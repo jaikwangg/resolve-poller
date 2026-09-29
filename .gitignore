@@ -1,0 +1,25 @@
+# secrets / env — อย่า commit ค่าจริงของ ERP creds เด็ดขาด
+.env
+*.env
+secrets.*
+
+# per-machine config (host↔room, scopes, role) — env-specific
+room_map.json
+role.json
+scopes/
+jobs.json
+
+# runtime data / queue
+data/
+*.jsonl
+.editortrack/
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# os
+.DS_Store
+Thumbs.db

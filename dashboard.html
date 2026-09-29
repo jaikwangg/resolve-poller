@@ -1,0 +1,477 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Editor Tracking</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    color-scheme:light;
+    --bg:#f9f9f7; --surface:#fcfcfb; --surface-2:#f0efec;
+    --text:#0b0b0b; --text-2:#52514e; --muted:#898781;
+    --grid:#e1e0d9; --baseline:#c3c2b7; --border:rgba(11,11,11,.10);
+    --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --idle:#c3c2b7;
+    --good:#0ca30c; --warn:#fab219; --crit:#d03b3b;
+    --accent:#2a78d6; --accent-soft:rgba(42,120,214,.10);
+    --shadow:0 1px 2px rgba(20,25,40,.05), 0 4px 16px rgba(20,25,40,.04);
+    --font:"IBM Plex Sans Thai",system-ui,-apple-system,"Segoe UI",sans-serif;
+    --maxw:1080px;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0d0d0d; --surface:#1a1a19; --surface-2:#242422;
+    --text:#fff; --text-2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --baseline:#383835; --border:rgba(255,255,255,.10);
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --idle:#4a4a47;
+    --accent:#3987e5; --accent-soft:rgba(57,135,229,.14);
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 6px 22px rgba(0,0,0,.28);
+  }}
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --bg:#0d0d0d; --surface:#1a1a19; --surface-2:#242422;
+    --text:#fff; --text-2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --baseline:#383835; --border:rgba(255,255,255,.10);
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --idle:#4a4a47;
+    --accent:#3987e5; --accent-soft:rgba(57,135,229,.14);
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 6px 22px rgba(0,0,0,.28);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);
+    font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding-inline:16px;padding-block:0}
+
+  header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:30;
+    background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--border)}
+  header.top .row{max-width:var(--maxw);margin:0 auto;padding:12px 16px;
+    display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px}
+  .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--accent);
+    box-shadow:0 0 0 4px var(--accent-soft);flex:none}
+  .badge{font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:20px;
+    background:var(--warn);color:#3a2c00;letter-spacing:.02em}
+
+  .banner{display:flex;gap:10px;align-items:flex-start;margin:16px 0;padding:12px 14px;
+    border-radius:12px;background:color-mix(in srgb,var(--warn) 14%,var(--surface));
+    border:1px solid color-mix(in srgb,var(--warn) 40%,var(--border));font-size:13px;color:var(--text-2)}
+  .banner b{color:var(--text)}
+  .banner .ic{flex:none;font-size:15px;line-height:1.3}
+
+  .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0}
+  .tile{background:var(--surface);border:1px solid var(--border);border-radius:14px;
+    padding:15px 16px;box-shadow:var(--shadow)}
+  .tile .l{font-size:12.5px;color:var(--muted);margin-bottom:7px}
+  .tile .n{font-size:27px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+  .tile .sub{font-size:12px;color:var(--text-2);margin-top:6px}
+  .tile .n.good{color:var(--good)}
+
+  /* per-job 2-track */
+  .job{border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:12px;background:var(--surface)}
+  .job:last-child{margin-bottom:0}
+  .job-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+  .job-title{font-weight:600;font-size:15px;line-height:1.3}
+  .job-id{font-size:12px;color:var(--muted);margin-top:2px}
+  .job-ov{text-align:right;flex:none}
+  .job-ov-n{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+  .job-ov-l{font-size:11px;color:var(--muted);margin-top:3px}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 2px}
+  .chip{font-size:11px;padding:2px 8px;border-radius:20px;background:var(--surface-2);color:var(--text-2);border:1px solid var(--border)}
+  .chip.erp{color:var(--s1);border-color:color-mix(in srgb,var(--s1) 40%,var(--border));background:var(--accent-soft)}
+  .chip.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,var(--border));background:color-mix(in srgb,var(--warn) 13%,var(--surface))}
+  .trk{margin-top:10px}
+  .trk-top{display:flex;align-items:baseline;gap:8px;font-size:12.5px;margin-bottom:4px}
+  .trk-l{font-weight:600;display:inline-flex;align-items:center;gap:5px;flex:none}
+  .trk-meta{color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .trk-v{font-variant-numeric:tabular-nums;font-weight:600;flex:none}
+  .bar{height:10px;background:var(--surface-2);border-radius:6px;overflow:hidden}
+  .fill{height:100%;border-radius:6px}
+  .trk.empty{display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:12.5px}
+  .trk.empty .trk-none{color:var(--muted);font-style:italic}
+  .live{width:7px;height:7px;border-radius:50%;background:var(--good);box-shadow:0 0 0 3px color-mix(in srgb,var(--good) 25%,transparent);display:inline-block}
+  @media (prefers-reduced-motion:no-preference){.fill{transition:width .3s ease}}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;
+    padding:18px 18px 14px;box-shadow:var(--shadow);margin:16px 0}
+  .card h2{font-size:15.5px;font-weight:600;margin:0 0 2px}
+  .card .cap{font-size:12.5px;color:var(--muted);margin:0 0 14px}
+  .card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .grid2 .card{margin:0}
+
+  .seg{display:inline-flex;gap:2px;background:var(--surface-2);border-radius:9px;padding:3px;flex-wrap:wrap}
+  .seg button{border:0;background:transparent;color:var(--text-2);font-family:inherit;font-size:12.5px;
+    font-weight:500;padding:5px 11px;border-radius:7px;cursor:pointer;white-space:nowrap}
+  .seg button[aria-pressed="true"]{background:var(--surface);color:var(--text);box-shadow:var(--shadow)}
+  .seg button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--text-2);margin-top:4px}
+  .legend .k{display:inline-flex;align-items:center;gap:6px}
+  .legend .sw{width:11px;height:11px;border-radius:3px;flex:none}
+
+  svg{width:100%;height:auto;display:block;overflow:visible}
+  svg text{font-family:var(--font)}
+  .tick{fill:var(--muted);font-size:11px}
+  .tickn{fill:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
+  .vlabel{fill:var(--text);font-size:11.5px;font-weight:600;font-variant-numeric:tabular-nums}
+  .rowlabel{fill:var(--text-2);font-size:12px}
+  .muted-txt{fill:var(--muted);font-size:11px;font-style:italic}
+
+  .tip{position:fixed;z-index:50;pointer-events:none;opacity:0;transition:opacity .1s;
+    background:var(--text);color:var(--bg);font-size:12px;line-height:1.5;
+    padding:7px 10px;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.25);max-width:220px}
+  .tip .th{font-weight:700;margin-bottom:3px}
+  .tip .tr{display:flex;justify-content:space-between;gap:14px}
+  .tip .tr .v{font-variant-numeric:tabular-nums;font-weight:600}
+
+  footer{padding:18px 0 40px;color:var(--muted);font-size:12.5px;text-align:center}
+
+  @media (max-width:720px){
+    .tiles{grid-template-columns:repeat(2,1fr)}
+    .grid2{grid-template-columns:1fr}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<header class="top"><div class="row">
+  <span class="brand"><span class="dot"></span>Editor Tracking</span>
+  <span id="srcbadge"></span>
+</div></header>
+
+<div class="wrap">
+
+  <div class="banner">
+    <span class="ic">⚠️</span>
+    <div><b>% = proxy ของเฟสที่วัดได้ ไม่ใช่ความคืบหน้าทั้งงาน</b> — ใช้ประกอบการคุย/วางแผนเท่านั้น
+    ห้ามผูกเงินเดือนหรือใช้ตัดสินคน (ค่าต่ำมักคือ deep work) · เก็บแบบเปิดเผยตาม PDPA</div>
+  </div>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="card">
+    <div class="card-head">
+      <div><h2>งานตาม deliverable · Conform → Color</h2>
+      <p class="cap">แต่ละงาน = 2 track ขนาน (conform + color) join จาก ERP booking · จุดเขียว = กำลังทำอยู่</p></div>
+    </div>
+    <div id="jobsList"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div><h2>ความคืบหน้าตามเวลา</h2><p class="cap">% รวม (เฟสที่วัดได้) ต่อโปรเจค · 7 วันล่าสุด</p></div>
+    </div>
+    <div id="chartProgress"></div>
+    <div class="legend" id="legProgress"></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-head">
+        <div><h2>ความคืบหน้าแต่ละเฟส</h2><p class="cap" id="phaseCap"></p></div>
+      </div>
+      <div class="seg" id="projSel" role="group" aria-label="เลือกโปรเจค"></div>
+      <div id="chartPhases" style="margin-top:12px"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div><h2>เวลาไปไหน (ต่อหน้า Resolve)</h2><p class="cap">รวมนาทีที่อยู่แต่ละ page</p></div>
+      </div>
+      <div class="seg" id="workerSel" role="group" aria-label="เลือกคน"></div>
+      <div id="chartTime" style="margin-top:12px"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div><h2>Active vs Idle รายวัน</h2><p class="cap" id="aiCap">ชั่วโมงทำงาน (Resolve อยู่หน้า + มี input) เทียบ idle</p></div>
+    </div>
+    <div id="chartActive"></div>
+    <div class="legend">
+      <span class="k"><span class="sw" style="background:var(--s1)"></span>Active</span>
+      <span class="k"><span class="sw" style="background:var(--idle)"></span>Idle</span>
+    </div>
+  </div>
+
+  <footer id="foot"></footer>
+</div>
+
+<div class="tip" id="tip"></div>
+
+<script>
+"use strict";
+
+/* ---------- sample data (ใช้เมื่อเปิดเป็น artifact / ยังไม่ต่อ API) ---------- */
+const SAMPLE = {
+  generated_at:"2026-09-24T16:00:00+07:00", sample:true,
+  summary:{projects:3, avg_progress:54.7, active_hours_today:14.3, workers_active:2, workers_total:3},
+  projects:[
+    {project:"PROMO_2026Q4", overall_pct:58.2, target_sec:30, current_sec:24,
+     phases:{edit:80,color:null,audio:null,deliver:0}, unmeasured:["color","audio"], flags:[]},
+    {project:"MV_ExtremeCut", overall_pct:34.0, target_sec:210, current_sec:150,
+     phases:{edit:71,color:22,audio:null,deliver:0}, unmeasured:["audio"], flags:["over_target_duration"]},
+    {project:"DOC_Series_EP3", overall_pct:72.0, target_sec:1320, current_sec:1250,
+     phases:{edit:95,color:60,audio:80,deliver:40}, unmeasured:[], flags:[]},
+  ],
+  progress_series:{ labels:["9/18","9/19","9/20","9/21","9/22","9/23","9/24"],
+    series:{ PROMO_2026Q4:[10,22,30,38,45,52,58], MV_ExtremeCut:[5,9,14,18,22,29,34],
+             DOC_Series_EP3:[40,48,55,60,64,69,72] } },
+  phase_time:{ __team__:{edit:320,color:280,fusion:70,fairlight:110,deliver:60,cut:40},
+    somchai:{edit:120,color:180,fusion:20,fairlight:15,deliver:25,cut:10},
+    nok:{edit:150,color:60,fusion:40,fairlight:20,deliver:20,cut:20},
+    ploy:{edit:50,color:40,fusion:10,fairlight:75,deliver:15,cut:10} },
+  active_idle:{ labels:["9/18","9/19","9/20","9/21","9/22","9/23","9/24"],
+    workers:{
+      __team__:{active:[12.1,13.4,11.8,14.0,13.2,10.5,14.3], idle:[2.1,1.8,2.4,1.6,2.0,1.2,1.9]},
+      somchai:{active:[4.2,4.5,3.8,4.6,4.2,3.1,4.8], idle:[.6,.5,.8,.4,.6,.3,.5]},
+      nok:{active:[4.0,4.3,4.1,4.7,4.5,3.9,4.9], idle:[.7,.6,.7,.5,.6,.4,.6]},
+      ploy:{active:[3.9,4.6,3.9,4.7,4.5,3.5,4.6], idle:[.8,.7,.9,.7,.8,.5,.8]} } },
+};
+
+const SAMPLE_JOBS = {jobs:[
+  {job_id:"KPP-2026-5871", title:"DEV-BURNUP Feature film grade", linked:true, source:"erp",
+   conform:{worker:"conform-01", page:"edit", pct:80, active:true},
+   color:{worker:"grade-03", page:"color", pct:35, active:true}, overall_pct:58.8, flags:[]},
+  {job_id:"KPP-2026-6012", title:"MV — XYZ Online", linked:true, source:"erp",
+   conform:{worker:"conform-01", page:"deliver", pct:100, active:false},
+   color:{worker:"grade-05", page:"color", pct:22, active:true}, overall_pct:63.3, flags:[]},
+  {job_id:"KPP-2026-5990", title:"DOC Series EP4", linked:true, source:"erp",
+   conform:{worker:"conform-01", page:"edit", pct:55, active:true},
+   color:null, overall_pct:55.0, flags:["color_not_started"]},
+]};
+
+const SERIES_COLORS = ["var(--s1)","var(--s2)","var(--s3)"];
+let DATA = SAMPLE, JOBS = null, curProj = 0, curWorker = "__team__";
+
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const mins = m => m>=60 ? `${Math.floor(m/60)}ชม ${m%60}น` : `${m}น`;
+const PHASE_TH = {edit:"Edit",color:"Color",audio:"Audio",deliver:"Deliver",fusion:"Fusion",fairlight:"Fairlight",cut:"Cut"};
+
+const tip = $("#tip");
+function showTip(html, x, y){
+  tip.innerHTML = html; tip.style.opacity = 1;
+  const r = tip.getBoundingClientRect();
+  let left = x+14, top = y+14;
+  if(left+r.width > innerWidth-8) left = x-r.width-14;
+  if(top+r.height > innerHeight-8) top = y-r.height-14;
+  tip.style.left = left+"px"; tip.style.top = top+"px";
+}
+const hideTip = () => tip.style.opacity = 0;
+
+/* ---------- 1. tiles ---------- */
+function renderTiles(){
+  const s = DATA.summary;
+  const t = [
+    ["โปรเจคที่ติดตาม", s.projects, ""],
+    ["ความคืบหน้าเฉลี่ย", s.avg_progress+"%", "ถ่วงน้ำหนักเฉพาะเฟสที่วัดได้"],
+    ["Active วันนี้ (ทีม)", s.active_hours_today+"ชม", "", "good"],
+    ["กำลังทำงาน", s.workers_active+"/"+s.workers_total, "คน"],
+  ];
+  $("#tiles").innerHTML = t.map(([l,n,sub,cls]) =>
+    `<div class="tile"><div class="l">${l}</div><div class="n ${cls||""}">${n}</div>${sub?`<div class="sub">${sub}</div>`:""}</div>`
+  ).join("");
+}
+
+/* ---------- 2. line chart: progress over time ---------- */
+function renderProgress(){
+  const W=720,H=280, L=34,R=104,T=14,B=30;
+  const ps = DATA.progress_series, labels = ps.labels, names = Object.keys(ps.series);
+  const n = labels.length, x = i => L + (W-L-R)*(n<2?0:i/(n-1)), y = v => T + (H-T-B)*(1-v/100);
+  let g = "";
+  for(let v=0; v<=100; v+=25){ g += `<line x1="${L}" y1="${y(v)}" x2="${W-R}" y2="${y(v)}" stroke="var(--grid)" stroke-width="1"/>`
+    + `<text class="tickn" x="${L-6}" y="${y(v)+4}" text-anchor="end">${v}</text>`; }
+  labels.forEach((lb,i)=> g += `<text class="tick" x="${x(i)}" y="${H-B+18}" text-anchor="middle">${esc(lb)}</text>`);
+  let lines="", dots="", hot="";
+  names.forEach((nm,si)=>{
+    const col = SERIES_COLORS[si%3], pts = ps.series[nm];
+    const d = pts.map((v,i)=>`${x(i)},${y(v)}`).join(" ");
+    lines += `<polyline points="${d}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    const lv = pts[pts.length-1];
+    dots += `<circle cx="${x(n-1)}" cy="${y(lv)}" r="4" fill="${col}" stroke="var(--surface)" stroke-width="2"/>`;
+    dots += `<circle cx="${x(n-1)}" cy="${y(lv)}" r="3.5" fill="none"/>`;
+    dots += `<text class="vlabel" x="${W-R+10}" y="${y(lv)+4}" fill="var(--text)">`
+          + `<tspan fill="${col}">● </tspan>${esc(nm)}</text>`;
+  });
+  // hover columns
+  labels.forEach((lb,i)=>{
+    const rows = names.map((nm,si)=>`<div class="tr"><span><span style="color:${SERIES_COLORS[si%3]}">●</span> ${esc(nm)}</span><span class="v">${ps.series[nm][i]}%</span></div>`).join("");
+    const bx = x(i)-(W-L-R)/(2*(n-1||1));
+    hot += `<rect x="${Math.max(L,bx)}" y="${T}" width="${(W-L-R)/(n-1||1)}" height="${H-T-B}" fill="transparent" `
+        + `data-th="${esc(lb)}" data-rows="${esc(rows)}" data-cx="${x(i)}"></rect>`;
+  });
+  const svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="ความคืบหน้าตามเวลา">
+    <line x1="${L}" y1="${y(0)}" x2="${W-R}" y2="${y(0)}" stroke="var(--baseline)" stroke-width="1"/>
+    ${g}${lines}${dots}
+    <line id="cross" x1="0" y1="${T}" x2="0" y2="${H-B}" stroke="var(--baseline)" stroke-width="1" opacity="0"/>
+    ${hot}</svg>`;
+  const c = $("#chartProgress"); c.innerHTML = svg;
+  const cross = c.querySelector("#cross");
+  c.querySelectorAll("rect[data-rows]").forEach(r=>{
+    r.addEventListener("mousemove",e=>{ cross.setAttribute("x1",r.dataset.cx); cross.setAttribute("x2",r.dataset.cx); cross.setAttribute("opacity",".6");
+      showTip(`<div class="th">${r.dataset.th}</div>${r.dataset.rows}`, e.clientX, e.clientY); });
+    r.addEventListener("mouseleave",()=>{ cross.setAttribute("opacity","0"); hideTip(); });
+  });
+  $("#legProgress").innerHTML = names.map((nm,si)=>`<span class="k"><span class="sw" style="background:${SERIES_COLORS[si%3]}"></span>${esc(nm)}</span>`).join("");
+}
+
+/* ---------- 3. phase completion (horizontal bars) ---------- */
+function renderPhases(){
+  const p = DATA.projects[curProj];
+  $("#phaseCap").textContent = `${p.project} · เป้า ${fmtDur(p.target_sec)} · วางแล้ว ${fmtDur(p.current_sec)}`
+    + (p.flags?.includes("over_target_duration") ? " · ⚠ วางเกินเป้า" : "");
+  const order = ["edit","color","audio","deliver"];
+  const W=680, rowH=40, padT=6, L=88, R=54, barMax=W-L-R;
+  const H = padT*2 + order.length*rowH;
+  let body="";
+  order.forEach((ph,i)=>{
+    const y = padT + i*rowH + rowH/2, by = y-8;
+    const val = p.phases[ph], measured = val!==null && val!==undefined;
+    body += `<text class="rowlabel" x="${L-10}" y="${y+4}" text-anchor="end">${PHASE_TH[ph]}</text>`;
+    body += `<rect x="${L}" y="${by}" width="${barMax}" height="16" rx="4" fill="var(--surface-2)"/>`;
+    if(measured){
+      const w = Math.max(2, barMax*val/100);
+      body += `<rect x="${L}" y="${by}" width="${w}" height="16" rx="4" fill="var(--s1)" `
+           + `data-th="${PHASE_TH[ph]}" data-rows="<div class='tr'><span>ความคืบหน้า</span><span class='v'>${val}%</span></div>"></rect>`;
+      body += `<text class="vlabel" x="${L+barMax+8}" y="${y+4}">${val}%</text>`;
+    } else {
+      body += `<rect x="${L}" y="${by}" width="${barMax}" height="16" rx="4" fill="url(#hatch)" opacity=".7"/>`;
+      body += `<text class="muted-txt" x="${L+8}" y="${y+4}">ยังไม่วัด (ปิดใน probe)</text>`;
+    }
+  });
+  const svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="ความคืบหน้าแต่ละเฟส">
+    <defs><pattern id="hatch" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <rect width="7" height="7" fill="var(--surface-2)"/><line x1="0" y1="0" x2="0" y2="7" stroke="var(--muted)" stroke-width="1.4" opacity=".5"/></pattern></defs>
+    ${body}</svg>`;
+  const c = $("#chartPhases"); c.innerHTML = svg;
+  attachBarTips(c);
+}
+function fmtDur(sec){ if(sec>=60){const m=Math.round(sec/60); return m>=60?`${(m/60).toFixed(m%60?1:0)}นาที`.replace('นาที','ชม'):`${m} นาที`;} return `${sec} วิ`; }
+
+/* ---------- 4. phase-time (horizontal bars, ranked) ---------- */
+function renderTime(){
+  const d = DATA.phase_time[curWorker] || {};
+  const rows = Object.entries(d).sort((a,b)=>b[1]-a[1]);
+  const max = Math.max(1,...rows.map(r=>r[1]));
+  const W=680, rowH=34, padT=6, L=88, R=64, barMax=W-L-R;
+  const H = padT*2 + rows.length*rowH;
+  let body="";
+  rows.forEach(([ph,v],i)=>{
+    const y=padT+i*rowH+rowH/2, by=y-7, w=Math.max(2,barMax*v/max);
+    const top = i===0;
+    body += `<text class="rowlabel" x="${L-10}" y="${y+4}" text-anchor="end">${PHASE_TH[ph]||ph}</text>`;
+    body += `<rect x="${L}" y="${by}" width="${barMax}" height="14" rx="4" fill="var(--surface-2)"/>`;
+    body += `<rect x="${L}" y="${by}" width="${w}" height="14" rx="4" fill="${top?'var(--s1)':'color-mix(in srgb,var(--s1) 62%,var(--surface))'}" `
+         + `data-th="${PHASE_TH[ph]||ph}" data-rows="<div class='tr'><span>เวลา</span><span class='v'>${mins(v)}</span></div>"></rect>`;
+    body += `<text class="vlabel" x="${L+barMax+8}" y="${y+4}">${mins(v)}</text>`;
+  });
+  const c=$("#chartTime"); c.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="เวลาต่อหน้า Resolve">${body}</svg>`;
+  attachBarTips(c);
+}
+
+/* ---------- 5. active vs idle (stacked bars) ---------- */
+function renderActive(){
+  const ai = DATA.active_idle, labels = ai.labels, w = ai.workers[curWorker];
+  $("#aiCap").textContent = (curWorker==="__team__"?"ทั้งทีม":curWorker)+" · ชั่วโมง active เทียบ idle รายวัน";
+  const totals = labels.map((_,i)=> w.active[i]+w.idle[i]);
+  const max = Math.max(1,...totals);
+  const W=720,H=280,L=34,R=12,T=12,B=30, n=labels.length;
+  const step=(W-L-R)/n, bw=Math.min(38, step*0.6);
+  const y=v=>T+(H-T-B)*(1-v/max);
+  let g="", bars="";
+  const yt = niceStep(max);
+  for(let v=0; v<=max+0.001; v+=yt){ g+=`<line x1="${L}" y1="${y(v)}" x2="${W-R}" y2="${y(v)}" stroke="var(--grid)" stroke-width="1"/>`
+    + `<text class="tickn" x="${L-6}" y="${y(v)+4}" text-anchor="end">${(+v.toFixed(1))}</text>`; }
+  labels.forEach((lb,i)=>{
+    const cx=L+step*i+step/2, a=w.active[i], id=w.idle[i];
+    const ay=y(a), ah=y(0)-y(a), iy=y(a+id), ih=y(a)-y(a+id);
+    bars += `<rect x="${cx-bw/2}" y="${ay}" width="${bw}" height="${Math.max(0,ah)}" rx="3" fill="var(--s1)"/>`;
+    bars += `<rect x="${cx-bw/2}" y="${iy}" width="${bw}" height="${Math.max(0,ih-2)}" rx="3" fill="var(--idle)"/>`;
+    bars += `<rect x="${cx-bw/2-3}" y="${T}" width="${bw+6}" height="${H-T-B}" fill="transparent" `
+         + `data-th="${esc(lb)}" data-rows="<div class='tr'><span><span style='color:var(--s1)'>●</span> Active</span><span class='v'>${a}ชม</span></div><div class='tr'><span><span style='color:var(--idle)'>●</span> Idle</span><span class='v'>${id}ชม</span></div>"></rect>`;
+    bars += `<text class="tick" x="${cx}" y="${H-B+18}" text-anchor="middle">${esc(lb)}</text>`;
+  });
+  const c=$("#chartActive");
+  c.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="active vs idle">
+    <line x1="${L}" y1="${y(0)}" x2="${W-R}" y2="${y(0)}" stroke="var(--baseline)" stroke-width="1"/>${g}${bars}</svg>`;
+  attachBarTips(c);
+}
+function niceStep(max){ const raw=max/4, p=Math.pow(10,Math.floor(Math.log10(raw))); const s=raw/p;
+  return (s<1.5?1:s<3?2:s<7?5:10)*p; }
+
+/* ---------- shared bar hover ---------- */
+function attachBarTips(container){
+  container.querySelectorAll("rect[data-rows]").forEach(r=>{
+    r.style.cursor="default";
+    r.addEventListener("mousemove",e=>showTip(`<div class="th">${r.dataset.th}</div>${r.dataset.rows}`,e.clientX,e.clientY));
+    r.addEventListener("mouseleave",hideTip);
+  });
+}
+
+/* ---------- selectors ---------- */
+function buildSelectors(){
+  $("#projSel").innerHTML = DATA.projects.map((p,i)=>
+    `<button aria-pressed="${i===curProj}" data-i="${i}">${esc(p.project)}</button>`).join("");
+  $("#projSel").onclick = e=>{ const b=e.target.closest("button"); if(!b)return;
+    curProj=+b.dataset.i; syncPressed("#projSel",b); renderPhases(); };
+  const workers = Object.keys(DATA.phase_time);
+  const wname = w => w==="__team__"?"ทั้งทีม":w;
+  $("#workerSel").innerHTML = workers.map(w=>
+    `<button aria-pressed="${w===curWorker}" data-w="${esc(w)}">${esc(wname(w))}</button>`).join("");
+  $("#workerSel").onclick = e=>{ const b=e.target.closest("button"); if(!b)return;
+    curWorker=b.dataset.w; syncPressed("#workerSel",b); renderTime(); renderActive(); };
+}
+function syncPressed(sel,btn){ document.querySelectorAll(sel+" button").forEach(x=>x.setAttribute("aria-pressed", x===btn)); }
+
+/* ---------- per-job 2-track ---------- */
+const FLAG_TH = {unlinked:"ไม่ผูก job", color_not_started:"color ยังไม่เริ่ม",
+  conform_missing:"ไม่มี conform", color_unmeasured:"color ยังวัดไม่ได้"};
+
+function trackBar(t, color, label){
+  if(!t) return `<div class="trk empty"><span class="trk-l">${label}</span><span class="trk-none">ยังไม่เริ่ม</span></div>`;
+  const pct = (t.pct===null||t.pct===undefined) ? null : t.pct;
+  const dot = t.active ? '<span class="live" title="กำลังทำอยู่"></span>' : '';
+  const w = pct===null ? 0 : Math.max(2, pct);
+  const val = pct===null ? 'ยังไม่วัด' : pct+'%';
+  const style = `width:${w}%;background:${color}` + (pct===null ? ';opacity:.3' : '');
+  return `<div class="trk">
+    <div class="trk-top"><span class="trk-l">${label}${dot}</span>
+      <span class="trk-meta">${esc(t.worker||'—')}${t.page?' · '+esc(t.page):''}</span>
+      <span class="trk-v">${val}</span></div>
+    <div class="bar"><div class="fill" style="${style}"></div></div>
+  </div>`;
+}
+
+function renderJobs(){
+  const jobs = (JOBS && JOBS.jobs) ? JOBS.jobs : [];
+  if(!jobs.length){ $("#jobsList").innerHTML = '<p class="muted" style="margin:0">ยังไม่มีงานในช่วงนี้</p>'; return; }
+  $("#jobsList").innerHTML = jobs.map(j=>{
+    const ov = (j.overall_pct===null||j.overall_pct===undefined) ? '—' : j.overall_pct+'%';
+    const src = j.source==='erp' ? '<span class="chip erp">ERP</span>' : '';
+    const flags = (j.flags||[]).map(f=>`<span class="chip warn">${FLAG_TH[f]||f}</span>`).join('');
+    return `<div class="job">
+      <div class="job-head">
+        <div><div class="job-title">${esc(j.title||j.job_id)}</div><div class="job-id">${esc(j.job_id)}</div></div>
+        <div class="job-ov"><div class="job-ov-n">${ov}</div><div class="job-ov-l">overall</div></div>
+      </div>
+      <div class="chips">${src}${flags}</div>
+      ${trackBar(j.conform,'var(--s1)','Conform')}
+      ${trackBar(j.color,'var(--s3)','Color')}
+    </div>`;
+  }).join('');
+}
+
+/* ---------- boot ---------- */
+function renderAll(){ renderJobs(); renderTiles(); renderProgress(); buildSelectors(); renderPhases(); renderTime(); renderActive();
+  $("#srcbadge").innerHTML = DATA.sample ? '<span class="badge">ข้อมูลตัวอย่าง</span>' : "";
+  $("#foot").textContent = "อัปเดต: "+new Date(DATA.generated_at).toLocaleString("th-TH")+(DATA.sample?" · sample data — ต่อ /api/dashboard + /api/jobs เพื่อข้อมูลจริง":"");
+}
+async function loadData(){
+  try{ const r = await fetch("/api/dashboard",{headers:{"Accept":"application/json"}}); if(r.ok) DATA = await r.json(); }catch(e){}
+  try{ const rj = await fetch("/api/jobs",{headers:{"Accept":"application/json"}}); if(rj.ok) JOBS = await rj.json(); }catch(e){}
+  if(!JOBS) JOBS = SAMPLE_JOBS;
+  renderAll();
+}
+loadData();
+</script>
