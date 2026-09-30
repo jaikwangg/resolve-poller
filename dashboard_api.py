@@ -183,7 +183,7 @@ def api_dashboard(days: int = 7):
 # ---------------- join: จับ conform-project + color-project เป็น deliverable เดียว ----------------
 # metric #1 เป็น 2 track ขนาน (คนละ project + overlap) join ด้วย job_id
 # job_id/role หลัก = ERP booking (room+time) · fallback = agent-side (registry/marker/naming) ใน record["job"]
-JOB_WEIGHTS = {"conform": 0.45, "color": 0.40, "deliver": 0.15}
+JOB_WEIGHTS = {"conform": 0.5, "color": 0.5}   # เหลือ conform(edit) + color (deliver/audio ไม่ใช้)
 
 try:
     import erp
@@ -244,8 +244,8 @@ def build_jobs(days=7):
             avail["color"] = co["pct"] / 100.0
         if deliver:
             avail["deliver"] = deliver / 100.0
-        wsum = sum(JOB_WEIGHTS[k] for k in avail) or 1.0
-        overall = round(sum(JOB_WEIGHTS[k] * v for k, v in avail.items()) / wsum * 100, 1) if avail else None
+        wsum = sum(JOB_WEIGHTS.get(k, 0) for k in avail) or 1.0
+        overall = round(sum(JOB_WEIGHTS.get(k, 0) * v for k, v in avail.items()) / wsum * 100, 1) if avail else None
         flags = []
         if not d["linked"]:
             flags.append("unlinked")

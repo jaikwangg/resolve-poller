@@ -3,15 +3,14 @@
 ดึง @scope / @job / @role markers ออกมาเป็น hint ให้ scope.py และ joblink.py ด้วย."""
 import os, sys, time, datetime, re
 
-DETECT_GRADE = True   # probe ยืนยันแล้ว (GetNodeGraph ใช้ได้บน v21.1) — color เป็นเฟสหลัก
+def _envflag(name, default):
+    v = os.environ.get(name)
+    return default if v is None else v.strip().lower() in ("1", "true", "yes", "on")
 
-# ⚠️ ห้ามเปิดโดยไม่จำเป็น: GetRenderJobList() ทำให้ UI เด้งไปหน้า Deliver → รบกวน worker ที่ทำงานอยู่
-# (deliver phase จะกลายเป็น unmeasured; ดึง % ส่งออกแบบไม่รบกวนภายหลังผ่าน fs-watch ของ output แทน)
-POLL_RENDER = False
-
-# ดึง shots จาก marker (ชื่อ marker = shot code เช่น PST_R04_00010) + graded ต่อ shot
-# เพิ่ม GetStart/GetEnd ต่อ clip → ดู timeline.scan_ms ว่าช้าไหม · ปิดได้ถ้าหนัก
-EXTRACT_SHOTS = True
+# ตั้งค่าต่อเครื่องผ่าน env ได้ — ห้อง color กับ ห้อง edit ใช้ค่าต่างกัน
+DETECT_GRADE = _envflag("EDITORTRACK_DETECT_GRADE", True)    # color room=on · **edit room ตั้ง =0** (ไม่ต้องสแกนสี → poll เบา)
+POLL_RENDER = _envflag("EDITORTRACK_POLL_RENDER", False)     # ⚠️ on = GetRenderJobList เด้งหน้า Deliver → รบกวน worker (deliver ไม่ใช้แล้ว)
+EXTRACT_SHOTS = _envflag("EDITORTRACK_EXTRACT_SHOTS", True)  # ดึง shots จาก marker (code + graded/conformed)
 
 
 def _load_resolve():

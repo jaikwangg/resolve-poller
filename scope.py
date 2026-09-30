@@ -4,7 +4,7 @@
 import json, os, re
 
 SCOPE_DIR = os.environ.get("EDITORTRACK_SCOPES", os.path.expanduser("~/.editortrack/scopes"))
-DEFAULT_WEIGHTS = {"edit": 0.45, "color": 0.40, "deliver": 0.15}
+DEFAULT_WEIGHTS = {"edit": 0.5, "color": 0.5}   # เหลือ edit + color (deliver/audio ไม่ใช้)
 
 
 def _clamp(x, lo=0.0, hi=1.0):
