@@ -66,6 +66,7 @@ per-user LaunchAgent (poll ~10 นาที)
 | `HANDOFF.md` | ไฟล์นี้ — เริ่มที่นี่ | — |
 | `TRACK_A.md` | **สเปค + โค้ดเต็มของ Track A** (A1 poller, A2 sampler, A5 scope, A3 runner+plist, A4 server) + probe checklist | reference หลัก |
 | `API_REFERENCE.md` | catalog method ของ Resolve API จัดหมวด + tag ความมั่นใจ + read vs mutating + กฎ "ใช้ Get* อย่างเดียว" | reference |
+| `DATAFLOW.md` | **dataflow ละเอียด end-to-end** (ERP→agent→server→dashboard) ทีละ stage + คำสั่ง + env config ครบ + deploy | reference |
 | `probe.py` | introspect Resolve จริง เช็ค checklist อัตโนมัติ | ⚠️ ยังไม่รันบน Mac |
 | `dashboard.html` | A6 dashboard — SVG charts + hover, fallback เป็น sample เมื่อ fetch ไม่ได้ | ✅ published เป็น artifact |
 | `dashboard_api.py` | ingest + query + serve + **`/api/jobs` (join conform↔color, ERP-backed)** (**แทน server.py เดิม**) | ✅ **endpoint + join + ERP ทดสอบเขียว** |
