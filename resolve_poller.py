@@ -11,6 +11,7 @@ def _envflag(name, default):
 DETECT_GRADE = _envflag("EDITORTRACK_DETECT_GRADE", True)    # color room=on · **edit room ตั้ง =0** (ไม่ต้องสแกนสี → poll เบา)
 POLL_RENDER = _envflag("EDITORTRACK_POLL_RENDER", False)     # ⚠️ on = GetRenderJobList เด้งหน้า Deliver → รบกวน worker (deliver ไม่ใช้แล้ว)
 EXTRACT_SHOTS = _envflag("EDITORTRACK_EXTRACT_SHOTS", True)  # ดึง shots จาก marker (code + graded/conformed)
+RESTORE_PAGE = _envflag("EDITORTRACK_RESTORE_PAGE", True)    # กันเหนียว: ถ้าหน้าเปลี่ยนระหว่าง poll → คืนหน้าเดิม
 
 
 def _load_resolve():
@@ -45,6 +46,7 @@ def snapshot():
         "timeline_count": proj.GetTimelineCount(),
         "rendering": bool(proj.IsRenderingInProgress()),
     }
+    start_page = out["page"]                      # จำหน้าเดิมไว้ (กันเหนียว)
     tl = proj.GetCurrentTimeline()
     if tl:
         try:
@@ -97,6 +99,15 @@ def snapshot():
                          "any_complete": any(c >= 100 for c in comps), "polled": True}
     else:
         out["render"] = {"jobs": None, "max_completion": None, "polled": False}
+
+    # กันเหนียว: ถ้ามี call ไหนแอบเปลี่ยนหน้าระหว่าง poll → คืนหน้าเดิมให้ worker
+    if RESTORE_PAGE and start_page:
+        try:
+            if resolve.GetCurrentPage() != start_page:
+                resolve.OpenPage(start_page)
+                out["page_restored"] = start_page
+        except Exception:
+            pass
     return out
 
 
