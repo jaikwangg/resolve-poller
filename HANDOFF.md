@@ -93,7 +93,9 @@ per-user LaunchAgent (poll ~10 นาที)
 - **ERP-backed join** (`erp.py` + `_eff_job`) — mock booking 2 ห้องคนละ role (Grading 3 + Conform Bay, job เดียว) → `/api/jobs` join เป็น job เดียว source=erp, role มาจาก task, agent ไม่ต้องรู้ job (unlinked ก็ได้) → **zero-touch พิสูจน์แล้ว**
 - **probe บนเครื่องจริง (2026-09-29, Windows, Resolve Studio 21.1.0.17, โปรเจคจริง 309 clips):** ✅ connect/Studio · ✅ `GetNodeGraph().GetNumNodes()` ใช้ได้ (nodes 1–6, graded=nodes>1) → **`DETECT_GRADE=True`** · ✅ audio coverage · ✅ StartFrame ไม่ใช่ 0 (reel TC) แต่ duration = End−Start ถูก · ⚠️ render keys ยังไม่ยืนยัน (คิวว่าง)
 - 🐞 **GOTCHA สำคัญ (แก้แล้ว): `GetRenderJobList()`/`GetRenderJobStatus()` ทำให้ Resolve เด้งไปหน้า Deliver → รบกวน worker** → ปิด **`POLL_RENDER=False`** default ใน `resolve_poller.py` (deliver phase เป็น unmeasured, renormalize) · `IsRenderingInProgress` ปลอดภัย ไม่เปลี่ยนหน้า · ดึง delivery % แบบไม่รบกวนภายหลังผ่าน **fs-watch ของ render output** แทน
-- ⏳ perf: DETECT_GRADE สแกน `GetNodeGraph` ต่อ clip (309 clips = ~300+ remote calls/รอบ) — ยังไม่วัดเวลาจริง ถ้าช้าให้ทำ sampling หรือสแกนเฉพาะเครื่อง colorist
+- ✅ **(ค) scan timing:** poller ใส่ `timeline.scan_ms` → รันจริงดูเวลา scan 309 clips (ถ้าช้าค่อย sample/สแกนเฉพาะ colorist)
+- ✅ **(ก) shots reconcile:** poller ดึง `shots` จาก marker (code+graded, สแกนรอบเดียวกับ grade) + `dashboard_api /api/shots` reconcile conform↔color ราย shot (เทส mock ผ่าน: conformed/graded matrix) → **ตอบ open question per-shot** · **ต้อง validate บนจริง:** marker→clip mapping + ต้องมี conform project ที่ marker code ตรงกัน
+- ✅ **(ข) sampler cross-platform:** `activity_sampler.py` = macOS/Linux(X11 libXss)/Windows + `--watch` · degrade สวยถ้าไม่มี X11 (เทส headless: unavailable ไม่ crash) · **Linux ห้อง grade ต้องมี `libXss.so.1` (`apt install libxss1`)** + (option) `xdotool` สำหรับ frontmost · Wayland ใช้ X11 API ไม่ได้ (ต้องเช็ค `echo $XDG_SESSION_TYPE`)
 
 **❌ ยังไม่ทำ/เทส:**
 - ยังไม่รันบน **Mac จริง** (เครื่อง dev เป็น Linux ไม่มี Resolve) — ทั้ง poller/sampler/probe

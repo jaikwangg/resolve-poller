@@ -267,6 +267,43 @@ def api_jobs(days: int = 7):
     return JSONResponse(build_jobs(days))
 
 
+def build_shots(days=7):
+    """reconcile ราย shot ข้าม conform-project กับ color-project (จับคู่ด้วย shot code จาก marker).
+    ตอบ open question 'per-reel/shot granularity' — conformed? graded? ต่อ shot."""
+    recs = _load_recent(days)
+    jobs = {}
+    for r in recs:
+        eff = _eff_job(r)
+        jid = eff.get("job_id")
+        if not jid:
+            continue
+        role = (eff.get("role") or "").lower()
+        slot = "conform" if role == "conform" else ("color" if role in ("colorist", "color") else None)
+        d = jobs.setdefault(jid, {"job_id": jid, "title": eff.get("title") or jid, "conform": None, "color": None})
+        if slot and (d[slot] is None or r.get("ts", "") > (d[slot].get("ts", ""))):
+            d[slot] = r
+
+    def shots_of(rec):
+        return ((rec.get("resolve") or {}).get("shots") or []) if rec else []
+
+    out = []
+    for jid, d in jobs.items():
+        conform = {s["code"] for s in shots_of(d["conform"]) if s.get("code")}
+        color = {s["code"]: s.get("graded") for s in shots_of(d["color"]) if s.get("code")}
+        codes = sorted(conform | set(color))
+        shots = [{"code": c, "conformed": c in conform, "graded": bool(color.get(c))} for c in codes]
+        out.append({"job_id": jid, "title": d["title"], "total_shots": len(codes),
+                    "conformed": sum(1 for s in shots if s["conformed"]),
+                    "graded": sum(1 for s in shots if s["graded"]),
+                    "shots": shots})
+    return {"generated_at": datetime.datetime.now().astimezone().isoformat(), "jobs": out}
+
+
+@app.get("/api/shots")
+def api_shots(days: int = 7):
+    return JSONResponse(build_shots(days))
+
+
 @app.get("/")
 def index():
     return FileResponse(HERE / "dashboard.html")

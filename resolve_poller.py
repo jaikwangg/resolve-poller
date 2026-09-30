@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """A1 — snapshot metric จาก DaVinci Resolve Studio (read-only, ไม่ใช้ LLM).
 ดึง @scope / @job / @role markers ออกมาเป็น hint ให้ scope.py และ joblink.py ด้วย."""
-import os, sys, datetime, re
+import os, sys, time, datetime, re
 
 DETECT_GRADE = True   # probe ยืนยันแล้ว (GetNodeGraph ใช้ได้บน v21.1) — color เป็นเฟสหลัก
 
 # ⚠️ ห้ามเปิดโดยไม่จำเป็น: GetRenderJobList() ทำให้ UI เด้งไปหน้า Deliver → รบกวน worker ที่ทำงานอยู่
 # (deliver phase จะกลายเป็น unmeasured; ดึง % ส่งออกแบบไม่รบกวนภายหลังผ่าน fs-watch ของ output แทน)
 POLL_RENDER = False
+
+# ดึง shots จาก marker (ชื่อ marker = shot code เช่น PST_R04_00010) + graded ต่อ shot
+# เพิ่ม GetStart/GetEnd ต่อ clip → ดู timeline.scan_ms ว่าช้าไหม · ปิดได้ถ้าหนัก
+EXTRACT_SHOTS = True
 
 
 def _load_resolve():
@@ -51,14 +55,22 @@ def snapshot():
         frames = (tl.GetEndFrame() or 0) - (tl.GetStartFrame() or 0)
         vtracks = tl.GetTrackCount("video") or 0
         atracks = tl.GetTrackCount("audio") or 0
+        t0 = time.time()
         vclips, graded = 0, 0
+        ranges = []   # (start, end, graded) ต่อ clip — ใช้ match marker→shot (สแกนรอบเดียว)
         for i in range(1, vtracks + 1):
             items = tl.GetItemListInTrack("video", i) or []   # NOTE: transition ไม่รวม
             vclips += len(items)
-            if DETECT_GRADE:
-                for it in items:
-                    if _is_graded(it):
-                        graded += 1
+            for it in items:
+                g = _is_graded(it) if DETECT_GRADE else None
+                if g:
+                    graded += 1
+                if EXTRACT_SHOTS:
+                    try:
+                        ranges.append((it.GetStart(), it.GetEnd(), g))
+                    except Exception:
+                        pass
+        scan_ms = int((time.time() - t0) * 1000)
         out["timeline"] = {
             "name": tl.GetName(),
             "duration_sec": round(frames / fps, 2) if fps else None,
@@ -66,9 +78,12 @@ def snapshot():
             "video_clips": vclips,
             "graded_clips": graded if DETECT_GRADE else None,
             "markers": len(tl.GetMarkers() or {}),
+            "scan_ms": scan_ms,          # ⏱️ เวลาสแกน clip ทั้งหมด (perf)
         }
         out["scope_hint"] = _marker_kv(tl, "scope")
         out["job_hint"] = _job_hint(tl)
+        if EXTRACT_SHOTS:
+            out["shots"] = _shots_from_markers(tl, ranges)
 
     # render status: IsRenderingInProgress (บน out["rendering"] แล้ว) ปลอดภัย ไม่เปลี่ยนหน้า
     # แต่ GetRenderJobList/GetRenderJobStatus เปลี่ยนหน้าเป็น Deliver → ปิดไว้ (POLL_RENDER)
@@ -112,6 +127,24 @@ def _marker_kv(tl, tag):
                     kv[k.strip()] = v.strip()
             return kv or None
     return None
+
+
+def _shots_from_markers(tl, ranges):
+    """marker name = shot code → จับคู่ clip ที่ frame นั้น → graded ต่อ shot (match ในหน่วยความจำ)."""
+    tl_start = tl.GetStartFrame() or 0
+    shots = []
+    for off, m in (tl.GetMarkers() or {}).items():
+        code = (m.get("name") or "").strip()
+        if not code:
+            continue
+        f = tl_start + off                       # marker key = offset จาก timeline start
+        graded = None
+        for s, e, g in ranges:
+            if s <= f < e:
+                graded = g
+                break
+        shots.append({"code": code, "frame": f, "graded": graded, "color": m.get("color")})
+    return shots
 
 
 def _job_hint(tl):

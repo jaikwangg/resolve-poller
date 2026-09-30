@@ -81,6 +81,15 @@ def load_resolve():
 
 
 def save_and_exit(code=0):
+    # คืนหน้าที่เปิดไว้ตอนเริ่ม (probe/§4 render อาจเด้งไป Deliver ชั่วคราว)
+    try:
+        r = globals().get("resolve")
+        sp = globals().get("_START_PAGE")
+        if r is not None and sp:
+            r.OpenPage(sp)
+            print(f"  ↩ คืนหน้าเดิม: {sp}")
+    except Exception:
+        pass
     out = os.path.expanduser("~/.editortrack/probe_report.json")
     pathlib.Path(out).parent.mkdir(parents=True, exist_ok=True)
     json.dump(REPORT, open(out, "w"), ensure_ascii=False, indent=2, default=str)
@@ -103,6 +112,7 @@ if resolve is None:
 
 REPORT["checks"]["connect"] = True
 print("  ✓ เชื่อมต่อ Resolve สำเร็จ")
+_START_PAGE = resolve.GetCurrentPage()   # จำหน้าเดิมไว้คืนตอนจบ (§4 อาจเด้งไป Deliver)
 _, product = call(resolve, "GetProductName")
 _, version = call(resolve, "GetVersionString")
 REPORT["product"], REPORT["version"] = product, version
@@ -169,6 +179,7 @@ print(f"\n  → fps = {FPS}")
 
 # ---------- 4. render queue — ชื่อ key จริง ----------
 h("4. RENDER QUEUE — ชื่อ key จริง")
+print("  (ℹ️ ขั้นนี้จะเด้งไปหน้า Deliver ชั่วคราว — probe จะคืนหน้าเดิมให้ตอนจบ)")
 _, jobs = call(proj, "GetRenderJobList", show=False)
 jobs = jobs or []
 print(f"  jobs ในคิว = {len(jobs)}")
