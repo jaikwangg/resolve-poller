@@ -229,7 +229,7 @@ def build_jobs(days=7):
         return {"project": res.get("project"), "worker": rec.get("user"),
                 "page": res.get("page"), "last_seen": rec.get("ts"),
                 "active": act.get("active_in_resolve"),
-                "render_pct": (res.get("render") or {}).get("max_completion", 0),
+                "render_pct": ((res.get("render") or {}).get("max_completion") or 0),
                 "pct": ph.get(phase)}   # conform→edit fill · color→graded ratio
 
     out = []

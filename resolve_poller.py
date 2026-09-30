@@ -3,7 +3,11 @@
 ดึง @scope / @job / @role markers ออกมาเป็น hint ให้ scope.py และ joblink.py ด้วย."""
 import os, sys, datetime, re
 
-DETECT_GRADE = False  # เปิดหลัง probe.py ยืนยัน GetNodeGraph บนเวอร์ชันคุณ (color เป็นเฟสหลัก!)
+DETECT_GRADE = True   # probe ยืนยันแล้ว (GetNodeGraph ใช้ได้บน v21.1) — color เป็นเฟสหลัก
+
+# ⚠️ ห้ามเปิดโดยไม่จำเป็น: GetRenderJobList() ทำให้ UI เด้งไปหน้า Deliver → รบกวน worker ที่ทำงานอยู่
+# (deliver phase จะกลายเป็น unmeasured; ดึง % ส่งออกแบบไม่รบกวนภายหลังผ่าน fs-watch ของ output แทน)
+POLL_RENDER = False
 
 
 def _load_resolve():
@@ -66,14 +70,19 @@ def snapshot():
         out["scope_hint"] = _marker_kv(tl, "scope")
         out["job_hint"] = _job_hint(tl)
 
-    jobs = proj.GetRenderJobList() or []
-    comps = []
-    for j in jobs:
-        jid = j.get("JobId")                       # PROBE: ยืนยันชื่อ key
-        st = proj.GetRenderJobStatus(jid) if jid else {}
-        comps.append(st.get("CompletionPercentage", 0))
-    out["render"] = {"jobs": len(jobs), "max_completion": max(comps) if comps else 0,
-                     "any_complete": any(c >= 100 for c in comps)}
+    # render status: IsRenderingInProgress (บน out["rendering"] แล้ว) ปลอดภัย ไม่เปลี่ยนหน้า
+    # แต่ GetRenderJobList/GetRenderJobStatus เปลี่ยนหน้าเป็น Deliver → ปิดไว้ (POLL_RENDER)
+    if POLL_RENDER:
+        jobs = proj.GetRenderJobList() or []       # ⚠️ เด้งไปหน้า Deliver — ใช้เฉพาะเครื่องที่ปลอดภัย
+        comps = []
+        for j in jobs:
+            jid = j.get("JobId")                   # PROBE: ยืนยันชื่อ key
+            st = proj.GetRenderJobStatus(jid) if jid else {}
+            comps.append(st.get("CompletionPercentage", 0))
+        out["render"] = {"jobs": len(jobs), "max_completion": max(comps) if comps else 0,
+                         "any_complete": any(c >= 100 for c in comps), "polled": True}
+    else:
+        out["render"] = {"jobs": None, "max_completion": None, "polled": False}
     return out
 
 

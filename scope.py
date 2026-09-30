@@ -43,7 +43,9 @@ def compute_progress(snap, scope):
     phases = {}
     if tl.get("duration_sec") is not None:
         phases["edit"] = _clamp(tl["duration_sec"] / scope["target_duration_sec"])
-    phases["deliver"] = _clamp((snap.get("render", {}) or {}).get("max_completion", 0) / 100.0)
+    mc = (snap.get("render", {}) or {}).get("max_completion")
+    if mc is not None:                          # deliver วัดได้เฉพาะเมื่อ POLL_RENDER เปิด (ไม่งั้น unmeasured)
+        phases["deliver"] = _clamp(mc / 100.0)
     if tl.get("graded_clips") is not None and tl.get("video_clips"):
         phases["color"] = _clamp(tl["graded_clips"] / tl["video_clips"])
 

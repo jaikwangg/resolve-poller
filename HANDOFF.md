@@ -91,6 +91,9 @@ per-user LaunchAgent (poll ~10 นาที)
 - `GET /api/jobs` — join 2 record คนละ project (conform+color, job_id เดียว) → conform_pct/color_pct/overall_pct ถูก (80% + 35% → overall 58.8%)
 - `runner.build_record()` — wire ครบ (poller→joblink→scope→record **schema 2**): job ผูกถูก (registry + marker override), target ดึงจาก job registry, active/idle ถูก (mock snapshot/sample บน Linux)
 - **ERP-backed join** (`erp.py` + `_eff_job`) — mock booking 2 ห้องคนละ role (Grading 3 + Conform Bay, job เดียว) → `/api/jobs` join เป็น job เดียว source=erp, role มาจาก task, agent ไม่ต้องรู้ job (unlinked ก็ได้) → **zero-touch พิสูจน์แล้ว**
+- **probe บนเครื่องจริง (2026-09-29, Windows, Resolve Studio 21.1.0.17, โปรเจคจริง 309 clips):** ✅ connect/Studio · ✅ `GetNodeGraph().GetNumNodes()` ใช้ได้ (nodes 1–6, graded=nodes>1) → **`DETECT_GRADE=True`** · ✅ audio coverage · ✅ StartFrame ไม่ใช่ 0 (reel TC) แต่ duration = End−Start ถูก · ⚠️ render keys ยังไม่ยืนยัน (คิวว่าง)
+- 🐞 **GOTCHA สำคัญ (แก้แล้ว): `GetRenderJobList()`/`GetRenderJobStatus()` ทำให้ Resolve เด้งไปหน้า Deliver → รบกวน worker** → ปิด **`POLL_RENDER=False`** default ใน `resolve_poller.py` (deliver phase เป็น unmeasured, renormalize) · `IsRenderingInProgress` ปลอดภัย ไม่เปลี่ยนหน้า · ดึง delivery % แบบไม่รบกวนภายหลังผ่าน **fs-watch ของ render output** แทน
+- ⏳ perf: DETECT_GRADE สแกน `GetNodeGraph` ต่อ clip (309 clips = ~300+ remote calls/รอบ) — ยังไม่วัดเวลาจริง ถ้าช้าให้ทำ sampling หรือสแกนเฉพาะเครื่อง colorist
 
 **❌ ยังไม่ทำ/เทส:**
 - ยังไม่รันบน **Mac จริง** (เครื่อง dev เป็น Linux ไม่มี Resolve) — ทั้ง poller/sampler/probe
