@@ -35,29 +35,48 @@ def load_scope(project, marker_hint=None):
 
 def compute_progress(snap, scope):
     tl = (snap or {}).get("timeline", {}) or {}
-    if not scope or not scope.get("target_duration_sec"):
-        return {"bounded": False,
-                "note": "ยังไม่ได้ตั้ง target scope — รายงานค่าดิบแทน %",
-                "absolute": {"duration_sec": tl.get("duration_sec"), "video_clips": tl.get("video_clips")}}
+    scope = scope or {}
+    tgt = scope.get("target_duration_sec")       # ตัวหารของ duration
+    exp = scope.get("expected_shots")            # ตัวหารของ shots
+    n_shots = len(snap.get("shots") or []) if snap else 0   # shots ที่ conform แล้ว (marker ในไฟล์)
 
-    phases = {}
-    if tl.get("duration_sec") is not None:
-        phases["edit"] = _clamp(tl["duration_sec"] / scope["target_duration_sec"])
-    mc = (snap.get("render", {}) or {}).get("max_completion")
-    if mc is not None:                          # deliver วัดได้เฉพาะเมื่อ POLL_RENDER เปิด (ไม่งั้น unmeasured)
-        phases["deliver"] = _clamp(mc / 100.0)
+    phases, detail = {}, {}
+
+    # --- edit/conform = ผสม duration + shots (เฉลี่ยเฉพาะส่วนที่มีตัวหาร) ---
+    edit_parts = {}
+    if tl.get("duration_sec") is not None and tgt:
+        edit_parts["duration"] = _clamp(tl["duration_sec"] / tgt)
+    if n_shots and exp:
+        edit_parts["shots"] = _clamp(n_shots / exp)
+    if edit_parts:
+        phases["edit"] = sum(edit_parts.values()) / len(edit_parts)
+        detail = {k: round(v * 100, 1) for k, v in edit_parts.items()}
+
+    # --- color = graded clips / total (node > 1) ---
     if tl.get("graded_clips") is not None and tl.get("video_clips"):
         phases["color"] = _clamp(tl["graded_clips"] / tl["video_clips"])
+
+    # --- deliver (ปกติปิด POLL_RENDER → unmeasured) ---
+    mc = (snap.get("render", {}) or {}).get("max_completion")
+    if mc is not None:
+        phases["deliver"] = _clamp(mc / 100.0)
+
+    if not phases:
+        return {"bounded": False,
+                "note": "ยังไม่ได้ตั้ง target_duration_sec/expected_shots — รายงานค่าดิบแทน %",
+                "absolute": {"duration_sec": tl.get("duration_sec"),
+                             "video_clips": tl.get("video_clips"), "shots_seen": n_shots}}
 
     w = scope.get("phase_weights", DEFAULT_WEIGHTS)
     measured = {k: v for k, v in phases.items() if v is not None}
     wsum = sum(w.get(k, 0) for k in measured) or 1.0
     overall = sum(w.get(k, 0) * v for k, v in measured.items()) / wsum
-
     unmeasured = sorted((set(w) | set(phases)) - set(measured))
     flags = []
-    if tl.get("duration_sec", 0) > scope["target_duration_sec"]:
+    if tgt and tl.get("duration_sec", 0) > tgt:
         flags.append("over_target_duration")
     return {"bounded": True, "overall_pct": round(overall * 100, 1),
             "phases": {k: round(v * 100, 1) for k, v in measured.items()},
+            "edit_detail": detail or None,       # {duration:%, shots:%} ของเฟส edit
+            "shots_seen": n_shots,
             "measured_phases": sorted(measured), "unmeasured_phases": unmeasured, "flags": flags}
