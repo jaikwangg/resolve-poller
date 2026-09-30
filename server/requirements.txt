@@ -1,0 +1,4 @@
+# server — รันบนเครื่องกลาง
+fastapi
+uvicorn
+httpx        # สำหรับ TestClient (เทส) — production ไม่จำเป็น

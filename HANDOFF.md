@@ -78,7 +78,7 @@ per-user LaunchAgent (poll ~10 นาที)
 | `runner.py` | A3 — poll→joblink→scope→record schema 2→POST | ✅ **build_record เทสผ่าน (mock)** |
 | `JOB_LINK.md` | design กลไก job-link: registry schema, record change, join, flags, เพดาน | reference |
 
-> ⚠️ โค้ด A1–A5 ตอนนี้ยัง**ฝังอยู่ใน `TRACK_A.md`** ยังไม่แตกเป็น `.py` แยก — เป็นงานข้อ 2 ของ Next steps
+> 📁 **โครงสร้าง 2 folder (แยกตาม deploy):** `agent/` = รันบน workstation (`resolve_poller`, `activity_sampler`, `scope`, `joblink`, `runner`, `probe` + requirements/README) · `server/` = รันบนเครื่องกลาง (`dashboard_api`, `erp`, `dashboard.html` + requirements/README) · docs อยู่ root · คำสั่ง python รันจากในโฟลเดอร์นั้น (`cd agent` / `cd server`)
 
 ---
 

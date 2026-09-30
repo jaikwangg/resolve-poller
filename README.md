@@ -11,25 +11,29 @@
 - **creds ทั้งหมดผ่าน env — ห้าม commit** (ดู `.gitignore`)
 - ไม่ใช่คำแนะนำกฎหมาย — ต้องผ่านทนาย (PDPA) ก่อน deploy
 
-## ไฟล์
-| ไฟล์ | คือ |
-|---|---|
-| `HANDOFF.md` | **entry point** — อ่านก่อน |
-| `TRACK_A.md` / `API_REFERENCE.md` / `JOB_LINK.md` | สเปค + reference API + กลไก job-link |
-| `probe.py` | introspect Resolve จริง (รันก่อนเป็น gate) |
-| `resolve_poller.py` · `activity_sampler.py` · `scope.py` · `runner.py` | agent (A1/A2/A5/A3) |
-| `joblink.py` · `erp.py` | ผูก job ข้าม project (ERP booking → room+time→job) |
-| `dashboard_api.py` · `dashboard.html` | server (ingest/query/serve) + dashboard per-job 2-track |
+## โครงสร้าง (2 folder ตามการ deploy)
 
-## เริ่มเทส (บนเครื่องที่มี Resolve Studio)
+```
+resolve-poller/
+├── agent/     ← รันบน workstation 7 เครื่อง (อ่าน Resolve + idle → POST)   ดู agent/README.md
+│   resolve_poller · activity_sampler · scope · joblink · runner · probe
+├── server/    ← รันบนเครื่องกลาง 1 เครื่อง (ingest + ERP join + dashboard)  ดู server/README.md
+│   dashboard_api · erp · dashboard.html
+└── docs: HANDOFF (entry) · DATAFLOW · TRACK_A · API_REFERENCE · JOB_LINK
+```
+
+> **เริ่มอ่าน [`HANDOFF.md`](HANDOFF.md)** · dataflow + คำสั่งครบ [`DATAFLOW.md`](DATAFLOW.md)
+
+## เริ่มเร็ว
 ```bash
-# ตั้ง env ให้ชี้ Resolve scripting (path ต่าง OS — ดู HANDOFF/TRACK_A)
-python probe.py            # ดูว่า API เวอร์ชันนี้เผยอะไรได้จริง (โดยเฉพาะ color/audio)
-python resolve_poller.py   # snapshot JSON จริงที่จะส่งเข้า server
+# workstation (มี Resolve Studio)
+cd agent   &&  python probe.py  &&  python runner.py
+# server
+cd server  &&  pip install -r requirements.txt  &&  EDITORTRACK_TOKEN=xxx uvicorn dashboard_api:app --host 0.0.0.0 --port 8000
 ```
 
 ## สถานะ
-Track A + joblink + ERP connector + dashboard = เขียน + เทส (mock) ผ่านแล้ว · **ยังไม่รันบน Resolve/OS จริง** (gate ถัดไป) · Linux/Windows activity sampler ยังไม่ทำ (ตอนนี้ macOS) — รายละเอียดใน `HANDOFF.md`
+API metric #1 (color/edit/shots) พิสูจน์บนโปรเจคจริงแล้ว (Resolve 21.1) · zero-touch (ไม่เด้งหน้า) · sampler mac/win/linux · ERP join + dashboard 2-track + per-shot reconcile (เทส) · **เหลือ:** ต่อ ERP จริง + Linux sampler บนห้อง grade + deploy — รายละเอียด `HANDOFF.md`
 
 ---
 🤖 Generated with [Claude Code](https://claude.com/claude-code)

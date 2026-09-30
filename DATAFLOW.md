@@ -58,6 +58,7 @@ end-to-end ตั้งแต่ Resolve/ERP → agent → server → dashboard 
 
 **คำสั่ง — ทดสอบ agent แบบ manual (บนเครื่องมี Resolve):**
 ```bash
+cd agent                      # โค้ด agent อยู่ในโฟลเดอร์ agent/
 # env (per OS — ดู §Config)
 python resolve_poller.py      # ดู snapshot จริง
 python activity_sampler.py --watch   # ดู idle/frontmost สด
@@ -71,7 +72,7 @@ EDITORTRACK_SERVER=http://<server>:8000/ingest EDITORTRACK_TOKEN=xxx python runn
 **`dashboard_api.py` → `POST /ingest`**: verify Bearer token → append `data/YYYY-MM-DD.jsonl`
 
 ```bash
-# รัน server
+cd server && pip install -r requirements.txt     # โค้ด server อยู่ในโฟลเดอร์ server/
 EDITORTRACK_TOKEN=xxx uvicorn dashboard_api:app --host 0.0.0.0 --port 8000
 ```
 
@@ -186,12 +187,12 @@ RESOLVE_SCRIPT_LIB=/opt/resolve/libs/Fusion/fusionscript.so
 
 **Windows (Task Scheduler):**
 ```cmd
-schtasks /create /tn editortrack /tr "python C:\path\runner.py" /sc minute /mo 10 /ru <user>
+schtasks /create /tn editortrack /tr "python C:\path\resolve-poller\agent\runner.py" /sc minute /mo 10 /ru <user>
 ```
 
 **Linux (systemd user timer หรือ cron):**
 ```
-*/10 * * * * cd ~/resolve-poller && /usr/bin/python3 runner.py    # crontab -e (ใน X11 session)
+*/10 * * * * cd ~/resolve-poller/agent && /usr/bin/python3 runner.py    # crontab -e (ใน X11 session)
 ```
 > Linux ต้อง `libxss1` (idle) + (option) `xdotool` (frontmost) · X11 เท่านั้น
 
