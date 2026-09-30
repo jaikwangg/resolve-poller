@@ -36,10 +36,11 @@ def _windows():
     class LASTINPUTINFO(ctypes.Structure):
         _fields_ = [("cbSize", wintypes.UINT), ("dwTime", wintypes.DWORD)]
 
+    kernel32.GetTickCount.restype = wintypes.DWORD      # unsigned 32-bit (ไม่งั้น ctypes อ่านเป็น signed → ติดลบ)
     li = LASTINPUTINFO()
     li.cbSize = ctypes.sizeof(LASTINPUTINFO)
     user32.GetLastInputInfo(ctypes.byref(li))
-    idle = (kernel32.GetTickCount() - li.dwTime) / 1000.0
+    idle = ((kernel32.GetTickCount() - li.dwTime) & 0xFFFFFFFF) / 1000.0   # modular → กัน 32-bit wrap
     hwnd = user32.GetForegroundWindow()
     n = user32.GetWindowTextLengthW(hwnd)
     buf = ctypes.create_unicode_buffer(n + 1)

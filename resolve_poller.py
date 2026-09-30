@@ -135,7 +135,7 @@ def _shots_from_markers(tl, ranges):
     shots = []
     for off, m in (tl.GetMarkers() or {}).items():
         code = (m.get("name") or "").strip()
-        if not code:
+        if not code or re.match(r"^Marker\s+\d+$", code, re.I):   # ข้าม marker default (ไม่ใช่ shot code)
             continue
         f = tl_start + off                       # marker key = offset จาก timeline start
         graded = None
