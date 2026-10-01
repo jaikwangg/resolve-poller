@@ -12,6 +12,16 @@
 
 > conform/color ทำใน Resolve (อ่าน API) · data/subtitle/master **ไม่ใช่ Resolve** → อ่านจาก **ไฟล์ที่ผลิต** (ไม่พึ่ง API ของ tool)
 
+## Goal (ตัวหาร / 100% ของแต่ละ stage) — **ERP ไม่มี เราออกแบบเอง**
+| stage | goal (100%) | ที่มา |
+|---|---|---|
+| **color** | graded / total clips | **auto** จากไทม์ไลน์ (self-defined) |
+| **conform** | duration / **offline edit** | **auto** — อ่านความยาว offline/editorial timeline (`_offline_target`, env `EDITORTRACK_OFFLINE_MATCH`) · ⚠️ ต้อง validate ชื่อ/โครงสร้าง offline timeline บนโปรเจคจริง (ไม่เจอ → ค่าดิบ) |
+| **subtitle** | — | **ค่าดิบ** (นับ cue ไม่ทำ %) |
+| **master** | — | **ค่าดิบ** (นับไฟล์ ไม่ทำ %) |
+| **data** | — | ⏸️ **pause** (detail งานยังไม่ชัด) |
+> ค่าดิบ = รายงาน count/ความเคลื่อนไหว โดยไม่มี % (ยังมีประโยชน์ดูว่าขยับ) · เปิด % ภายหลังได้เมื่อมีแหล่ง goal
+
 ## หลักการ
 - **1 workstation = 1 stage** · ตั้ง `EDITORTRACK_STAGE` ต่อเครื่อง
 - ทุก stage ส่ง record **schema 3** รูปเดียวกัน → server รวมต่อ job เป็น N track

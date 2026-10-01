@@ -39,15 +39,18 @@ def _resolve(stage):
     if not snap.get("ok"):
         return {"ok": False, "stage": stage, "reason": snap.get("reason"),
                 "project": None, "job_hint": None, "raw": snap}
-    sc = scope.load_scope(snap.get("project"), snap.get("scope_hint")) or {}
-    prog = scope.compute_progress(snap, sc)
-    phases = prog.get("phases", {}) if prog.get("bounded") else {}
     tl = snap.get("timeline", {}) or {}
     if stage == "conform":
-        pct = phases.get("edit")
-        detail = prog.get("edit_detail") or {"duration_sec": tl.get("duration_sec"), "shots_seen": prog.get("shots_seen")}
-    else:  # color
-        pct = phases.get("color")
+        # goal = ความยาว offline edit (auto) · fallback scope registry · ไม่มี → ค่าดิบ (pct None)
+        target = snap.get("offline_target_sec")
+        sc = {"target_duration_sec": target} if target else (scope.load_scope(snap.get("project"), snap.get("scope_hint")) or {})
+        prog = scope.compute_progress(snap, sc)
+        pct = (prog.get("phases") or {}).get("edit")
+        detail = {"duration_sec": tl.get("duration_sec"), "offline_target_sec": target,
+                  "shots_seen": prog.get("shots_seen"), "parts": prog.get("edit_detail")}
+    else:  # color — graded/total clips (self-defined, ไม่ต้อง target)
+        prog = scope.compute_progress(snap, {})
+        pct = (prog.get("phases") or {}).get("color")
         detail = {"graded_clips": tl.get("graded_clips"), "video_clips": tl.get("video_clips")}
     return {"ok": True, "stage": stage, "project": snap.get("project"),
             "job_hint": snap.get("job_hint"), "scope_hint": snap.get("scope_hint"),

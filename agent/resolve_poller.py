@@ -83,6 +83,7 @@ def snapshot():
         }
         out["scope_hint"] = _marker_kv(tl, "scope")
         out["job_hint"] = _job_hint(tl)
+        out["offline_target_sec"] = _offline_target(proj, fps, tl.GetName())   # goal ของ conform
         if EXTRACT_SHOTS:
             out["shots"] = _shots_from_markers(tl, ranges)
 
@@ -136,6 +137,31 @@ def _marker_kv(tl, tag):
                     k, v = tok.split("=", 1)
                     kv[k.strip()] = v.strip()
             return kv or None
+    return None
+
+
+OFFLINE_MATCH = os.environ.get("EDITORTRACK_OFFLINE_MATCH", r"offline|editorial|_ref\b|reference|picture\s*lock|ผ่านตัด")
+
+
+def _offline_target(proj, fps, current_name):
+    """goal ของ conform = ความยาว 'offline/editorial timeline' ในโปรเจค (วินาที).
+    หา timeline ที่ชื่อ match OFFLINE_MATCH (ข้ามไทม์ไลน์ที่กำลังทำ) → duration.
+    ⚠️ ต้อง validate โครงสร้างจริง (ชื่อ offline timeline) ด้วย probe — คืน None ถ้าไม่เจอ → conform เป็นค่าดิบ."""
+    try:
+        n = proj.GetTimelineCount() or 0
+    except Exception:
+        return None
+    for i in range(1, n + 1):
+        try:
+            tl = proj.GetTimelineByIndex(i)       # ไม่เปลี่ยน current timeline (อ่านอย่างเดียว)
+            name = tl.GetName() or ""
+            if name == current_name:
+                continue
+            if re.search(OFFLINE_MATCH, name, re.I):
+                frames = (tl.GetEndFrame() or 0) - (tl.GetStartFrame() or 0)
+                return round(frames / (fps or 24.0), 2) if frames > 0 else None
+        except Exception:
+            continue
     return None
 
 
