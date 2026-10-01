@@ -15,11 +15,11 @@
 
 ```
 resolve-poller/
-├── agent/     ← รันบน workstation 7 เครื่อง (อ่าน Resolve + idle → POST)   ดู agent/README.md
-│   resolve_poller · activity_sampler · scope · joblink · runner · probe
-├── server/    ← รันบนเครื่องกลาง 1 เครื่อง (ingest + ERP join + dashboard)  ดู server/README.md
+├── agent/     ← รันบน workstation (อ่าน progress ตาม stage + idle → POST)  ดู agent/README.md
+│   collect (dispatcher) · resolve_poller · fs_collector · subtitle_collector · activity_sampler · scope · joblink · runner · probe · deploy/
+├── server/    ← รันบนเครื่องกลาง (ingest + ERP join + dashboard)  ดู server/README.md
 │   dashboard_api · erp · dashboard.html
-└── docs: HANDOFF (entry) · DATAFLOW · TRACK_A · API_REFERENCE · JOB_LINK
+└── docs: HANDOFF (entry) · DATAFLOW · STAGES (5-stage) · TRACK_A · API_REFERENCE · JOB_LINK
 ```
 
 > **เริ่มอ่าน [`HANDOFF.md`](HANDOFF.md)** · dataflow + คำสั่งครบ [`DATAFLOW.md`](DATAFLOW.md)

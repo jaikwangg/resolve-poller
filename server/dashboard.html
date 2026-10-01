@@ -150,8 +150,8 @@
 
   <div class="card">
     <div class="card-head">
-      <div><h2>งานตาม deliverable · Conform → Color</h2>
-      <p class="cap">แต่ละงาน = 2 track ขนาน (conform + color) join จาก ERP booking · จุดเขียว = กำลังทำอยู่</p></div>
+      <div><h2>งานตาม deliverable · pipeline 5 stage</h2>
+      <p class="cap">Data → Conform → Color → Subtitle → Master · join จาก ERP booking · จุดเขียว = กำลังทำอยู่</p></div>
     </div>
     <div id="jobsList"></div>
   </div>
@@ -164,22 +164,12 @@
     <div class="legend" id="legProgress"></div>
   </div>
 
-  <div class="grid2">
-    <div class="card">
-      <div class="card-head">
-        <div><h2>ความคืบหน้าแต่ละเฟส</h2><p class="cap" id="phaseCap"></p></div>
-      </div>
-      <div class="seg" id="projSel" role="group" aria-label="เลือกโปรเจค"></div>
-      <div id="chartPhases" style="margin-top:12px"></div>
+  <div class="card">
+    <div class="card-head">
+      <div><h2>เวลาไปไหน (ต่อ stage / page)</h2><p class="cap">รวมนาทีที่ active แต่ละ stage/page</p></div>
     </div>
-
-    <div class="card">
-      <div class="card-head">
-        <div><h2>เวลาไปไหน (ต่อหน้า Resolve)</h2><p class="cap">รวมนาทีที่อยู่แต่ละ page</p></div>
-      </div>
-      <div class="seg" id="workerSel" role="group" aria-label="เลือกคน"></div>
-      <div id="chartTime" style="margin-top:12px"></div>
-    </div>
+    <div class="seg" id="workerSel" role="group" aria-label="เลือกคน"></div>
+    <div id="chartTime" style="margin-top:12px"></div>
   </div>
 
   <div class="card">
@@ -229,15 +219,20 @@ const SAMPLE = {
 };
 
 const SAMPLE_JOBS = {jobs:[
-  {job_id:"KPP-2026-5871", title:"DEV-BURNUP Feature film grade", linked:true, source:"erp",
-   conform:{worker:"conform-01", page:"edit", pct:80, active:true},
-   color:{worker:"grade-03", page:"color", pct:35, active:true}, overall_pct:58.8, flags:[]},
-  {job_id:"KPP-2026-6012", title:"MV — XYZ Online", linked:true, source:"erp",
-   conform:{worker:"conform-01", page:"deliver", pct:100, active:false},
-   color:{worker:"grade-05", page:"color", pct:22, active:true}, overall_pct:63.3, flags:[]},
-  {job_id:"KPP-2026-5990", title:"DOC Series EP4", linked:true, source:"erp",
-   conform:{worker:"conform-01", page:"edit", pct:55, active:true},
-   color:null, overall_pct:55.0, flags:["color_not_started"]},
+  {job_id:"KPP-2026-5871", title:"DEV-BURNUP Feature film", source:"erp", overall_pct:60.0,
+   stage_order:["data","conform","color","subtitle","master"],
+   tracks:{ data:{pct:100,worker:"dit-01",active:false},
+            conform:{pct:90,worker:"conform-01",page:"edit",active:true},
+            color:{pct:60,worker:"grade-03",page:"color",active:true},
+            subtitle:{pct:40,worker:"sub-01",active:false},
+            master:{pct:10,worker:"master-01",active:true} }, flags:[]},
+  {job_id:"KPP-2026-6012", title:"MV — XYZ", source:"erp", overall_pct:46.0,
+   stage_order:["conform","color"],
+   tracks:{ conform:{pct:70,worker:"conform-01",page:"deliver",active:false},
+            color:{pct:22,worker:"grade-05",page:"color",active:true} }, flags:[]},
+  {job_id:"KPP-2026-5990", title:"DOC Series EP4", source:"erp", overall_pct:55.0,
+   stage_order:["conform"],
+   tracks:{ conform:{pct:55,worker:"conform-01",page:"edit",active:true} }, flags:["color: ยังไม่วัด"]},
 ]};
 
 const SERIES_COLORS = ["var(--s1)","var(--s2)","var(--s3)"];
@@ -411,10 +406,6 @@ function attachBarTips(container){
 
 /* ---------- selectors ---------- */
 function buildSelectors(){
-  $("#projSel").innerHTML = DATA.projects.map((p,i)=>
-    `<button aria-pressed="${i===curProj}" data-i="${i}">${esc(p.project)}</button>`).join("");
-  $("#projSel").onclick = e=>{ const b=e.target.closest("button"); if(!b)return;
-    curProj=+b.dataset.i; syncPressed("#projSel",b); renderPhases(); };
   const workers = Object.keys(DATA.phase_time);
   const wname = w => w==="__team__"?"ทั้งทีม":w;
   $("#workerSel").innerHTML = workers.map(w=>
@@ -424,17 +415,18 @@ function buildSelectors(){
 }
 function syncPressed(sel,btn){ document.querySelectorAll(sel+" button").forEach(x=>x.setAttribute("aria-pressed", x===btn)); }
 
-/* ---------- per-job 2-track ---------- */
-const FLAG_TH = {unlinked:"ไม่ผูก job", color_not_started:"color ยังไม่เริ่ม",
-  conform_missing:"ไม่มี conform", color_unmeasured:"color ยังวัดไม่ได้"};
+/* ---------- per-job dynamic tracks (5 stage) ---------- */
+const STAGE_LABEL = {data:"Data", conform:"Conform", color:"Color", subtitle:"Subtitle", master:"Master"};
+const STAGE_COLOR = {data:"var(--s2)", conform:"var(--s1)", color:"var(--s3)", subtitle:"var(--warn)", master:"var(--good)"};
 
-function trackBar(t, color, label){
+function trackBar(stage, t){
+  const label = STAGE_LABEL[stage] || stage, col = STAGE_COLOR[stage] || "var(--s1)";
   if(!t) return `<div class="trk empty"><span class="trk-l">${label}</span><span class="trk-none">ยังไม่เริ่ม</span></div>`;
   const pct = (t.pct===null||t.pct===undefined) ? null : t.pct;
   const dot = t.active ? '<span class="live" title="กำลังทำอยู่"></span>' : '';
   const w = pct===null ? 0 : Math.max(2, pct);
   const val = pct===null ? 'ยังไม่วัด' : pct+'%';
-  const style = `width:${w}%;background:${color}` + (pct===null ? ';opacity:.3' : '');
+  const style = `width:${w}%;background:${col}` + (pct===null ? ';opacity:.3' : '');
   return `<div class="trk">
     <div class="trk-top"><span class="trk-l">${label}${dot}</span>
       <span class="trk-meta">${esc(t.worker||'—')}${t.page?' · '+esc(t.page):''}</span>
@@ -449,21 +441,22 @@ function renderJobs(){
   $("#jobsList").innerHTML = jobs.map(j=>{
     const ov = (j.overall_pct===null||j.overall_pct===undefined) ? '—' : j.overall_pct+'%';
     const src = j.source==='erp' ? '<span class="chip erp">ERP</span>' : '';
-    const flags = (j.flags||[]).map(f=>`<span class="chip warn">${FLAG_TH[f]||f}</span>`).join('');
+    const flags = (j.flags||[]).map(f=>`<span class="chip warn">${esc(f)}</span>`).join('');
+    const order = j.stage_order || Object.keys(j.tracks||{});
+    const bars = order.map(s=>trackBar(s, (j.tracks||{})[s])).join('');
     return `<div class="job">
       <div class="job-head">
         <div><div class="job-title">${esc(j.title||j.job_id)}</div><div class="job-id">${esc(j.job_id)}</div></div>
         <div class="job-ov"><div class="job-ov-n">${ov}</div><div class="job-ov-l">overall</div></div>
       </div>
       <div class="chips">${src}${flags}</div>
-      ${trackBar(j.conform,'var(--s1)','Conform')}
-      ${trackBar(j.color,'var(--s3)','Color')}
+      ${bars}
     </div>`;
   }).join('');
 }
 
 /* ---------- boot ---------- */
-function renderAll(){ renderJobs(); renderTiles(); renderProgress(); buildSelectors(); renderPhases(); renderTime(); renderActive();
+function renderAll(){ renderJobs(); renderTiles(); renderProgress(); buildSelectors(); renderTime(); renderActive();
   $("#srcbadge").innerHTML = DATA.sample ? '<span class="badge">ข้อมูลตัวอย่าง</span>' : "";
   $("#foot").textContent = "อัปเดต: "+new Date(DATA.generated_at).toLocaleString("th-TH")+(DATA.sample?" · sample data — ต่อ /api/dashboard + /api/jobs เพื่อข้อมูลจริง":"");
 }

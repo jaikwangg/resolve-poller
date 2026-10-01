@@ -41,6 +41,13 @@ TASK_ROLE = {"grading": "colorist", "grade": "colorist", "color": "colorist", "c
              "conform": "conform", "conforming": "conform", "online": "conform", "onlining": "conform",
              "edit": "conform", "editorial": "conform"}
 
+# activity (ERP) → stage (5 stage ของ pipeline)
+STAGE_MAP = {"grading": "color", "grade": "color", "color": "color", "colour": "color", "cc": "color",
+             "conform": "conform", "conforming": "conform", "online": "conform", "edit": "conform", "editorial": "conform",
+             "data": "data", "data management": "data", "dit": "data", "ingest": "data", "data wrangle": "data",
+             "subtitle": "subtitle", "subtitles": "subtitle", "caption": "subtitle", "captions": "subtitle",
+             "master": "master", "mastering": "master", "deliverable": "master"}
+
 _tok = {"token": None, "exp": None}
 _cache = {"at": None, "rows": []}
 
@@ -168,7 +175,8 @@ def lookup(host, ts):
             task = str(b.get(F["task"], "")).lower()
             return {"job_id": b.get(F["job"]),
                     "title": b.get(F["title"]) or b.get(F["job"]),
-                    "role": TASK_ROLE.get(task),          # None → caller fallback role เครื่อง
+                    "role": TASK_ROLE.get(task),          # compat เดิม
+                    "stage": STAGE_MAP.get(task),         # 5-stage · None → caller fallback stage เครื่อง
                     "target_duration_sec": b.get("target_duration_sec"),
                     "status": b.get("status"), "source": "erp"}
     return None
