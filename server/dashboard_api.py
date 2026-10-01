@@ -14,6 +14,8 @@ TOKEN = os.environ.get("EDITORTRACK_TOKEN", "")
 INTERVAL_MIN = int(os.environ.get("EDITORTRACK_INTERVAL_MIN", "10"))
 HERE = pathlib.Path(__file__).parent
 STAGES = ["data", "conform", "color", "subtitle", "master"]
+# NOTE: ระบบนี้ไม่จัด queue/dependency (subtitle รอ color ฯลฯ) — ERP จัดการเอง
+# หน้าที่ระบบ = วัด progress ต่อ stage แล้วส่งให้ ERP
 
 try:
     import erp
@@ -30,7 +32,17 @@ async def ingest(req: Request, authorization: str = Header(default="")):
     day = datetime.date.today().isoformat()
     with open(STORE / f"{day}.jsonl", "a", encoding="utf-8") as f:
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-    return {"ok": True}
+    # push progress → ERP (best-effort; no-op ถ้ายังไม่ตั้ง ERP_PROGRESS_PATH) — นี่คือ "หน้าที่หลัก" ของระบบ
+    pushed = False
+    if erp:
+        try:
+            eff = _eff_job(rec)
+            prog = rec.get("progress") or {}
+            if eff.get("job_id") and eff.get("stage") and prog.get("pct") is not None:
+                pushed = erp.push_progress(eff["job_id"], eff["stage"], prog["pct"])
+        except Exception:
+            pass
+    return {"ok": True, "pushed": pushed}
 
 
 # ---------------- load / helpers ----------------

@@ -48,6 +48,13 @@ STAGE_MAP = {"grading": "color", "grade": "color", "color": "color", "colour": "
              "subtitle": "subtitle", "subtitles": "subtitle", "caption": "subtitle", "captions": "subtitle",
              "master": "master", "mastering": "master", "deliverable": "master"}
 
+# ---- push progress กลับ ERP (ตั้ง ERP_PROGRESS_PATH เพื่อเปิด; ว่าง=ไม่ push) — รอ spec จริงจาก ERP ----
+ERP_PROGRESS_PATH = os.environ.get("ERP_PROGRESS_PATH", "")   # เช่น /api/progress
+ERP_PROGRESS_METHOD = os.environ.get("ERP_PROGRESS_METHOD", "POST")
+PF = {"job":   os.environ.get("ERP_PF_JOB", "project_no"),
+      "stage": os.environ.get("ERP_PF_STAGE", "activity"),
+      "pct":   os.environ.get("ERP_PF_PCT", "progress_pct")}
+
 _tok = {"token": None, "exp": None}
 _cache = {"at": None, "rows": []}
 
@@ -180,3 +187,36 @@ def lookup(host, ts):
                     "target_duration_sec": b.get("target_duration_sec"),
                     "status": b.get("status"), "source": "erp"}
     return None
+
+
+def _post_auth(url, payload, method="POST"):
+    data = json.dumps(payload).encode()
+
+    def _do(tok):
+        req = urllib.request.Request(url, data=data, method=method,
+                                     headers={"Authorization": f"Bearer {tok}",
+                                              "Content-Type": "application/json", "Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            return json.load(r)
+    try:
+        return _do(_login())
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            _tok["token"] = None
+            return _do(_login())
+        raise
+
+
+def push_progress(job_id, stage, pct, extra=None):
+    """ส่ง progress กลับ ERP (best-effort). no-op ถ้ายังไม่ตั้ง ERP_PROGRESS_PATH.
+    payload field ปรับผ่าน ERP_PF_* (รอ spec จริงจาก ERP)."""
+    if not ERP_PROGRESS_PATH or not ERP_BASE or not job_id or pct is None:
+        return False
+    payload = {PF["job"]: job_id, PF["stage"]: stage, PF["pct"]: pct}
+    if extra:
+        payload.update(extra)
+    try:
+        _post_auth(f"{ERP_BASE}{ERP_PROGRESS_PATH}", payload, ERP_PROGRESS_METHOD)
+        return True
+    except Exception:
+        return False

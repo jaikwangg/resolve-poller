@@ -10,7 +10,7 @@
 
 ระบบติดตาม **ความคืบหน้า + เวลาทำงานจริง** ของทีมตัดต่อ **DaVinci Resolve บน macOS** ระดับองค์กร แบบ **DIY + ใช้ local LLM**
 เก็บ 2 metric: **#1** % ความคืบหน้างานตัดต่อ (proxy) · **#2** เวลา active-in-Resolve
-ปลายทาง: dashboard ให้หัวหน้า/PM เห็นภาพรวม + (เฟสต่อไป) report เชิงเล่าเรื่องต่อ session
+ปลายทาง: **push progress ต่อ stage กลับ ERP** (ERP เป็นเจ้าของ queue/schedule/dependency — ระบบนี้**ไม่จัดคิว** แค่รายงาน progress) · dashboard = monitor ภายใน (ไม่ใช่ตัว product หลัก)
 
 > **งานหลักของทีม = ตัดต่อ (edit) + ปรับสี (color)** — ไม่เน้น audio/fusion → phase weights = `edit 0.45 / color 0.40 / deliver 0.15` (audio ตัดออก)
 > ผลคือ **การ detect สีให้ได้เป็น priority สูง ไม่ใช่ optional** (color นน .40 ถ้าวัดไม่ได้ % เพี้ยนหนัก) — ดู §7 ข้อ 1
