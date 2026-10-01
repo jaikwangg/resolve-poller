@@ -1,0 +1,10 @@
+[Unit]
+Description=run editortrack agent ทุก 10 นาที
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

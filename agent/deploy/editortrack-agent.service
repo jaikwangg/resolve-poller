@@ -1,0 +1,9 @@
+[Unit]
+Description=editortrack agent — poll DaVinci Resolve (oneshot, เรียกโดย .timer)
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh @AGENT_DIR@/deploy/run-agent.sh
+# X11: systemd --user service มักต้องระบุ display/authority เอง (ปรับถ้าจอ/ผู้ใช้ต่าง)
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=%h/.Xauthority

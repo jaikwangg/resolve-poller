@@ -23,3 +23,7 @@ venv/
 # os
 .DS_Store
 Thumbs.db
+
+# agent deploy env (มี token)
+env.sh
+agent/deploy/env.sh
