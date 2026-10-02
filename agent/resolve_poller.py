@@ -12,6 +12,19 @@ DETECT_GRADE = _envflag("EDITORTRACK_DETECT_GRADE", True)    # color room=on · 
 POLL_RENDER = _envflag("EDITORTRACK_POLL_RENDER", False)     # ⚠️ on = GetRenderJobList เด้งหน้า Deliver → รบกวน worker (deliver ไม่ใช้แล้ว)
 EXTRACT_SHOTS = _envflag("EDITORTRACK_EXTRACT_SHOTS", True)  # ดึง shots จาก marker (code + graded/conformed)
 RESTORE_PAGE = _envflag("EDITORTRACK_RESTORE_PAGE", True)    # กันเหนียว: ถ้าหน้าเปลี่ยนระหว่าง poll → คืนหน้าเดิม
+EXTRACT_CLIP_META = _envflag("EDITORTRACK_EXTRACT_CLIP_META", False)  # ⚠️ หนัก: ดึง meta ราย clip (source/metadata/node label/version/fusion) — เปิดเฉพาะตอนต้องการ detail ลึก + ยืนยันด้วย probe ก่อน
+try:
+    CLIP_META_MAX = int(os.environ.get("EDITORTRACK_CLIP_META_MAX", "0") or 0)  # จำกัดจำนวน clip ที่ดึง detail (0 = ทั้งหมด) — กัน payload บวมบน timeline ใหญ่
+except ValueError:
+    CLIP_META_MAX = 0
+
+
+def _safe(obj, method, *args):
+    """เรียก obj.method(*args) แบบปลอดภัย (รวม getattr) → ค่า หรือ None ถ้าไม่มี/เรียกไม่ผ่าน."""
+    try:
+        return getattr(obj, method)(*args)
+    except Exception:
+        return None
 
 
 def _load_resolve():
@@ -58,7 +71,8 @@ def snapshot():
         atracks = tl.GetTrackCount("audio") or 0
         t0 = time.time()
         vclips, graded = 0, 0
-        ranges = []   # (start, end, graded) ต่อ clip — ใช้ match marker→shot (สแกนรอบเดียว)
+        ranges = []          # (start, end, graded) ต่อ clip — ใช้ match marker→shot (สแกนรอบเดียว)
+        clips_detail = []    # เปิดด้วย EXTRACT_CLIP_META เท่านั้น (ดึง meta ลึกราย clip)
         for i in range(1, vtracks + 1):
             items = tl.GetItemListInTrack("video", i) or []   # NOTE: transition ไม่รวม
             vclips += len(items)
@@ -71,6 +85,8 @@ def snapshot():
                         ranges.append((it.GetStart(), it.GetEnd(), g))
                     except Exception:
                         pass
+                if EXTRACT_CLIP_META and (CLIP_META_MAX == 0 or len(clips_detail) < CLIP_META_MAX):
+                    clips_detail.append(_clip_detail(it, "V%d" % i))
         scan_ms = int((time.time() - t0) * 1000)
         out["timeline"] = {
             "name": tl.GetName(),
@@ -86,6 +102,9 @@ def snapshot():
         out["offline_target_sec"] = _offline_target(proj, fps, tl.GetName())   # goal ของ conform
         if EXTRACT_SHOTS:
             out["shots"] = _shots_from_markers(tl, ranges)
+        if EXTRACT_CLIP_META:
+            out["clips_detail"] = clips_detail
+            out["clips_detail_count"] = len(clips_detail)
 
     # render status: IsRenderingInProgress (บน out["rendering"] แล้ว) ปลอดภัย ไม่เปลี่ยนหน้า
     # แต่ GetRenderJobList/GetRenderJobStatus เปลี่ยนหน้าเป็น Deliver → ปิดไว้ (POLL_RENDER)
@@ -120,6 +139,73 @@ def _is_graded(item):
         return bool(n and n > 1)
     except Exception:
         return False
+
+
+# คีย์ ClipProperty ที่สนใจ (GetClipProperty() no-arg คืน dict ทั้งหมด → เลือกเฉพาะนี้ กัน payload บวม)
+_SRC_KEYS = ("Resolution", "Video Codec", "FPS", "File Path", "Usage", "Date Created", "Type")
+
+
+def _color_detail(item):
+    """ชั้นสีราย clip: node count + label + LUT + versions + group (ทุกตัว 🟠 version-dependent → safe)."""
+    c = {}
+    g = _safe(item, "GetNodeGraph")
+    if g is not None:
+        n = _safe(g, "GetNumNodes")
+        if isinstance(n, int):
+            c["nodes"] = n
+            c["graded"] = n > 1
+            labels, luts = [], {}
+            for i in range(1, n + 1):
+                lb = _safe(g, "GetNodeLabel", i)
+                if lb:
+                    labels.append(lb)
+                lut = _safe(g, "GetLUT", i)
+                if lut and lut not in ("", "None"):
+                    luts[str(i)] = lut
+            if labels:
+                c["node_labels"] = labels
+            if luts:
+                c["luts"] = luts
+    vers = _safe(item, "GetVersionNameList", 0)   # 0 = local versions
+    if vers:
+        c["versions"] = vers
+    grp = _safe(item, "GetColorGroup")
+    if grp is not None:
+        c["color_group"] = _safe(grp, "GetName") or str(grp)
+    return c or None
+
+
+def _clip_detail(item, track):
+    """ดึง meta ราย clip แบบ safe ทุก method (เปิดด้วย EXTRACT_CLIP_META).
+    ฟิลด์ที่หายไป = เวอร์ชันนี้ไม่คืนค่า/ทีมไม่ได้ใส่ (ดู probe §5d ว่าตัวไหนใช้ได้จริง)."""
+    d = {"name": _safe(item, "GetName"), "track": track,
+         "start": _safe(item, "GetStart"), "end": _safe(item, "GetEnd"),
+         "duration": _safe(item, "GetDuration"),
+         "left_offset": _safe(item, "GetLeftOffset"), "right_offset": _safe(item, "GetRightOffset"),
+         "clip_color": _safe(item, "GetClipColor"), "flags": _safe(item, "GetFlagList")}
+    cm = _safe(item, "GetMarkers")
+    if isinstance(cm, dict) and cm:
+        d["markers"] = [{"frame": k, "name": v.get("name"), "color": v.get("color"), "note": v.get("note")}
+                        for k, v in cm.items()]
+    mp = _safe(item, "GetMediaPoolItem")
+    if mp is not None:
+        props = _safe(mp, "GetClipProperty")      # no-arg → dict ทั้งหมด
+        if isinstance(props, dict):
+            src = {k: props.get(k) for k in _SRC_KEYS if props.get(k)}
+            if src:
+                d["source"] = src
+        meta = _safe(mp, "GetMetadata")           # no-arg → dict (🟠 บางเวอร์ชันต้องใส่ key ทีละตัว)
+        if isinstance(meta, dict):
+            meta = {k: v for k, v in meta.items() if v}
+            if meta:
+                d["metadata"] = meta
+    color = _color_detail(item)
+    if color:
+        d["color"] = color
+    fc = _safe(item, "GetFusionCompCount")
+    if fc:
+        d["fusion_comps"] = fc
+    return {k: v for k, v in d.items() if v not in (None, [], {})}
 
 
 def _iter_marker_text(tl):

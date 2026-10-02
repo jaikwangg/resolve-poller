@@ -283,6 +283,63 @@ else:
         print("\n  → COLOR: ❌ ยังดึงสถานะเกรดไม่ได้ — ปล่อย DETECT_GRADE=False (เฟส color ถูกข้ามใน %)")
 
 
+# ---------- 5d. DEEP CLIP META — ยืนยัน EXTRACT_CLIP_META ----------
+h("5d. DEEP CLIP META — ยืนยัน EXTRACT_CLIP_META (ราย clip + perf)")
+if not clips:
+    print("  ⚠ ไม่มี clip — ข้าม")
+    REPORT["clip_meta"] = {"status": "no_clip"}
+else:
+    REPORT["clip_meta"] = {}
+    c0 = clips[0]
+    # 1) คีย์ทั้งหมดที่ MediaPoolItem เผย (เอาไว้จูน _SRC_KEYS / เลือก metadata)
+    _, mp = call(c0, "GetMediaPoolItem", show=False)
+    if mp is not None:
+        _, allprops = call(mp, "GetClipProperty", show=False)   # no-arg → dict ทั้งหมด
+        if isinstance(allprops, dict):
+            print(f"  ✓ ClipProperty keys ({len(allprops)}): {list(allprops.keys())}")
+            REPORT["clip_meta"]["clip_property_keys"] = list(allprops.keys())
+        else:
+            print(f"  ⚠ GetClipProperty() ไม่คืน dict (ได้ {type(allprops).__name__}) — เวอร์ชันนี้ต้องเรียกทีละ key")
+        _, allmeta = call(mp, "GetMetadata", show=False)        # no-arg → dict (🟠)
+        if isinstance(allmeta, dict):
+            nonempty = [k for k, v in allmeta.items() if v]
+            print(f"  ✓ Metadata keys ที่มีค่า ({len(nonempty)}): {nonempty}")
+            REPORT["clip_meta"]["metadata_keys"] = nonempty
+        else:
+            print(f"  ⚠ GetMetadata() ไม่คืน dict (ได้ {type(allmeta).__name__}) — อาจต้องใส่ key ทีละตัว")
+    else:
+        print("  ⚠ GetMediaPoolItem() = None (clip นี้ไม่มี media pool item?)")
+
+    # 2) รันโค้ดจริง resolve_poller._clip_detail กับ clip[0] → เห็นว่าได้ field ไหนจริง
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import resolve_poller as rp
+        detail = rp._clip_detail(c0, "V1")
+        print(f"\n  ✓ _clip_detail(clip[0]) → fields: {list(detail.keys())}")
+        if "color" in detail:
+            print(f"    color: {json.dumps(detail['color'], ensure_ascii=False, default=str)}")
+        print("  full JSON (clip[0]):")
+        print("    " + json.dumps(detail, ensure_ascii=False, default=str, indent=2).replace("\n", "\n    "))
+        REPORT["clip_meta"]["sample_fields"] = list(detail.keys())
+        REPORT["clip_meta"]["sample"] = detail
+
+        # 3) perf: ดึง detail ครบทั้ง timeline — ตัวเลขนี้คือภาระจริงถ้าเปิด EXTRACT_CLIP_META
+        import time as _t
+        t0 = _t.time()
+        for c in clips:
+            rp._clip_detail(c, "V?")
+        ms = int((_t.time() - t0) * 1000)
+        per = round(ms / max(len(clips), 1), 1)
+        print(f"\n  ⏱️ ดึง detail ครบ {len(clips)} clip ใช้ {ms} ms  (~{per} ms/clip)")
+        print(f"    → เทียบ scan เบา (นับ node) ~0.2s · ถ้าหนักเกินให้ตั้ง EDITORTRACK_CLIP_META_MAX=<n>")
+        REPORT["clip_meta"]["scan_ms_all"] = ms
+        REPORT["clip_meta"]["scan_clips"] = len(clips)
+        REPORT["clip_meta"]["ms_per_clip"] = per
+    except Exception as e:
+        print(f"  ✗ เรียก resolve_poller._clip_detail ไม่ผ่าน: {e}")
+        REPORT["clip_meta"]["error"] = str(e)
+
+
 # ---------- 6. AUDIO — ลองทุกทาง ----------
 h("6. AUDIO COVERAGE — ลองทุก method")
 a_tracks = tl.GetTrackCount("audio") or 0
@@ -365,6 +422,13 @@ print(f"  {m(rk not in (None, 'empty_queue'))} render keys {'(คิวว่า
 col = REPORT.get("color", {})
 print(f"  {m(bool(col.get('node_graph') and col.get('num_nodes_readable')))} COLOR detection (node graph)")
 print(f"  {m(REPORT.get('audio', {}).get('readable') is True)} AUDIO coverage")
+cm = REPORT.get("clip_meta", {})
+if cm.get("sample_fields"):
+    print(f"  {m(True)} DEEP clip-meta ({len(cm['sample_fields'])} fields · {cm.get('scan_ms_all','?')}ms/{cm.get('scan_clips','?')} clip)")
+elif cm.get("status") == "no_clip":
+    print(f"  {m(None)} DEEP clip-meta (ไม่มี clip)")
+elif cm:
+    print(f"  {m(False)} DEEP clip-meta (เรียกไม่ผ่าน — ดู §5d)")
 
 print("\n  === แปะลงโค้ด ===")
 if bid:
@@ -375,5 +439,12 @@ else:
     print("  resolve_poller.py:    DETECT_GRADE = False  # ยังดึงเกรดไม่ได้")
 if isinstance(rk, dict):
     print(f"  render id/status keys: {rk}")
+if cm.get("sample_fields"):
+    per = cm.get("ms_per_clip", "?")
+    print(f"  resolve_poller.py:    EDITORTRACK_EXTRACT_CLIP_META=1  # ดึง detail ลึกได้ (~{per} ms/clip)")
+    if isinstance(cm.get("scan_ms_all"), int) and cm["scan_ms_all"] > 1500:
+        print(f"                        EDITORTRACK_CLIP_META_MAX=50   # ⚠ {cm['scan_ms_all']}ms/รอบ ถือว่าหนัก — จำกัดจำนวน clip")
+    if cm.get("clip_property_keys"):
+        print(f"  (ClipProperty keys จริงบนเครื่องนี้ → จูน _SRC_KEYS ได้: {cm['clip_property_keys']})")
 
 save_and_exit(0)
