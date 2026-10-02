@@ -7,3 +7,10 @@ ExecStart=/bin/sh @AGENT_DIR@/deploy/run-agent.sh
 # X11: systemd --user service มักต้องระบุ display/authority เอง (ปรับถ้าจอ/ผู้ใช้ต่าง)
 Environment=DISPLAY=:0
 Environment=XAUTHORITY=%h/.Xauthority
+# priority ต่ำสุด + เพดานทรัพยากร: การันตีว่าไม่แย่ง Resolve (ตรงกับ plist ฝั่ง Mac)
+Nice=19
+IOSchedulingClass=idle
+CPUWeight=20
+CPUQuota=20%
+MemoryMax=200M
+TimeoutStartSec=120
