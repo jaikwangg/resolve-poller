@@ -11,6 +11,7 @@ IDLE_THRESHOLD = int(os.environ.get("EDITORTRACK_IDLE", "90"))   # วิ; เ�
 STAGE = canon(os.environ.get("EDITORTRACK_STAGE") or os.environ.get("EDITORTRACK_ROLE") or "conform")
 SERVER = os.environ.get("EDITORTRACK_SERVER", "http://localhost:8000/ingest")
 TOKEN = os.environ.get("EDITORTRACK_TOKEN", "")
+HTTP_TIMEOUT = int(os.environ.get("EDITORTRACK_HTTP_TIMEOUT", "5"))   # วิ; server ค้าง → เข้า offline queue ไม่ค้าง agent
 QUEUE = pathlib.Path(os.path.expanduser("~/.editortrack/queue.jsonl"))
 
 
@@ -42,7 +43,7 @@ def post(rec):
         SERVER, data=data,
         headers={"Content-Type": "application/json", "Authorization": f"Bearer {TOKEN}"})
     try:
-        with urllib.request.urlopen(req, timeout=10) as r:
+        with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as r:
             _flush_queue()
             return r.status
     except Exception:

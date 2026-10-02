@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<!-- macOS LaunchAgent (per-user, GUI session) — install.sh จะแทน @AGENT_DIR@ ให้ -->
+<!-- macOS LaunchAgent · install.sh แทน @AGENT_DIR@ ให้
+     วางที่ ~/Library/LaunchAgents = ทดสอบรายคน · /Library/LaunchAgents = ทุก user (ต้อง sudo)
+     log เขียนเองที่ ~/.editortrack/agent.log (run-agent.sh) — ไม่ชนกันระหว่าง user -->
 <plist version="1.0">
 <dict>
   <key>Label</key><string>com.kantana.editortrack.agent</string>
@@ -12,7 +14,9 @@
   </array>
   <key>StartInterval</key><integer>600</integer>   <!-- ทุก 10 นาที -->
   <key>RunAtLoad</key><true/>
-  <key>StandardOutPath</key><string>/tmp/editortrack.out.log</string>
-  <key>StandardErrorPath</key><string>/tmp/editortrack.err.log</string>
+  <!-- ลำดับความสำคัญต่ำสุด: การันตีว่าไม่แย่งทรัพยากร Resolve -->
+  <key>ProcessType</key><string>Background</string>
+  <key>Nice</key><integer>19</integer>
+  <key>LowPriorityIO</key><true/>
 </dict>
 </plist>
