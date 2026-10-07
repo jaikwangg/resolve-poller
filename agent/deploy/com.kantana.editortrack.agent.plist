@@ -10,13 +10,13 @@
   <key>ProgramArguments</key>
   <array>
     <string>/bin/sh</string>
-    <string>@AGENT_DIR@/deploy/run-agent.sh</string>
+    <string>@AGENT_DIR@/deploy/run-loop.sh</string>
   </array>
-  <key>StartInterval</key><integer>60</integer>   <!-- ทุก 1 นาที -->
   <key>RunAtLoad</key><true/>
-  <!-- ลำดับความสำคัญต่ำ: ไม่แย่งทรัพยากร Resolve
-       ไม่ใช้ ProcessType=Background เพราะ macOS จะหน่วง StartInterval (timer coalescing) → ไม่ยิงตรงเวลา
-       Nice+LowPriorityIO เบาพอโดยไม่ทำให้ timer เพี้ยน -->
+  <key>KeepAlive</key><true/>
+  <!-- ใช้ loop+sleep (run-loop.sh) แทน StartInterval เพราะ macOS หน่วง StartInterval หนัก (coalescing/App Nap)
+       KeepAlive = ถ้า loop ตาย launchd รีสตาร์ทให้ · ปรับช่วงเวลาที่ EDITORTRACK_INTERVAL_SEC ใน env.sh
+       priority ต่ำ (Nice+LowPriorityIO) ไม่แย่ง Resolve -->
   <key>Nice</key><integer>19</integer>
   <key>LowPriorityIO</key><true/>
 </dict>
