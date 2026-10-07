@@ -1,41 +1,152 @@
 # deploy agent — macOS / Linux
 
-ติดตั้ง agent ให้รันอัตโนมัติทุก 10 นาที (Windows ดู `../../DATAFLOW.md §Deploy` — ใช้ Task Scheduler)
+ติดตั้ง agent ให้รันอัตโนมัติทุก 10 นาที · priority ต่ำสุด (ไม่แย่งทรัพยากร Resolve) · log ต่อ user ที่ `~/.editortrack/agent.log`
+(Windows ดู `../../DATAFLOW.md §Deploy` — ใช้ Task Scheduler)
 
-## ขั้นตอน (เหมือนกันทั้ง mac/linux)
+> โค้ดเหมือนกันทุกเครื่อง ต่างแค่ **env.sh** (เลือกจาก `stations/`) + **hostname** · ดู `stations/README.md`
+
+---
+
+## ขั้นตอนร่วม (ทั้ง mac/linux)
 ```sh
-cd agent/deploy
-cp env.example env.sh        # แล้วแก้: ROLE, DETECT_GRADE, SERVER, TOKEN, RESOLVE_* (เลือก OS)
-sh install.sh                # ตรวจ OS → ทดสอบรัน 1 รอบ → ติดตั้ง scheduler
+cd agent
+cp deploy/stations/<STATION>.sh deploy/env.sh   # grade-01..06 (color) หรือ conform-01
+nano deploy/env.sh                               # แก้ SERVER_IP + TOKEN
+sh deploy/install.sh                             # ทดสอบ 1 รอบ → ติดตั้ง scheduler (per-user)
+#   หลายกะ/หลาย user:  sh deploy/install.sh --system
 ```
-- **macOS** → LaunchAgent (`~/Library/LaunchAgents/com.kantana.editortrack.agent.plist`)
-- **Linux** → systemd user timer (`~/.config/systemd/user/editortrack-agent.{service,timer}`)
-
-## เตรียมก่อน (per OS)
-
-**macOS**
-- Resolve Studio + external scripting = Local
-- `pip install -r ../requirements.txt`  (pyobjc สำหรับ idle/frontmost)
-- ใน `env.sh` ใช้ path macOS (default)
-
-**Linux (ห้อง color)**
-- Resolve Studio (`/opt/resolve/...`) + external scripting = Local
-- `sudo apt install -y libxss1`  (idle) · `xdotool` (option, frontmost)
-- **ต้องเป็น X11**: `echo $XDG_SESSION_TYPE` → `x11` (Wayland ยังไม่รองรับ)
-- ใน `env.sh` เปิด path Linux (คอมเมนต์ไว้)
-
-## role ต่อห้อง
-| ห้อง | EDITORTRACK_ROLE | EDITORTRACK_DETECT_GRADE |
-|---|---|---|
-| edit/conform | `conform` | `0` |
-| color (×6) | `colorist` | `1` |
-
-## เช็ค/แก้ปัญหา
+ถอน:
 ```sh
 # macOS
-tail -f /tmp/editortrack.out.log /tmp/editortrack.err.log
+launchctl bootout gui/$(id -u)/com.kantana.editortrack.agent ; rm ~/Library/LaunchAgents/com.kantana.editortrack.agent.plist
 # Linux
+systemctl --user disable --now editortrack-agent.timer
+```
+
+---
+
+## 🍎 macOS
+
+### เตรียมก่อน
+1. **Resolve Studio** + Preferences → System → General → *External scripting using* = **Local** (ฟรีใช้ไม่ได้)
+2. pyobjc (metric 02 — idle/frontmost):
+   ```sh
+   pip3 install pyobjc-framework-Quartz pyobjc-framework-Cocoa
+   ```
+3. ตั้ง hostname ให้ตรง room_map:
+   ```sh
+   sudo scutil --set HostName conform-01
+   ```
+4. ใน `env.sh` ใช้ path macOS (default ใน `conform-01.sh`)
+
+### เทสเป็นชั้น (0-4 ไม่ต้องมี server)
+```sh
+# 0) pyobjc พร้อม
+python3 -c "import Quartz, AppKit; print('pyobjc ok')"
+
+# 1) metric 02 (ขยับเมาส์แล้วรันซ้ำ ดู idle_sec ลด)
+python3 -c "import json,activity_sampler as a; print(json.dumps(a.sample(), default=str))"
+
+# 2) ต่อ Resolve ได้ไหม (เปิด Resolve + โปรเจค + timeline หน้า Color)
+. deploy/env.sh && python3 probe.py          # ดู §7: connect ✅ / Studio ✅ / COLOR
+
+# 3) snapshot + เช็คไม่เด้งหน้า ("page" ควรคงเป็น color)
+. deploy/env.sh && python3 resolve_poller.py
+
+# 4) record เต็ม (ยังไม่ส่ง)
+. deploy/env.sh && python3 -c "import json,runner; print(json.dumps(runner.build_record(), ensure_ascii=False, indent=2, default=str))"
+```
+
+### force run + log (หลัง install)
+```sh
+launchctl kickstart -k gui/$(id -u)/com.kantana.editortrack.agent
+tail -f ~/.editortrack/agent.log
+```
+
+---
+
+## 🐧 Linux (ห้อง color ×6)
+
+### เตรียมก่อน
+1. **Resolve Studio** (`/opt/resolve/...`) + External scripting = **Local**
+2. X11 libs (metric 02):
+   ```sh
+   sudo apt install -y libxss1 xdotool x11-utils
+   ```
+3. **ต้องเป็น X11** (ไม่ใช่ Wayland):
+   ```sh
+   echo $XDG_SESSION_TYPE        # ต้องได้ x11
+   ```
+4. ตั้ง hostname:
+   ```sh
+   sudo hostnamectl set-hostname grade-03
+   ```
+5. ใน `env.sh` ใช้ path Linux (default ใน `grade-0N.sh`)
+
+### เทสเป็นชั้น (0-4 ไม่ต้องมี server)
+```sh
+# 0) X11 + libs
+echo $XDG_SESSION_TYPE                         # x11
+python3 -c "import ctypes; ctypes.CDLL('libXss.so.1'); print('libXss ok')"
+
+# 1) metric 02
+python3 -c "import json,activity_sampler as a; print(json.dumps(a.sample(), default=str))"
+
+# 2) ต่อ Resolve (เปิด Resolve + โปรเจค + timeline หน้า Color)
+. deploy/env.sh && python3 probe.py            # ดู §7: connect ✅ / Studio ✅ / COLOR
+
+# 3) snapshot + เช็คไม่เด้งหน้า
+. deploy/env.sh && python3 resolve_poller.py
+
+# 4) record เต็ม (ยังไม่ส่ง)
+. deploy/env.sh && python3 -c "import json,runner; print(json.dumps(runner.build_record(), ensure_ascii=False, indent=2, default=str))"
+```
+
+### force run + สถานะ + log (หลัง install)
+```sh
+systemctl --user start editortrack-agent.service       # รันเดี๋ยวนี้ 1 รอบ
 systemctl --user list-timers | grep editortrack
 journalctl --user -u editortrack-agent -n 30 --no-pager
+tail -f ~/.editortrack/agent.log
 ```
-รันเทสมือ: `sh run-agent.sh` (รัน 1 รอบด้วย env.sh)
+
+### จุดที่ Linux งอแงบ่อย
+- **XAUTHORITY** บาง display manager ไม่ใช่ `~/.Xauthority` (gdm อยู่ `/run/user/$(id -u)/gdm/Xauthority`) → ถ้า idle อ่านไม่ได้ แก้ `Environment=XAUTHORITY=` ใน service
+- **Wayland** → เลือก session "X11/Xorg" ตอน login
+- `CPUQuota`/`MemoryMax` ต้องมี cgroup v2 (distro ใหม่มีหมด)
+
+---
+
+## ⚙️ ชั้น 5-7 (ร่วม) — end-to-end + ไม่รบกวน
+
+**ชั้น 5 — end-to-end** (รัน server ทดสอบบนเครื่องเดียวกันก่อน):
+```sh
+# Terminal A — server
+cd ../server && pip3 install fastapi uvicorn && EDITORTRACK_TOKEN=testtoken uvicorn dashboard_api:app --port 8000
+# Terminal B — ยิง 1 รอบไป localhost แล้วเปิด dashboard
+cd agent && . deploy/env.sh && EDITORTRACK_SERVER=http://localhost:8000/ingest EDITORTRACK_TOKEN=testtoken python3 runner.py   # ได้ 200
+```
+เปิด `http://localhost:8000/`
+
+**ชั้น 6 — เทสสำคัญสุด: ไม่รบกวนงาน**
+เปิด playback จริง แล้วยิง `python3 resolve_poller.py` ตอนนั้น → ดูว่า**เฟรมตกไหม** + `scan_ms` ควร < 300ms
+
+**ชั้น 7 — scheduler รันเอง** → ดู force run/log ของแต่ละ OS ข้างบน
+
+> ลำดับแนะนำ: 0 → 1 → 2 → 3 → 4 → (5 ถ้าดู dashboard) → 6 (ก่อน deploy จริง) → 7
+
+---
+
+## resource cap (ใส่มาให้แล้ว — ไม่ต้องทำเอง)
+| | macOS (plist) | Linux (service) |
+|---|---|---|
+| CPU priority | `Nice 19` + `ProcessType Background` | `Nice 19` + `CPUWeight 20` + `CPUQuota 20%` |
+| I/O | `LowPriorityIO` | `IOSchedulingClass idle` |
+| memory | — | `MemoryMax 200M` |
+| ค้าง | StartInterval คุม | `TimeoutStartSec 120` |
+
+## role ต่อห้อง (ตั้งใน env.sh — มีใน stations/ แล้ว)
+| ห้อง | EDITORTRACK_STAGE | EDITORTRACK_DETECT_GRADE |
+|---|---|---|
+| conform/edit | `conform` | `0` |
+| color (×6) | `color` | `1` |
