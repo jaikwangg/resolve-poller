@@ -9,10 +9,19 @@
 
 ## ขั้นตอนร่วม (ทั้ง mac/linux)
 > ⚠️ **ต้องมี `deploy/env.sh` ก่อน** — ไม่งั้น runner จะใช้ default (`localhost` + token ว่าง) แล้ว POST ไม่ติด → ได้ `None`
+
+**วิธีสร้าง env.sh (เลือก 1):**
 ```sh
 cd agent
-cp deploy/stations/<STATION>.sh deploy/env.sh   # grade-01..06 (color) หรือ conform-01
+# a) ตัวช่วย: ถามค่า + auto-detect OS (path Resolve ให้เอง) — ง่ายสุด
+sh deploy/make-env.sh
+#    ไม่อยากถาม:  STAGE=color SERVER=http://IP:8000/ingest TOKEN=xxx sh deploy/make-env.sh
+# b) หรือก็อป template ของเครื่องนั้นแล้วแก้เอง
+cp deploy/stations/<STATION>.sh deploy/env.sh    # grade-01..06 (color) หรือ conform-01
 nano deploy/env.sh                               # แก้ SERVER_IP + TOKEN
+```
+จากนั้นติดตั้ง:
+```sh
 sh deploy/install.sh                             # ทดสอบ 1 รอบ → ติดตั้ง scheduler (per-user)
 #   หลายกะ/หลาย user:  sh deploy/install.sh --system
 ```
