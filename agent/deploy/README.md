@@ -8,12 +8,51 @@
 ---
 
 ## ขั้นตอนร่วม (ทั้ง mac/linux)
+> ⚠️ **ต้องมี `deploy/env.sh` ก่อน** — ไม่งั้น runner จะใช้ default (`localhost` + token ว่าง) แล้ว POST ไม่ติด → ได้ `None`
 ```sh
 cd agent
 cp deploy/stations/<STATION>.sh deploy/env.sh   # grade-01..06 (color) หรือ conform-01
 nano deploy/env.sh                               # แก้ SERVER_IP + TOKEN
 sh deploy/install.sh                             # ทดสอบ 1 รอบ → ติดตั้ง scheduler (per-user)
 #   หลายกะ/หลาย user:  sh deploy/install.sh --system
+```
+
+### ทดสอบเร็วบนเครื่องเดียว (ยังไม่มี server จริง)
+สร้าง env.sh ชี้ localhost + token ทดสอบ แล้วรัน server local ควบคู่ (ชั้น 5)
+
+**macOS** — วางทั้งบล็อกใน `agent/`:
+```sh
+cat > deploy/env.sh <<'EOF'
+export EDITORTRACK_STAGE=color
+export EDITORTRACK_DETECT_GRADE=1
+export EDITORTRACK_SERVER=http://localhost:8000/ingest
+export EDITORTRACK_TOKEN=testtoken
+export EDITORTRACK_HTTP_TIMEOUT=5
+export RESOLVE_SCRIPT_API="/Library/Application Support/Blackmagic Design/DaVinci Resolve/Developer/Scripting"
+export RESOLVE_SCRIPT_LIB="/Applications/DaVinci Resolve/DaVinci Resolve.app/Contents/Libraries/Fusion/fusionscript.so"
+export PYTHONPATH="$PYTHONPATH:$RESOLVE_SCRIPT_API/Modules/"
+EOF
+```
+**Linux** — เหมือนกัน เปลี่ยนแค่ 2 path:
+```sh
+cat > deploy/env.sh <<'EOF'
+export EDITORTRACK_STAGE=color
+export EDITORTRACK_DETECT_GRADE=1
+export EDITORTRACK_SERVER=http://localhost:8000/ingest
+export EDITORTRACK_TOKEN=testtoken
+export EDITORTRACK_HTTP_TIMEOUT=5
+export RESOLVE_SCRIPT_API="/opt/resolve/Developer/Scripting"
+export RESOLVE_SCRIPT_LIB="/opt/resolve/libs/Fusion/fusionscript.so"
+export PYTHONPATH="$PYTHONPATH:$RESOLVE_SCRIPT_API/Modules/"
+EOF
+```
+จากนั้น Terminal นึงเปิด server:
+```sh
+cd ../server && pip3 install fastapi uvicorn && EDITORTRACK_TOKEN=testtoken uvicorn dashboard_api:app --port 8000
+```
+อีก Terminal ยิง 1 รอบ (ต้อง `. deploy/env.sh` ก่อนเสมอ):
+```sh
+cd agent && . deploy/env.sh && python3 runner.py    # ได้ 200 = ส่งเข้า server แล้ว (ไม่ใช่ None)
 ```
 ถอน:
 ```sh
