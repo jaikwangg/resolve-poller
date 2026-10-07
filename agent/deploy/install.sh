@@ -1,5 +1,5 @@
 #!/bin/sh
-# ติดตั้ง scheduler ให้ agent รันทุก 10 นาที — ตรวจ OS อัตโนมัติ
+# ติดตั้ง scheduler ให้ agent รันทุก 1 นาที — ตรวจ OS อัตโนมัติ
 #   macOS = LaunchAgent · Linux = systemd user timer
 # โหมด:
 #   sh install.sh            → ลงให้ user ปัจจุบัน (ทดสอบง่าย ไม่ต้อง sudo)
@@ -35,7 +35,7 @@ if [ "$OS" = "Darwin" ]; then
   # โหลดเข้า GUI session ของ user ปัจจุบันทันที (ไม่ต้อง relogin) — รองรับทั้ง API ใหม่/เก่า
   launchctl bootout "gui/$(id -u)/com.kantana.editortrack.agent" 2>/dev/null || true
   launchctl bootstrap "gui/$(id -u)" "$PLIST" 2>/dev/null || { launchctl unload "$PLIST" 2>/dev/null || true; launchctl load "$PLIST"; }
-  echo "✓ macOS ($MODE): โหลด LaunchAgent แล้ว (ทุก 10 นาที, priority ต่ำ)"
+  echo "✓ macOS ($MODE): โหลด LaunchAgent แล้ว (ทุก 1 นาที, priority ต่ำ)"
   [ "$MODE" = "system" ] && echo "  → ทุก user จะได้อัตโนมัติตอน login · user ปัจจุบัน bootstrap ให้แล้ว"
   echo "  log:   tail -f ~/.editortrack/agent.log"
   echo "  ถอน:   launchctl bootout gui/\$(id -u)/com.kantana.editortrack.agent ; $SUDO rm \"$PLIST\""
@@ -54,7 +54,7 @@ elif [ "$OS" = "Linux" ]; then
     cp "$DEPLOY/editortrack-agent.timer" "$UDIR/editortrack-agent.timer"
     systemctl --user daemon-reload
     systemctl --user enable --now editortrack-agent.timer
-    echo "✓ Linux (user): enable systemd user timer แล้ว (ทุก 10 นาที)"
+    echo "✓ Linux (user): enable systemd user timer แล้ว (ทุก 1 นาที)"
   fi
   echo "  สถานะ: systemctl --user list-timers | grep editortrack ; journalctl --user -u editortrack-agent -n 20"
   echo "  ⚠️ X11 เท่านั้น: ถ้า idle อ่านไม่ได้ เช็ค \$XDG_SESSION_TYPE=x11 + DISPLAY/XAUTHORITY ใน service"

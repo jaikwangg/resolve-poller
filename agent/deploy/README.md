@@ -1,6 +1,6 @@
 # deploy agent — macOS / Linux
 
-ติดตั้ง agent ให้รันอัตโนมัติทุก 10 นาที · priority ต่ำสุด (ไม่แย่งทรัพยากร Resolve) · log ต่อ user ที่ `~/.editortrack/agent.log`
+ติดตั้ง agent ให้รันอัตโนมัติทุก 1 นาที · priority ต่ำสุด (ไม่แย่งทรัพยากร Resolve) · log ต่อ user ที่ `~/.editortrack/agent.log`
 (Windows ดู `../../DATAFLOW.md §Deploy` — ใช้ Task Scheduler)
 
 > โค้ดเหมือนกันทุกเครื่อง ต่างแค่ **env.sh** (เลือกจาก `stations/`) + **hostname** · ดู `stations/README.md`

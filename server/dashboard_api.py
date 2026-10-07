@@ -11,7 +11,7 @@ app = FastAPI()
 STORE = pathlib.Path(os.environ.get("EDITORTRACK_STORE", "data"))
 STORE.mkdir(parents=True, exist_ok=True)
 TOKEN = os.environ.get("EDITORTRACK_TOKEN", "")
-INTERVAL_MIN = int(os.environ.get("EDITORTRACK_INTERVAL_MIN", "10"))
+INTERVAL_MIN = int(os.environ.get("EDITORTRACK_INTERVAL_MIN", "1"))   # นาทีที่ 1 record แทน = cadence ของ agent (ปรับให้ตรง StartInterval/OnUnitActiveSec)
 HERE = pathlib.Path(__file__).parent
 STAGES = ["data", "conform", "color", "subtitle", "master"]
 # NOTE: ระบบนี้ไม่จัด queue/dependency (subtitle รอ color ฯลฯ) — ERP จัดการเอง

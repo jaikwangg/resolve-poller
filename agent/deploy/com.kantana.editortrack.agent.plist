@@ -12,7 +12,7 @@
     <string>/bin/sh</string>
     <string>@AGENT_DIR@/deploy/run-agent.sh</string>
   </array>
-  <key>StartInterval</key><integer>600</integer>   <!-- ทุก 10 นาที -->
+  <key>StartInterval</key><integer>60</integer>   <!-- ทุก 1 นาที -->
   <key>RunAtLoad</key><true/>
   <!-- ลำดับความสำคัญต่ำสุด: การันตีว่าไม่แย่งทรัพยากร Resolve -->
   <key>ProcessType</key><string>Background</string>

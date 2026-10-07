@@ -1,5 +1,5 @@
 #!/bin/sh
-# รัน agent 1 รอบ (scheduler เรียกทุก ~10 นาที) — source env.sh → runner.py ด้วย priority ต่ำ
+# รัน agent 1 รอบ (scheduler เรียกทุก ~1 นาที) — source env.sh → runner.py ด้วย priority ต่ำ
 # log ต่อ user ที่ ~/.editortrack/agent.log (cap ~1MB กันโตไม่จำกัด)
 AGENT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 [ -f "$AGENT_DIR/deploy/env.sh" ] && . "$AGENT_DIR/deploy/env.sh"

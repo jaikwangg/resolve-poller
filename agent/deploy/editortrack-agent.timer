@@ -1,9 +1,9 @@
 [Unit]
-Description=run editortrack agent ทุก 10 นาที
+Description=run editortrack agent ทุก 1 นาที
 
 [Timer]
-OnBootSec=2min
-OnUnitActiveSec=10min
+OnBootSec=1min
+OnUnitActiveSec=1min
 Persistent=true
 
 [Install]
