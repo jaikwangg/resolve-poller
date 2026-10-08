@@ -3,6 +3,8 @@
 > **session ถัดไป: อ่านไฟล์นี้ก่อนเป็นอันดับแรก** แล้วค่อยดูไฟล์อื่นใน `~/editortrack/`
 > เอกสารนี้ตั้งใจให้ครบพอทำต่อได้โดยไม่ต้องมี context จากแชทเดิม
 > (จะ `cp HANDOFF.md AGENTS.md` เพื่อให้ agent อ่านอัตโนมัติก็ได้)
+>
+> 👉 **สถานะปัจจุบัน + งานที่เหลือ: ดู [`NEXT_STEPS.md`](NEXT_STEPS.md)** (อัปเดตหลังทดสอบ deploy บน Mac จริงแล้ว)
 
 ---
 
@@ -33,7 +35,7 @@
 1. **เก็บแบบเปิดเผย (transparent) — worker รู้เท่านั้น ห้ามแอบ** → ต้องทำ PDPA ให้ครบ: policy ลายลักษณ์อักษร + แจ้งล่วงหน้า + **data minimization (จับเฉพาะแอปงาน อย่าจับทั้งจอ/ชีวิตส่วนตัว)** + retention
 2. **% เป็น proxy/advisory เท่านั้น — ห้ามผูกเงินเดือน/ประเมิน/ตัดสินคน** (ค่าต่ำมักคือ deep work ทุก metric โกงได้)
 3. **ไม่ใช่คำแนะนำกฎหมาย** — ต้องให้ทนายไทยยืนยันฐานทางกฎหมาย + ความต่าง employee vs contractor ก่อน deploy
-4. ตอนนี้ **ยังไม่ใช่ git repo** — อย่า commit/init อะไรโดยไม่ถาม user
+4. เป็น git repo แล้ว (push ที่ github.com/jaikwangg/resolve-poller) — **commit/push เฉพาะเมื่อ user สั่ง** · อย่าใส่ secret ลง repo (creds อยู่ใน env.sh ซึ่ง .gitignore ไว้)
 5. 🚫 **worker zero-touch — worker (colorist/conform) ต้องไม่อยู่ใน workflow tracking เลย**: ไม่ใส่ marker, ไม่ตั้งชื่อพิเศษ, ไม่กรอก scope, ไม่กดอะไร. การผูกงานทั้งหมด = **ดึงจาก ERP booking/schedule อัตโนมัติ (server-side join by room+time) — ทั้ง worker และ PM ไม่ต้องกรอกอะไร** · role = **IT ตั้งต่อเครื่อง หรือจาก ERP** · agent รัน background เงียบ (read-only ไม่รบกวน session). **marker/naming/registry = fallback เท่านั้น** ถ้า ERP ไม่มี booking → `unlinked`. ห้ามบังคับ worker/PM ทำอะไรเพื่อ tracking
 
 ---
