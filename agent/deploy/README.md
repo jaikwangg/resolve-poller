@@ -5,6 +5,11 @@
 
 > โค้ดเหมือนกันทุกเครื่อง ต่างแค่ **env.sh** (เลือกจาก `stations/`) + **hostname** · ดู `stations/README.md`
 
+> 🛑 **macOS — ห้ามวางโค้ดใน `~/Downloads`, `~/Desktop`, `~/Documents`**
+> โฟลเดอร์พวกนี้ถูก **TCC (privacy) ปกป้อง** → LaunchAgent (background) ถูกบล็อก ไม่ให้รันสคริปต์ (`last exit code = 126`)
+> — อาการหลอก: **รันมือในเทอร์มินัลได้ 200 ปกติ** (เพราะ Terminal มีสิทธิ์) แต่ scheduler เงียบสนิท
+> ✅ วางใน `~/editortrack` หรือ `~/Library/Application Support/editortrack` แทน
+
 ---
 
 ## ขั้นตอนร่วม (ทั้ง mac/linux)
@@ -105,11 +110,14 @@ python3 -c "import json,activity_sampler as a; print(json.dumps(a.sample(), defa
 . deploy/env.sh && python3 -c "import json,runner; print(json.dumps(runner.build_record(), ensure_ascii=False, indent=2, default=str))"
 ```
 
-### force run + log (หลัง install)
+### ยืนยัน + log (หลัง install)
+macOS ใช้ **KeepAlive loop** (`run-loop.sh`) ยิงทุก 60 วิ — ไม่ใช้ StartInterval เพราะ macOS หน่วง timer (coalescing/App Nap)
 ```sh
-launchctl kickstart -k gui/$(id -u)/com.kantana.editortrack.agent
-tail -f ~/.editortrack/agent.log
+pgrep -fl run-loop          # เห็น run-loop.sh = ลูปทำงาน (process ค้าง 1 ตัว, Nice 19)
+tail -f ~/.editortrack/agent.log   # log เพิ่มทุก 60 วิ
 ```
+ปรับช่วงเวลา: ใส่ `export EDITORTRACK_INTERVAL_SEC=120` ใน `deploy/env.sh` (ไม่ต้องแก้ plist)
+> ถ้า log นิ่ง + `last exit code = 126` ใน `launchctl print ...` = โค้ดอยู่ในโฟลเดอร์ TCC (Downloads/Desktop/Documents) → ย้ายไป `~/editortrack`
 
 ---
 
