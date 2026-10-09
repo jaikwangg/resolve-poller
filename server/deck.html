@@ -1,0 +1,476 @@
+<title>editortrack</title>
+<meta name="description" content="สไลด์นำเสนอระบบติดตามความคืบหน้างานตัดต่อ DaVinci แบบ zero-touch — ภาพรวม ตัวอย่างข้อมูลจริง และระดับลึกสุดต่อ clip">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* layout: deck แนวตั้ง — hero + section การ์ด · ธีม dark-first (ห้องเกรดมืด) + light เต็มรูปแบบ */
+  :root{
+    color-scheme:dark;
+    --bg:#0d1113; --surface:#161c1f; --surface-2:#1e262a; --surface-3:#273035;
+    --fg:#eef3f2; --fg-2:#aab6b4; --muted:#6c7a79;
+    --border:rgba(255,255,255,.09); --border-2:rgba(255,255,255,.15);
+    --accent:#37c6ad; --accent-soft:rgba(55,198,173,.14);
+    --amber:#e8a63f; --amber-soft:rgba(232,166,63,.14);
+    --violet:#b58ce8; --violet-soft:rgba(181,140,232,.14);
+    --blue:#6fa8e8; --blue-soft:rgba(111,168,232,.14);
+    --good:#49c76a; --warn:#e8a63f; --crit:#e2584f;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 30px rgba(0,0,0,.32);
+    --f-display:"Anuphan",system-ui,sans-serif;
+    --f-body:"IBM Plex Sans Thai",system-ui,-apple-system,sans-serif;
+    --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",monospace;
+    --maxw:880px;
+  }
+  @media (prefers-color-scheme:light){:root:not([data-theme="dark"]){
+    color-scheme:light;
+    --bg:#f3f5f3; --surface:#ffffff; --surface-2:#eceeeb; --surface-3:#e2e5e1;
+    --fg:#111819; --fg-2:#46534f; --muted:#7a847f;
+    --border:rgba(10,22,20,.12); --border-2:rgba(10,22,20,.22);
+    --accent:#0e9a84; --accent-soft:rgba(14,154,132,.1);
+    --amber:#b2741a; --amber-soft:rgba(178,116,26,.12);
+    --violet:#7b53b8; --violet-soft:rgba(123,83,184,.1);
+    --blue:#3f78c0; --blue-soft:rgba(63,120,192,.1);
+    --good:#1f9c45; --warn:#b2741a; --crit:#cc4139;
+    --shadow:0 1px 2px rgba(20,30,30,.06), 0 6px 22px rgba(20,30,30,.07);
+  }}
+  :root[data-theme="light"]{
+    color-scheme:light;
+    --bg:#f3f5f3; --surface:#ffffff; --surface-2:#eceeeb; --surface-3:#e2e5e1;
+    --fg:#111819; --fg-2:#46534f; --muted:#7a847f;
+    --border:rgba(10,22,20,.12); --border-2:rgba(10,22,20,.22);
+    --accent:#0e9a84; --accent-soft:rgba(14,154,132,.1);
+    --amber:#b2741a; --amber-soft:rgba(178,116,26,.12);
+    --violet:#7b53b8; --violet-soft:rgba(123,83,184,.1);
+    --blue:#3f78c0; --blue-soft:rgba(63,120,192,.1);
+    --good:#1f9c45; --warn:#b2741a; --crit:#cc4139;
+    --shadow:0 1px 2px rgba(20,30,30,.06), 0 6px 22px rgba(20,30,30,.07);
+  }
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:16px;line-height:1.7;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding-inline:20px}
+  h1,h2,h3{font-family:var(--f-display);font-weight:700;text-wrap:balance;line-height:1.25;margin:0}
+  p{margin:0}
+  code{font-family:var(--f-mono);font-size:.9em;background:var(--surface-2);padding:1px 6px;border-radius:5px}
+
+  header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:40;background:color-mix(in srgb,var(--bg) 85%,transparent);
+    backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
+  header.top .row{max-width:var(--maxw);margin:0 auto;padding:11px 20px;display:flex;align-items:center;gap:12px;justify-content:space-between}
+  .brand{display:flex;align-items:center;gap:9px;font-family:var(--f-mono);font-weight:500;font-size:15px}
+  .brand .dot{width:9px;height:9px;border-radius:2px;background:var(--accent);box-shadow:0 0 0 4px var(--accent-soft);flex:none}
+  .brand b{color:var(--accent);font-weight:500}
+  .nav{display:flex;gap:10px;align-items:center}
+  .tbtn{border:1px solid var(--border);background:var(--surface);color:var(--fg-2);font-family:var(--f-body);font-size:13px;
+    padding:5px 12px;border-radius:20px;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+  .tbtn:hover{border-color:var(--border-2);color:var(--fg)}
+  .tbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  .hero{padding:56px 0 18px}
+  .eyebrow{font-family:var(--f-mono);font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:18px}
+  .hero h1{font-size:clamp(32px,6vw,52px);letter-spacing:-.01em}
+  .hero .lead{font-size:clamp(17px,2.4vw,21px);color:var(--fg-2);margin-top:18px;max-width:42ch}
+  .hero .lead b{color:var(--fg);font-weight:600}
+  .metrics{display:flex;gap:10px;flex-wrap:wrap;margin-top:28px}
+  .metric{flex:1 1 200px;min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow)}
+  .metric .no{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+  .metric .ti{font-family:var(--f-display);font-weight:600;font-size:18px;margin-top:4px}
+  .metric .de{font-size:13.5px;color:var(--fg-2);margin-top:5px;line-height:1.55}
+
+  section{padding:38px 0;border-top:1px solid var(--border);scroll-margin-top:60px}
+  .sec-eyebrow{font-family:var(--f-mono);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+    display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .sec-eyebrow .n{color:var(--accent)}
+  .sec-eyebrow::after{content:"";height:1px;flex:1;background:var(--border)}
+  section h2{font-size:clamp(23px,3.6vw,30px);letter-spacing:-.01em}
+  section > .wrap > p.intro{color:var(--fg-2);margin-top:12px;font-size:16.5px;max-width:62ch}
+
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:22px}
+  .pane{border:1px solid var(--border);border-radius:14px;padding:18px 18px 16px;background:var(--surface)}
+  .pane.before{background:color-mix(in srgb,var(--crit) 7%,var(--surface))}
+  .pane.after{background:color-mix(in srgb,var(--accent) 8%,var(--surface));border-color:color-mix(in srgb,var(--accent) 30%,var(--border))}
+  .pane h3{font-size:15px;display:flex;align-items:center;gap:8px;margin-bottom:12px}
+  .pane h3 .tag{font-family:var(--f-mono);font-size:10.5px;font-weight:500;letter-spacing:.05em;padding:2px 8px;border-radius:5px;text-transform:uppercase}
+  .pane.before .tag{background:color-mix(in srgb,var(--crit) 18%,transparent);color:var(--crit)}
+  .pane.after .tag{background:var(--accent-soft);color:var(--accent)}
+  .pane ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+  .pane li{display:flex;gap:9px;font-size:14.5px;color:var(--fg-2);line-height:1.5}
+  .pane li .m{flex:none;font-family:var(--f-mono);font-weight:500}
+  .pane.before li .m{color:var(--crit)}
+  .pane.after li .m{color:var(--accent)}
+
+  .flow{display:flex;align-items:stretch;gap:0;margin-top:22px;flex-wrap:wrap}
+  .step{flex:1 1 150px;min-width:0;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 15px;position:relative}
+  .step + .step{margin-left:10px}
+  .step .k{font-family:var(--f-mono);font-size:11px;color:var(--accent);letter-spacing:.06em}
+  .step .t{font-family:var(--f-display);font-weight:600;font-size:15.5px;margin-top:3px}
+  .step .d{font-size:13px;color:var(--fg-2);margin-top:5px;line-height:1.5}
+  .step .arr{position:absolute;right:-16px;top:50%;transform:translateY(-50%);color:var(--muted);z-index:2;font-size:14px}
+  .step:last-child .arr{display:none}
+  @media (max-width:640px){.flow{flex-direction:column}.step+.step{margin-left:0;margin-top:22px}
+    .step .arr{right:50%;top:auto;bottom:-20px;transform:translateX(50%) rotate(90deg)}}
+
+  .tblwrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;background:var(--surface);margin-top:18px}
+  table{width:100%;border-collapse:collapse;font-size:14.5px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+  th{font-family:var(--f-mono);font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:500}
+  td.api{font-family:var(--f-mono);font-size:12.5px;color:var(--accent);white-space:nowrap}
+  tr:last-child td{border-bottom:0}
+  .cf{font-family:var(--f-mono);font-size:12px;white-space:nowrap}
+  .cf.g{color:var(--good)} .cf.y{color:var(--blue)} .cf.o{color:var(--amber)}
+  td .gbadge{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px}
+
+  .tabs{display:inline-flex;gap:3px;background:var(--surface-2);border-radius:10px;padding:4px;margin-top:20px;flex-wrap:wrap}
+  .tabs button{border:0;background:transparent;color:var(--fg-2);font-family:var(--f-body);font-size:13.5px;font-weight:500;padding:7px 14px;border-radius:7px;cursor:pointer;white-space:nowrap}
+  .tabs button[aria-selected="true"]{background:var(--surface);color:var(--fg);box-shadow:var(--shadow)}
+  .tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  .panel{margin-top:14px}
+  .panel .desc{font-size:14px;color:var(--fg-2);margin-bottom:10px}
+
+  pre{margin:0;background:#0a0e10;color:#d6e2e0;border:1px solid var(--border);border-radius:12px;padding:16px 18px;
+    overflow-x:auto;font-family:var(--f-mono);font-size:12.5px;line-height:1.75}
+  @media (prefers-color-scheme:light){:root:not([data-theme="dark"]) pre{background:#0d1113}}
+  pre .k{color:#8fd4c6} pre .s{color:#e8c07d} pre .n{color:#7fb3e8} pre .b{color:#c58fe8} pre .c{color:#5f6f6e;font-style:italic}
+
+  .flagbox{margin-top:20px;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow)}
+  .flagbox .fl-l{font-family:var(--f-mono);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+  .flagbox .note{font-size:13px;color:var(--fg-2);margin-top:11px;display:flex;gap:8px;align-items:flex-start}
+  .flagbox .note .ic{color:var(--amber);flex:none}
+
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:20px}
+  .gchip{font-family:var(--f-body);font-size:13.5px;font-weight:500;padding:6px 13px;border-radius:20px;cursor:pointer;
+    border:1px solid var(--border);background:var(--surface);color:var(--fg-2);display:inline-flex;align-items:center;gap:7px}
+  .gchip .sw{width:9px;height:9px;border-radius:2px;flex:none}
+  .gchip[aria-pressed="true"]{color:var(--fg);border-color:var(--border-2);background:var(--surface-2)}
+  .gchip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  #clipjson{margin-top:14px}
+  .grp{display:block;border-left:2px solid transparent;padding-left:10px;margin-left:-12px;border-radius:2px;transition:opacity .15s,background .15s,border-color .15s}
+  #clipjson.filtering .grp{opacity:.26}
+  #clipjson.filtering .grp.on{opacity:1;border-left-color:var(--gc,var(--accent));background:color-mix(in srgb,var(--gc,var(--accent)) 9%,transparent)}
+  .gtag{font-family:var(--f-mono);font-size:10px;color:var(--muted)}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--fg-2);margin-top:14px}
+  .legend .k{display:inline-flex;align-items:center;gap:6px}
+
+  .psteps{display:flex;flex-direction:column;gap:10px;margin-top:20px}
+  .pstep{display:grid;grid-template-columns:auto 1fr;gap:13px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px}
+  .pstep .num{width:26px;height:26px;border-radius:7px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-family:var(--f-mono);font-size:13px;font-weight:500}
+  .pstep .t{font-family:var(--f-display);font-weight:600;font-size:15px}
+  .pstep .d{font-size:13.5px;color:var(--fg-2);margin-top:3px;line-height:1.55}
+
+  .stages{display:flex;flex-direction:column;gap:8px;margin-top:20px}
+  .stg{display:grid;grid-template-columns:120px 1fr auto;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:12px 15px}
+  .stg .nm{font-family:var(--f-display);font-weight:600;font-size:15px;display:flex;align-items:center;gap:8px;min-width:0}
+  .stg .sw{width:9px;height:9px;border-radius:2px;flex:none}
+  .stg .how{font-size:13.5px;color:var(--fg-2);min-width:0}
+  .stg .pct{font-family:var(--f-mono);font-size:12px;padding:3px 9px;border-radius:20px;white-space:nowrap;flex:none}
+  .pct.auto{background:var(--accent-soft);color:var(--accent)}
+  .pct.raw{background:var(--amber-soft);color:var(--amber)}
+  .pct.pause{background:var(--surface-3);color:var(--muted)}
+  @media (max-width:560px){.stg{grid-template-columns:1fr auto}.stg .how{grid-column:1/-1}}
+
+  .rails{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:22px}
+  .rail{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:17px}
+  .rail .ic{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;background:var(--accent-soft);color:var(--accent);font-size:17px;margin-bottom:11px}
+  .rail h3{font-size:15px;margin-bottom:6px}
+  .rail p{font-size:13.5px;color:var(--fg-2);line-height:1.55}
+
+  .stat{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:20px}
+  .stat .col h3{font-size:13px;font-family:var(--f-mono);letter-spacing:.06em;text-transform:uppercase;margin-bottom:11px;display:flex;align-items:center;gap:8px}
+  .stat ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+  .stat li{font-size:14px;color:var(--fg-2);display:flex;gap:9px;line-height:1.5}
+  .stat li .m{flex:none}
+  .ok .m{color:var(--good)} .pend .m{color:var(--amber)}
+
+  .callout{margin-top:22px;display:flex;gap:12px;align-items:flex-start;padding:15px 17px;border-radius:13px;font-size:14px;color:var(--fg-2)}
+  .callout.amber{background:var(--amber-soft);border:1px solid color-mix(in srgb,var(--amber) 35%,var(--border))}
+  .callout.crit{background:color-mix(in srgb,var(--crit) 9%,var(--surface));border:1px solid color-mix(in srgb,var(--crit) 32%,var(--border))}
+  .callout b{color:var(--fg)}
+  .callout .ic{flex:none;font-size:17px}
+
+  footer{padding:30px 0 56px;border-top:1px solid var(--border);color:var(--muted);font-size:13px;text-align:center}
+  footer .mono{font-family:var(--f-mono);font-size:12px}
+
+  @media (max-width:640px){.split{grid-template-columns:1fr}.rails{grid-template-columns:1fr}.stat{grid-template-columns:1fr}.nav .hidesm{display:none}}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<header class="top"><div class="row">
+  <span class="brand"><span class="dot"></span><b>editortrack</b></span>
+  <span class="nav">
+    <a class="tbtn hidesm" href="#data">ตัวอย่างข้อมูล</a>
+    <button class="tbtn" id="themeToggle" aria-label="สลับธีม"><span id="themeIc">◐</span><span id="themeTx">ธีม</span></button>
+  </span>
+</div></header>
+
+<div class="hero wrap">
+  <div class="eyebrow">Post-production progress · zero-touch</div>
+  <h1>รู้ว่างานตัดต่อไปถึงไหน<br>โดยทีมไม่ต้องรายงาน</h1>
+  <div class="metrics">
+    <div class="metric"><div class="no">METRIC 01</div><div class="ti">ความคืบหน้า (%)</div>
+      <div class="de">แต่ละ stage ไปถึงไหนแล้ว เทียบกับเป้าของงานนั้น</div></div>
+    <div class="metric"><div class="no">METRIC 02</div><div class="ti">Active เทียบ Idle</div>
+      <div class="de">เครื่องถูกใช้ทำงานจริงกี่ชั่วโมง เทียบกับว่างไม่มี input</div></div>
+  </div>
+</div>
+
+<section id="problem"><div class="wrap">
+  <div class="sec-eyebrow"><span class="n">01</span> ปัญหา</div>
+  <h2>งาน post กระจายหลายห้อง หลายเครื่อง หลาย stage</h2>
+  <div class="split">
+    <div class="pane before"><h3><span class="tag">เดิม</span> ถามเอา / กรอกเอง</h3>
+      <ul>
+        <li><span class="m">×</span> ทีมต้องหยุดงานมากรอกสถานะ</li>
+        <li><span class="m">×</span> ข้อมูลช้า ไม่ตรงเวลาจริง</li>
+        <li><span class="m">×</span> 7 เครื่อง หลายโปรเจคพร้อมกัน ตามไม่ไหว</li>
+        <li><span class="m">×</span> PM ต้องคอยไล่ถาม</li>
+      </ul></div>
+    <div class="pane after"><h3><span class="tag">editortrack</span> อ่านเองเงียบ ๆ</h3>
+      <ul>
+        <li><span class="m">✓</span> อ่านจากสิ่งที่มีอยู่แล้วในเครื่อง</li>
+        <li><span class="m">✓</span> อัปเดตอัตโนมัติทุกไม่กี่นาที</li>
+        <li><span class="m">✓</span> join เป็นงานจาก booking ของ ERP</li>
+        <li><span class="m">✓</span> ทีมและ PM ไม่ต้องทำอะไรเพิ่ม</li>
+      </ul></div>
+  </div>
+</div></section>
+
+<section id="how"><div class="wrap">
+  <div class="sec-eyebrow"><span class="n">02</span> วิธีทำงาน</div>
+  <h2>เก็บจาก 2 แหล่งในเครื่อง — ไม่แคปหน้าจอ ไม่ใช้ AI เดา</h2>
+  <div class="flow">
+    <div class="step"><div class="k">WORKSTATION</div><div class="t">Resolve + OS</div>
+      <div class="d">อ่าน timeline / clip / เกรดสี ผ่าน scripting API (อ่านอย่างเดียว) + เวลา idle ของเครื่อง</div><span class="arr">→</span></div>
+    <div class="step"><div class="k">AGENT</div><div class="t">สรุปเป็น record</div>
+      <div class="d">คำนวณ % ของ stage + active/idle แล้วส่ง (มีคิวสำรองถ้าเน็ตหลุด)</div><span class="arr">→</span></div>
+    <div class="step"><div class="k">SERVER</div><div class="t">join กับ ERP</div>
+      <div class="d">เอา ห้อง+เวลา ไปจับกับ booking ของ ERP → ได้ว่า record นี้คืองานไหน</div><span class="arr">→</span></div>
+    <div class="step"><div class="k">ERP</div><div class="t">เห็นความคืบหน้า</div>
+      <div class="d">ส่ง % กลับเข้า ERP เพื่อให้ฝ่ายวางแผนเห็นสถานะงานจริง</div></div>
+  </div>
+  <div class="callout amber"><span class="ic">🎬</span><div><b>ไม่รบกวนคนทำงาน</b> — เลี่ยงคำสั่งที่เด้งเปลี่ยนหน้า Resolve + กันเหนียวดึงหน้ากลับ</div></div>
+</div></section>
+
+<section id="resolve"><div class="wrap">
+  <div class="sec-eyebrow"><span class="n">03</span> อ่านอะไรจาก Resolve ได้บ้าง</div>
+  <h2>ใช้ scripting API อย่างเดียว — read-only (<code>Get*</code>) ทั้งหมด</h2>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>อ่านจาก</th><th>ได้ข้อมูล</th><th>ใช้ทำ</th></tr></thead>
+      <tbody>
+        <tr><td class="api">GetCurrentPage</td><td>หน้าที่เปิดอยู่ (edit / color / fusion…)</td><td>รู้ว่ากำลังทำ stage ไหน</td></tr>
+        <tr><td class="api">GetStart/EndFrame</td><td>ความยาว timeline</td><td>ตัวตั้ง % ของ conform</td></tr>
+        <tr><td class="api">GetItemListInTrack</td><td>จำนวน clip บน timeline</td><td>ตัวหารของ color</td></tr>
+        <tr><td class="api">GetNodeGraph · GetNumNodes</td><td>clip ไหนถูกเกรดสีแล้ว</td><td>% color = เกรดแล้ว/ทั้งหมด</td></tr>
+        <tr><td class="api">GetMarkers</td><td>รหัส shot + หมายเหตุบน marker</td><td>ไล่สถานะราย shot</td></tr>
+        <tr><td class="api">IsRenderingInProgress</td><td>กำลัง render อยู่ไหม (ปลอดภัย)</td><td>รู้ว่าเข้าขั้น output</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="intro" style="margin-top:14px;font-size:14px"><b>metric 02</b> (active/idle): API ของ OS — idle + แอปหน้าสุด (Linux/Mac) ไม่ใช่แคปหน้าจอ</p>
+</div></section>
+
+<section id="data"><div class="wrap">
+  <div class="sec-eyebrow"><span class="n">04</span> ตัวอย่างข้อมูลจริง</div>
+  <h2>หน้าตาข้อมูลที่เก็บได้ — ตัวเลขล้วน ไม่มีภาพหน้าจอ</h2>
+  <div class="tabs" role="tablist" aria-label="ตัวอย่างข้อมูล">
+    <button role="tab" aria-selected="true" data-p="snap">สิ่งที่อ่านจาก Resolve</button>
+    <button role="tab" aria-selected="false" data-p="rec">record ที่ส่งเข้า server</button>
+    <button role="tab" aria-selected="false" data-p="sub">stage ที่ไม่ได้ทำใน Resolve</button>
+  </div>
+  <div class="panel" id="p-snap">
+    <pre><span class="c">// snapshot จากห้อง grade-03 · โปรเจค color หนึ่งรีล</span>
+{
+  <span class="k">"ok"</span>: <span class="b">true</span>,
+  <span class="k">"page"</span>: <span class="s">"color"</span>,
+  <span class="k">"project"</span>: <span class="s">"Feature_เรื่องก_Reel03"</span>,
+  <span class="k">"timeline"</span>: {
+    <span class="k">"name"</span>: <span class="s">"Reel03_grade_v2"</span>,
+    <span class="k">"duration_sec"</span>: <span class="n">642.5</span>, <span class="k">"fps"</span>: <span class="n">24.0</span>,
+    <span class="k">"video_clips"</span>: <span class="n">309</span>,
+    <span class="k">"graded_clips"</span>: <span class="n">148</span>,   <span class="c">// เกรดสีแล้ว 148 จาก 309</span>
+    <span class="k">"markers"</span>: <span class="n">42</span>, <span class="k">"scan_ms"</span>: <span class="n">214</span>   <span class="c">// สแกน clip ทั้งหมด 0.2 วิ</span>
+  },
+  <span class="k">"render"</span>: { <span class="k">"polled"</span>: <span class="b">false</span> }   <span class="c">// ไม่แตะคิว render = ไม่เด้งหน้า Deliver</span>
+}</pre>
+  </div>
+  <div class="panel" id="p-rec" hidden>
+    <pre><span class="c">// agent คำนวณ + server join booking ของ ERP → record (รูปเดียวกันทุก stage)</span>
+{
+  <span class="k">"schema"</span>: <span class="n">3</span>, <span class="k">"ts"</span>: <span class="s">"2026-10-02T09:14:07Z"</span>,
+  <span class="k">"host"</span>: <span class="s">"grade-03"</span>,       <span class="c">// เครื่องไหน → ใช้ join งาน</span>
+  <span class="k">"stage"</span>: <span class="s">"color"</span>,
+  <span class="k">"activity"</span>: { <span class="k">"idle_sec"</span>: <span class="n">3.2</span>, <span class="k">"active"</span>: <span class="b">true</span>, <span class="k">"resolve_frontmost"</span>: <span class="b">true</span> },  <span class="c">// metric 02</span>
+  <span class="k">"job"</span>: { <span class="k">"job_id"</span>: <span class="s">"KPP-2026-5871"</span>, <span class="k">"linked"</span>: <span class="b">true</span> },  <span class="c">// server เติมจาก ERP</span>
+  <span class="k">"progress"</span>: { <span class="k">"stage"</span>: <span class="s">"color"</span>, <span class="k">"pct"</span>: <span class="n">47.9</span>, <span class="k">"done"</span>: <span class="n">148</span>, <span class="k">"total"</span>: <span class="n">309</span> },  <span class="c">// metric 01</span>
+  <span class="k">"page"</span>: <span class="s">"color"</span>
+}</pre>
+  </div>
+  <div class="panel" id="p-sub" hidden>
+    <pre><span class="c">// ไม่ได้ทำใน Resolve → อ่านจากไฟล์ที่ผลิต (subtitle: นับ cue ใน .srt/.vtt)</span>
+{ <span class="k">"stage"</span>: <span class="s">"subtitle"</span>,
+  <span class="k">"source"</span>: { <span class="k">"file"</span>: <span class="s">"EP2_th.srt"</span>, <span class="k">"cues"</span>: <span class="n">214</span> },
+  <span class="k">"progress"</span>: { <span class="k">"pct"</span>: <span class="b">null</span>, <span class="k">"done"</span>: <span class="n">214</span> } }   <span class="c">// ยังเป็นค่าดิบ</span>
+
+<span class="c">// mastering: นับไฟล์ master ที่ผลิตในโฟลเดอร์</span>
+{ <span class="k">"stage"</span>: <span class="s">"master"</span>,
+  <span class="k">"source"</span>: { <span class="k">"glob"</span>: <span class="s">"*.mxf"</span>, <span class="k">"files"</span>: <span class="n">3</span> },
+  <span class="k">"progress"</span>: { <span class="k">"pct"</span>: <span class="b">null</span>, <span class="k">"done"</span>: <span class="n">3</span> } }</pre>
+  </div>
+</div></section>
+
+<section id="deep"><div class="wrap">
+  <div class="sec-eyebrow"><span class="n">05</span> ถ้าต้องการลึกสุด · ต่อ clip</div>
+  <h2>เปิด flag เดียว ดึงได้ทุกอย่างที่ Resolve ยอมให้อ่าน · <b style="color:var(--amber);font-weight:600">default ปิด</b></h2>
+  <div class="flagbox">
+    <div class="fl-l">เปิดใช้งาน (ต่อเครื่อง)</div>
+    <pre>export EDITORTRACK_EXTRACT_CLIP_META=<span class="n">1</span>
+export EDITORTRACK_CLIP_META_MAX=<span class="n">50</span>   <span class="c"># จำกัดจำนวน clip (0 = ทั้งหมด)</span></pre>
+    <div class="note"><span class="ic">⚠</span><div>ยืนยันด้วย <code>probe.py</code> ก่อนเปิดจริง — method ชั้นเกรดสี/version เปลี่ยนตาม Resolve version</div></div>
+  </div>
+
+  <p class="intro" style="margin-top:22px;font-size:14px">กดกลุ่ม → ไฮไลต์ที่มาของแต่ละส่วน:</p>
+  <div class="chips" id="chips">
+    <button class="gchip" aria-pressed="false" data-g="all">ทั้งหมด</button>
+    <button class="gchip" aria-pressed="false" data-g="clip"><span class="sw" style="background:var(--accent)"></span>clip บน timeline</button>
+    <button class="gchip" aria-pressed="false" data-g="source"><span class="sw" style="background:var(--blue)"></span>source</button>
+    <button class="gchip" aria-pressed="false" data-g="metadata"><span class="sw" style="background:var(--amber)"></span>metadata</button>
+    <button class="gchip" aria-pressed="false" data-g="color"><span class="sw" style="background:var(--good)"></span>color</button>
+    <button class="gchip" aria-pressed="false" data-g="vfx"><span class="sw" style="background:var(--violet)"></span>vfx</button>
+  </div>
+
+  <pre id="clipjson"><span>{</span>
+<span class="grp" data-g="clip" style="--gc:var(--accent)">  <span class="gtag">// clip · TimelineItem</span>
+  <span class="k">"name"</span>: <span class="s">"A047C012_230815_R1AB.mov"</span>, <span class="k">"track"</span>: <span class="s">"V1"</span>,
+  <span class="k">"start"</span>: <span class="n">14400</span>, <span class="k">"end"</span>: <span class="n">14640</span>, <span class="k">"duration"</span>: <span class="n">240</span>,
+  <span class="k">"left_offset"</span>: <span class="n">120</span>, <span class="k">"right_offset"</span>: <span class="n">88</span>,
+  <span class="k">"clip_color"</span>: <span class="s">"Green"</span>, <span class="k">"flags"</span>: [<span class="s">"Green"</span>],
+  <span class="k">"markers"</span>: [{ <span class="k">"frame"</span>: <span class="n">14460</span>, <span class="k">"name"</span>: <span class="s">"รอ note จาก sup"</span>, <span class="k">"color"</span>: <span class="s">"Yellow"</span> }],</span>
+<span class="grp" data-g="source" style="--gc:var(--blue)">  <span class="gtag">// source · GetMediaPoolItem().GetClipProperty()</span>
+  <span class="k">"source"</span>: {
+    <span class="k">"Resolution"</span>: <span class="s">"4096x2160"</span>, <span class="k">"Video Codec"</span>: <span class="s">"Apple ProRes 422 HQ"</span>,
+    <span class="k">"FPS"</span>: <span class="s">"23.976"</span>, <span class="k">"File Path"</span>: <span class="s">"/vol/footage/day03/A047C012.mov"</span>,
+    <span class="k">"Usage"</span>: <span class="s">"2"</span>, <span class="k">"Date Created"</span>: <span class="s">"2023-08-15 10:42:07"</span>
+  },</span>
+<span class="grp" data-g="metadata" style="--gc:var(--amber)">  <span class="gtag">// metadata · GetMetadata() — ถ้าทีมใส่</span>
+  <span class="k">"metadata"</span>: { <span class="k">"Scene"</span>: <span class="s">"47"</span>, <span class="k">"Shot"</span>: <span class="s">"12"</span>, <span class="k">"Take"</span>: <span class="s">"3"</span>, <span class="k">"Camera #"</span>: <span class="s">"A"</span> },</span>
+<span class="grp" data-g="color" style="--gc:var(--good)">  <span class="gtag">// color · GetNodeGraph() + GetVersionNameList()</span>
+  <span class="k">"color"</span>: {
+    <span class="k">"nodes"</span>: <span class="n">6</span>, <span class="k">"graded"</span>: <span class="b">true</span>,
+    <span class="k">"node_labels"</span>: [<span class="s">"Balance"</span>,<span class="s">"Primary"</span>,<span class="s">"Sky window"</span>,<span class="s">"Skin key"</span>,<span class="s">"Vignette"</span>,<span class="s">"Output LUT"</span>],
+    <span class="k">"luts"</span>: { <span class="k">"6"</span>: <span class="s">"Rec709_Kodak2383.cube"</span> },
+    <span class="k">"versions"</span>: [<span class="s">"Version 1"</span>, <span class="s">"client_rev2"</span>],  <span class="c">// 2 version = revise 1 รอบ</span>
+    <span class="k">"color_group"</span>: <span class="s">"Interiors_Day"</span>
+  },</span>
+<span class="grp" data-g="vfx" style="--gc:var(--violet)">  <span class="gtag">// vfx · GetFusionCompCount()</span>
+  <span class="k">"fusion_comps"</span>: <span class="n">1</span></span>
+<span>}</span></pre>
+
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>field</th><th>method</th><th>conf</th><th>บอกอะไร</th></tr></thead>
+      <tbody>
+        <tr><td><span class="gbadge" style="background:var(--accent)"></span>start/end/offsets</td><td class="api">GetStart · GetLeftOffset</td><td class="cf g">🟢</td><td>ตำแหน่ง + หัว-ท้ายที่ตัดทิ้ง</td></tr>
+        <tr><td><span class="gbadge" style="background:var(--blue)"></span>source</td><td class="api">GetClipProperty</td><td class="cf y">🟡</td><td>resolution, codec, path, usage</td></tr>
+        <tr><td><span class="gbadge" style="background:var(--amber)"></span>metadata</td><td class="api">GetMetadata</td><td class="cf y">🟡</td><td>scene/shot/take/camera</td></tr>
+        <tr><td><span class="gbadge" style="background:var(--good)"></span>nodes / labels / luts</td><td class="api">GetNodeGraph</td><td class="cf o">🟠</td><td>เกรดหนักแค่ไหน + LUT</td></tr>
+        <tr><td><span class="gbadge" style="background:var(--good)"></span>versions</td><td class="api">GetVersionNameList</td><td class="cf o">🟠</td><td>กี่ version = นับรอบ revise</td></tr>
+        <tr><td><span class="gbadge" style="background:var(--violet)"></span>fusion_comps</td><td class="api">GetFusionCompCount</td><td class="cf y">🟡</td><td>clip ไหนมีงาน VFX</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="legend">
+    <span class="k"><span class="cf g">🟢</span> ทดสอบจริงแล้ว</span>
+    <span class="k"><span class="cf y">🟡</span> รู้จาก doc ต้องลอง</span>
+    <span class="k"><span class="cf o">🟠</span> เปลี่ยนตามเวอร์ชัน — <code>probe.py</code> ยืนยันก่อนเปิด</span>
+  </div>
+
+  <div class="callout crit"><span class="ic">🚫</span><div><b>อ่านไม่ได้แม้ระดับนี้:</b> คุณภาพงาน · ใครแก้/เมื่อไหร่ · เวลาจริงต่อ shot · (ไม่ดึง thumbnail)</div></div>
+</div></section>
+
+<section id="stages"><div class="wrap">
+  <div class="sec-eyebrow"><span class="n">06</span> 5 stage ต่อหนึ่งงาน</div>
+  <h2>ทุก stage รูปแบบเดียวกัน ต่างกันแค่ตัวอ่าน · เป้าออกแบบเอง (ERP ไม่มี)</h2>
+  <div class="stages">
+    <div class="stg"><div class="nm"><span class="sw" style="background:var(--amber)"></span>Data</div><div class="how">จัดการไฟล์ต้นทาง (ไม่ใช่ Resolve)</div><div class="pct pause">พักไว้</div></div>
+    <div class="stg"><div class="nm"><span class="sw" style="background:var(--accent)"></span>Conform</div><div class="how">ความยาวที่ทำ ÷ ความยาว offline edit</div><div class="pct auto">% อัตโนมัติ</div></div>
+    <div class="stg"><div class="nm"><span class="sw" style="background:var(--good)"></span>Color</div><div class="how">clip ที่เกรดสีแล้ว ÷ clip ทั้งหมด</div><div class="pct auto">% อัตโนมัติ</div></div>
+    <div class="stg"><div class="nm"><span class="sw" style="background:var(--warn)"></span>Subtitle</div><div class="how">นับ cue ในไฟล์ซับ (ไม่ใช่ Resolve)</div><div class="pct raw">ค่าดิบ</div></div>
+    <div class="stg"><div class="nm"><span class="sw" style="background:var(--crit)"></span>Master</div><div class="how">นับไฟล์ master ที่ผลิต (ไม่ใช่ Resolve)</div><div class="pct raw">ค่าดิบ</div></div>
+  </div>
+  <div class="callout amber"><span class="ic">🔗</span><div><b>ไม่จัดคิวงาน</b> — ลำดับ stage เป็นหน้าที่ ERP · editortrack แค่รายงาน</div></div>
+</div></section>
+
+<section id="rails"><div class="wrap">
+  <div class="sec-eyebrow"><span class="n">07</span> กรอบการใช้งาน</div>
+  <h2>เก็บแบบเปิดเผย · ตัวเลขเป็นตัวช่วย ไม่ใช่ตัวตัดสินคน</h2>
+  <div class="rails">
+    <div class="rail"><div class="ic">👁️</div><h3>เปิดเผย ตาม PDPA</h3>
+      <p>ทีมรู้ว่าเก็บอะไร · ไม่แอบ · ไม่มีภาพหน้าจอ</p></div>
+    <div class="rail"><div class="ic">⚖️</div><h3>% เป็นตัวช่วยคุย</h3>
+      <p>ใช้คุย/วางแผนเท่านั้น · ไม่ผูกเงินเดือน ไม่ตัดสินคน</p></div>
+    <div class="rail"><div class="ic">🔐</div><h3>ความลับงานปลอดภัย</h3>
+      <p>ไม่เก็บภาพ/เสียงลูกค้า · รหัสอยู่ใน env ไม่ commit</p></div>
+  </div>
+</div></section>
+
+<section id="status"><div class="wrap">
+  <div class="sec-eyebrow"><span class="n">08</span> สถานะตอนนี้</div>
+  <h2>อะไรพิสูจน์แล้ว อะไรกำลังทำต่อ</h2>
+  <div class="stat">
+    <div class="col"><h3 class="ok"><span class="m">✓</span> พิสูจน์แล้ว</h3>
+      <ul>
+        <li class="ok"><span class="m">✓</span> อ่าน Resolve ได้จริง (ทดสอบบนโปรเจค 309 clip)</li>
+        <li class="ok"><span class="m">✓</span> วัด active/idle ข้ามแพลตฟอร์ม (Mac / Win / Linux)</li>
+        <li class="ok"><span class="m">✓</span> join งานจาก ERP booking (ห้อง+เวลา)</li>
+        <li class="ok"><span class="m">✓</span> color = เกรดแล้ว/ทั้งหมด · conform = เทียบ offline</li>
+      </ul></div>
+    <div class="col"><h3 class="pend"><span class="m">●</span> กำลังทำต่อ</h3>
+      <ul>
+        <li class="pend"><span class="m">●</span> เปิดช่องให้ ERP รับค่า % กลับ (รอสเปก endpoint)</li>
+        <li class="pend"><span class="m">●</span> ยืนยันตัว 🟠 ของ clip-meta ลึกบนเครื่องจริง (probe §5d)</li>
+        <li class="pend"><span class="m">●</span> ตั้งเป้าของ subtitle / master เพื่อเปิด %</li>
+        <li class="pend"><span class="m">●</span> ติดตั้งลงครบ 7 เครื่อง (6 เกรด + 1 conform)</li>
+      </ul></div>
+  </div>
+</div></section>
+
+<footer>
+  <div class="mono">editortrack · Kantana Digital · post-production progress tracking</div>
+  <div style="margin-top:6px">ข้อมูลในตัวอย่างทั้งหมดเป็นค่าสมมติเพื่อการนำเสนอ · ชื่อ method / flag เป็นของจริง</div>
+</footer>
+
+<script>
+"use strict";
+/* theme toggle */
+(function(){
+  const root=document.documentElement, ic=document.getElementById("themeIc"), tx=document.getElementById("themeTx");
+  const sysDark=()=>matchMedia("(prefers-color-scheme: dark)").matches;
+  const cur=()=>root.getAttribute("data-theme")||(sysDark()?"dark":"light");
+  function apply(t){root.setAttribute("data-theme",t);ic.textContent=t==="dark"?"☾":"☀";tx.textContent=t==="dark"?"มืด":"สว่าง";}
+  let saved=null;try{saved=localStorage.getItem("et_theme");}catch(e){}
+  apply(saved||(sysDark()?"dark":"light"));
+  document.getElementById("themeToggle").addEventListener("click",()=>{const t=cur()==="dark"?"light":"dark";apply(t);try{localStorage.setItem("et_theme",t);}catch(e){}});
+})();
+/* data tabs */
+(function(){
+  const tabs=document.querySelectorAll('.tabs [role=tab]');
+  const panels={snap:document.getElementById("p-snap"),rec:document.getElementById("p-rec"),sub:document.getElementById("p-sub")};
+  tabs.forEach(t=>t.addEventListener("click",()=>{
+    tabs.forEach(x=>x.setAttribute("aria-selected", x===t));
+    Object.entries(panels).forEach(([k,el])=>el.hidden=(k!==t.dataset.p));
+  }));
+})();
+/* clip JSON group highlight */
+(function(){
+  const box=document.getElementById("clipjson"); if(!box) return;
+  const chips=[...document.querySelectorAll("#chips .gchip")], grps=[...box.querySelectorAll(".grp")];
+  let active=null;
+  function set(g){
+    if(g==="all"||g===active){active=null;box.classList.remove("filtering");grps.forEach(x=>x.classList.remove("on"));chips.forEach(c=>c.setAttribute("aria-pressed","false"));return;}
+    active=g;box.classList.add("filtering");
+    grps.forEach(x=>x.classList.toggle("on",x.dataset.g===g));
+    chips.forEach(c=>c.setAttribute("aria-pressed",c.dataset.g===g));
+  }
+  chips.forEach(c=>c.addEventListener("click",()=>set(c.dataset.g)));
+})();
+</script>
