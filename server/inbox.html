@@ -1,0 +1,231 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Editor Tracking</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    color-scheme:light;
+    --bg:#f9f9f7; --surface:#fcfcfb; --surface-2:#f0efec;
+    --text:#0b0b0b; --text-2:#52514e; --muted:#898781;
+    --grid:#e1e0d9; --baseline:#c3c2b7; --border:rgba(11,11,11,.10);
+    --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --idle:#c3c2b7;
+    --good:#0ca30c; --warn:#fab219; --crit:#d03b3b;
+    --accent:#2a78d6; --accent-soft:rgba(42,120,214,.10);
+    --shadow:0 1px 2px rgba(20,25,40,.05), 0 4px 16px rgba(20,25,40,.04);
+    --font:"IBM Plex Sans Thai",system-ui,-apple-system,"Segoe UI",sans-serif;
+    --maxw:1080px;
+  }
+  @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0d0d0d; --surface:#1a1a19; --surface-2:#242422;
+    --text:#fff; --text-2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --baseline:#383835; --border:rgba(255,255,255,.10);
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --idle:#4a4a47;
+    --accent:#3987e5; --accent-soft:rgba(57,135,229,.14);
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 6px 22px rgba(0,0,0,.28);
+  }}
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --bg:#0d0d0d; --surface:#1a1a19; --surface-2:#242422;
+    --text:#fff; --text-2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --baseline:#383835; --border:rgba(255,255,255,.10);
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --idle:#4a4a47;
+    --accent:#3987e5; --accent-soft:rgba(57,135,229,.14);
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 6px 22px rgba(0,0,0,.28);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);
+    font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding-inline:16px;padding-block:0}
+
+  header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:30;
+    background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--border)}
+  header.top .row{max-width:var(--maxw);margin:0 auto;padding:12px 16px;
+    display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px}
+  .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--accent);
+    box-shadow:0 0 0 4px var(--accent-soft);flex:none}
+  .badge{font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:20px;
+    background:var(--warn);color:#3a2c00;letter-spacing:.02em}
+
+  .banner{display:flex;gap:10px;align-items:flex-start;margin:16px 0;padding:12px 14px;
+    border-radius:12px;background:color-mix(in srgb,var(--warn) 14%,var(--surface));
+    border:1px solid color-mix(in srgb,var(--warn) 40%,var(--border));font-size:13px;color:var(--text-2)}
+  .banner b{color:var(--text)}
+  .banner .ic{flex:none;font-size:15px;line-height:1.3}
+
+  .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0}
+  .tile{background:var(--surface);border:1px solid var(--border);border-radius:14px;
+    padding:15px 16px;box-shadow:var(--shadow)}
+  .tile .l{font-size:12.5px;color:var(--muted);margin-bottom:7px}
+  .tile .n{font-size:27px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+  .tile .sub{font-size:12px;color:var(--text-2);margin-top:6px}
+  .tile .n.good{color:var(--good)}
+
+  /* per-job 2-track */
+  .job{border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:12px;background:var(--surface)}
+  .job:last-child{margin-bottom:0}
+  .job-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+  .job-title{font-weight:600;font-size:15px;line-height:1.3}
+  .job-id{font-size:12px;color:var(--muted);margin-top:2px}
+  .job-ov{text-align:right;flex:none}
+  .job-ov-n{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+  .job-ov-l{font-size:11px;color:var(--muted);margin-top:3px}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 2px}
+  .chip{font-size:11px;padding:2px 8px;border-radius:20px;background:var(--surface-2);color:var(--text-2);border:1px solid var(--border)}
+  .chip.erp{color:var(--s1);border-color:color-mix(in srgb,var(--s1) 40%,var(--border));background:var(--accent-soft)}
+  .chip.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,var(--border));background:color-mix(in srgb,var(--warn) 13%,var(--surface))}
+  .trk{margin-top:10px}
+  .trk-top{display:flex;align-items:baseline;gap:8px;font-size:12.5px;margin-bottom:4px}
+  .trk-l{font-weight:600;display:inline-flex;align-items:center;gap:5px;flex:none}
+  .trk-meta{color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .trk-v{font-variant-numeric:tabular-nums;font-weight:600;flex:none}
+  .bar{height:10px;background:var(--surface-2);border-radius:6px;overflow:hidden}
+  .fill{height:100%;border-radius:6px}
+  .trk.empty{display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:12.5px}
+  .trk.empty .trk-none{color:var(--muted);font-style:italic}
+  .live{width:7px;height:7px;border-radius:50%;background:var(--good);box-shadow:0 0 0 3px color-mix(in srgb,var(--good) 25%,transparent);display:inline-block}
+  @media (prefers-reduced-motion:no-preference){.fill{transition:width .3s ease}}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:16px;
+    padding:18px 18px 14px;box-shadow:var(--shadow);margin:16px 0}
+  .card h2{font-size:15.5px;font-weight:600;margin:0 0 2px}
+  .card .cap{font-size:12.5px;color:var(--muted);margin:0 0 14px}
+  .card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .grid2 .card{margin:0}
+
+  .seg{display:inline-flex;gap:2px;background:var(--surface-2);border-radius:9px;padding:3px;flex-wrap:wrap}
+  .seg button{border:0;background:transparent;color:var(--text-2);font-family:inherit;font-size:12.5px;
+    font-weight:500;padding:5px 11px;border-radius:7px;cursor:pointer;white-space:nowrap}
+  .seg button[aria-pressed="true"]{background:var(--surface);color:var(--text);box-shadow:var(--shadow)}
+  .seg button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--text-2);margin-top:4px}
+  .legend .k{display:inline-flex;align-items:center;gap:6px}
+  .legend .sw{width:11px;height:11px;border-radius:3px;flex:none}
+
+  svg{width:100%;height:auto;display:block;overflow:visible}
+  svg text{font-family:var(--font)}
+  .tick{fill:var(--muted);font-size:11px}
+  .tickn{fill:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}
+  .vlabel{fill:var(--text);font-size:11.5px;font-weight:600;font-variant-numeric:tabular-nums}
+  .rowlabel{fill:var(--text-2);font-size:12px}
+  .muted-txt{fill:var(--muted);font-size:11px;font-style:italic}
+
+  .tip{position:fixed;z-index:50;pointer-events:none;opacity:0;transition:opacity .1s;
+    background:var(--text);color:var(--bg);font-size:12px;line-height:1.5;
+    padding:7px 10px;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.25);max-width:220px}
+  .tip .th{font-weight:700;margin-bottom:3px}
+  .tip .tr{display:flex;justify-content:space-between;gap:14px}
+  .tip .tr .v{font-variant-numeric:tabular-nums;font-weight:600}
+
+  footer{padding:18px 0 40px;color:var(--muted);font-size:12.5px;text-align:center}
+
+  @media (max-width:720px){
+    .tiles{grid-template-columns:repeat(2,1fr)}
+    .grid2{grid-template-columns:1fr}
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+  .hosts{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;margin:16px 0}
+  .host{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:13px 15px;
+    box-shadow:var(--shadow);cursor:pointer;text-align:left;font:inherit;color:inherit}
+  .host[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  .host:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .host .hn{font-weight:600;display:flex;align-items:center;gap:7px}
+  .host .hm{font-size:12.5px;color:var(--text-2);margin-top:4px;line-height:1.5}
+  .off{width:7px;height:7px;border-radius:50%;background:var(--crit);display:inline-block}
+  .rec{border:1px solid var(--border);border-radius:12px;margin-bottom:8px;background:var(--surface)}
+  .rec summary{list-style:none;cursor:pointer;padding:10px 14px;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+  .rec summary::-webkit-details-marker{display:none}
+  .rec summary:focus-visible{outline:2px solid var(--accent);outline-offset:1px;border-radius:12px}
+  .rec .t{font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--muted);flex:none}
+  .rec .s{flex:1;min-width:200px;font-size:13.5px}
+  .rec .body{padding:2px 14px 14px;border-top:1px solid var(--border)}
+  .rec ul{margin:10px 0;padding-left:20px;font-size:13.5px}
+  .rec ul.w{color:var(--text);list-style:"⚠ ";}
+  .rec ul.w li{margin-bottom:3px}
+  .rec h3{font-size:12px;font-weight:600;color:var(--muted);margin:14px 0 6px;text-transform:uppercase;letter-spacing:.04em}
+  .tw{overflow-x:auto}
+  table{border-collapse:collapse;width:100%;font-size:12.5px}
+  th,td{text-align:left;padding:5px 10px 5px 0;border-bottom:1px solid var(--grid);vertical-align:top}
+  th{color:var(--muted);font-weight:500}
+  td.p,td.v,pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+  td.v{font-variant-numeric:tabular-nums;word-break:break-word}
+  td.m{color:var(--text-2)}
+  pre{background:var(--surface-2);border-radius:8px;padding:10px;overflow:auto;max-height:320px;margin:0}
+  .nav a{color:var(--accent);font-size:13px;text-decoration:none}
+  .empty{color:var(--muted);font-style:italic;padding:12px 0}
+</style>
+
+<header class="top"><div class="row">
+  <span class="brand"><span class="dot"></span>Editor Tracking · ข้อมูลที่รับเข้า</span>
+  <span class="nav"><a href="/">← dashboard</a></span>
+</div></header>
+
+<div class="wrap">
+  <div class="hosts" id="hosts"></div>
+  <section class="card">
+    <div class="card-head">
+      <div><h2 id="listTitle">record ล่าสุด</h2>
+      <p class="cap" id="listCap">กดแต่ละแถวเพื่อดูคำอธิบาย ความหมายของทุก field และ JSON ดิบ · รีเฟรชทุก 30 วิ</p></div>
+    </div>
+    <div id="list"></div>
+  </section>
+  <footer id="foot"></footer>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let HOST = "", OPEN = new Set();
+const key = r => (r.record.host||"")+"|"+(r.record.ts||"");
+const tm = s => s ? new Date(s).toLocaleString("th-TH",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"}) : "?";
+function ago(sec){ if(sec==null) return "?"; sec=Math.round(sec);
+  return sec<90 ? sec+" วิ" : sec<5400 ? Math.round(sec/60)+" นาที" : (sec/3600).toFixed(1)+" ชม."; }
+
+function renderHosts(d){
+  $("#hosts").innerHTML = d.hosts.length ? d.hosts.map(h => `
+    <button class="host" data-h="${esc(h.host)}" aria-pressed="${HOST===h.host}">
+      <div class="hn"><span class="${h.online?"live":"off"}"></span>${esc(h.host)}
+        <span class="chip">${esc(h.stage||"?")}</span></div>
+      <div class="hm">${h.online?"ส่งล่าสุด":"เงียบมาแล้ว"} ${ago(h.age_sec)}${h.online?"ที่แล้ว":""} · IP ${esc(h.ip||"?")}<br>
+        วันนี้ ${h.today} record${h.late?` · ย้อนหลัง ${h.late}`:""} · user ${esc(h.user||"?")}</div>
+    </button>`).join("") : `<div class="empty">ยังไม่มีเครื่องไหนส่งข้อมูลเข้ามาใน 2 วันล่าสุด</div>`;
+  document.querySelectorAll(".host").forEach(b => b.onclick = () => { HOST = HOST===b.dataset.h ? "" : b.dataset.h; load(); });
+}
+function renderList(d){
+  $("#listTitle").textContent = HOST ? `record ล่าสุดของ ${HOST}` : "record ล่าสุด (ทุกเครื่อง)";
+  $("#list").innerHTML = d.records.length ? d.records.map(r => { const e=r.explain, k=key(r); return `
+    <details class="rec" data-k="${esc(k)}" ${OPEN.has(k)?"open":""}>
+      <summary><span class="t">${tm(r.record.ts)}</span><span class="s">${esc(e.lines.slice(2).find(l=>/ACTIVE|IDLE/.test(l))||e.summary)}</span>
+        <span class="chip">${esc(r.record.host)}</span>
+        ${r.record.progress&&r.record.progress.pct!=null?`<span class="chip erp">${esc(r.record.progress.stage)} ${r.record.progress.pct}%</span>`:""}
+        ${e.warnings.length?`<span class="chip warn">⚠ ${e.warnings.length}</span>`:""}</summary>
+      <div class="body">
+        <ul>${e.lines.map(l=>`<li>${esc(l)}</li>`).join("")}</ul>
+        ${e.warnings.length?`<h3>ข้อสังเกต</h3><ul class="w">${e.warnings.map(l=>`<li>${esc(l)}</li>`).join("")}</ul>`:""}
+        <h3>ทุก field ที่รับมา</h3>
+        <div class="tw"><table><tr><th>field</th><th>ค่า</th><th>ความหมาย</th></tr>
+          ${e.fields.map(f=>`<tr><td class="p">${esc(f.path)}</td><td class="v">${esc(f.value===null?"null":f.value)}</td><td class="m">${esc(f.meaning)}</td></tr>`).join("")}
+        </table></div>
+        <h3>JSON ดิบ</h3><pre>${esc(JSON.stringify(r.record,null,1))}</pre>
+      </div>
+    </details>`; }).join("") : `<div class="empty">ไม่มี record</div>`;
+  document.querySelectorAll(".rec").forEach(x => x.ontoggle = () => x.open ? OPEN.add(x.dataset.k) : OPEN.delete(x.dataset.k));
+  $("#foot").textContent = `แสดง ${d.records.length} จาก ${d.total} record (2 วันล่าสุด) · อัปเดต ${tm(d.generated_at)}`;
+}
+async function load(){
+  try{
+    const r = await fetch("/api/inbox?limit=60"+(HOST?"&host="+encodeURIComponent(HOST):""),{headers:{Accept:"application/json"}});
+    if(!r.ok) throw new Error(r.status);
+    const d = await r.json(); renderHosts(d); renderList(d);
+  }catch(e){ $("#foot").textContent = "โหลดไม่ได้: "+e.message; }
+}
+load(); setInterval(load, 30000);
+</script>

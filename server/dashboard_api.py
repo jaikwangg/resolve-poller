@@ -21,6 +21,7 @@ try:
     import erp
 except Exception:
     erp = None
+import explain as _ex
 
 
 # ---------------- ingest ----------------
@@ -29,6 +30,9 @@ async def ingest(req: Request, authorization: str = Header(default="")):
     if not TOKEN or authorization != f"Bearer {TOKEN}":
         raise HTTPException(status_code=401, detail="unauthorized")
     rec = await req.json()
+    if isinstance(rec, dict):                       # เวลา/IP ฝั่ง server — ใช้ดูว่ามาสดหรือมาจาก offline queue
+        rec["_rx"] = {"at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                      "ip": req.client.host if req.client else None}
     day = datetime.date.today().isoformat()
     with open(STORE / f"{day}.jsonl", "a", encoding="utf-8") as f:
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
@@ -115,7 +119,7 @@ def build_jobs(days=7):
             act = r.get("activity") or {}
             pct = prog.get("pct")
             tracks[stage] = {"pct": pct, "worker": r.get("user"), "host": r.get("host"),
-                             "page": r.get("page"), "active": act.get("active"),
+                             "page": r.get("page"), "active": _ex.is_active(r),
                              "last_seen": r.get("ts"), "detail": prog.get("detail")}
             if pct is not None:
                 pcts.append(pct)
@@ -177,15 +181,15 @@ def build_dashboard(days=7):
         act = r.get("activity") or {}
         day = _day(r.get("ts", ""))
         key = r.get("page") or r.get("stage")          # resolve=page · อื่น=stage
-        if act.get("active") and key:
+        if _ex.is_active(r) and key:
             phase_time["__team__"][key] += INTERVAL_MIN
             phase_time[user][key] += INTERVAL_MIN
         if day in ai["__team__"]:
-            b = "active" if act.get("active") else "idle"
+            b = "active" if _ex.is_active(r) else "idle"
             ai["__team__"][day][b] += INTERVAL_MIN / 60.0
             ai[user][day][b] += INTERVAL_MIN / 60.0
         try:
-            if act.get("active") and (now - datetime.datetime.fromisoformat(r["ts"].replace("Z", "+00:00"))).total_seconds() < 1800:
+            if _ex.is_active(r) and (now - datetime.datetime.fromisoformat(r["ts"].replace("Z", "+00:00"))).total_seconds() < 1800:
                 active_recent.add(user)
         except Exception:
             pass
@@ -227,6 +231,58 @@ def build_dashboard(days=7):
 @app.get("/api/dashboard")
 def api_dashboard(days: int = 7):
     return JSONResponse(build_dashboard(days))
+
+
+# ---------------- /api/inbox : record ที่รับมา + คำอธิบาย ----------------
+def build_inbox(limit=50, host=None, days=2):
+    recs = _load_recent(days)
+    try:
+        room_map = erp._room_map() if erp else None
+    except Exception:
+        room_map = None
+    room_map = room_map or None                     # ยังไม่ตั้ง map → ไม่เตือนเรื่อง room
+    now = datetime.datetime.now(datetime.timezone.utc)
+    today = datetime.date.today().isoformat()
+
+    hosts = {}
+    for r in recs:
+        h = r.get("host") or "?"
+        d = hosts.setdefault(h, {"host": h, "count": 0, "today": 0, "late": 0, "last": None})
+        d["count"] += 1
+        d["today"] += _day(r.get("ts", "")) == today
+        dl = _ex.delay_sec(r)
+        d["late"] += bool(dl is not None and dl > _ex.LATE_SEC)
+        if d["last"] is None or r.get("ts", "") > d["last"].get("ts", ""):
+            d["last"] = r
+    summary = []
+    for d in hosts.values():
+        last = d.pop("last")
+        try:
+            age = (now - datetime.datetime.fromisoformat(last["ts"].replace("Z", "+00:00"))).total_seconds()
+        except Exception:
+            age = None
+        summary.append({**d, "stage": last.get("stage"), "user": last.get("user"),
+                        "ip": (last.get("_rx") or {}).get("ip"), "last_ts": last.get("ts"),
+                        "age_sec": age, "online": age is not None and age < _ex.STALE_SEC})
+    summary.sort(key=lambda x: x["host"])
+
+    rows = [r for r in recs if not host or r.get("host") == host]
+    rows.sort(key=lambda r: (r.get("_rx") or {}).get("at") or r.get("ts", ""), reverse=True)
+    out = []
+    for r in rows[:max(1, min(limit, 500))]:
+        out.append({"explain": _ex.explain(r, _eff_job(r), room_map), "delay_sec": _ex.delay_sec(r), "record": r})
+    return {"generated_at": now.astimezone().isoformat(), "stale_sec": _ex.STALE_SEC,
+            "hosts": summary, "total": len(rows), "records": out}
+
+
+@app.get("/api/inbox")
+def api_inbox(limit: int = 50, host: str = "", days: int = 2):
+    return JSONResponse(build_inbox(limit, host or None, days))
+
+
+@app.get("/inbox")
+def inbox():
+    return FileResponse(HERE / "inbox.html")
 
 
 @app.get("/")
