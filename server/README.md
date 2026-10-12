@@ -11,7 +11,7 @@ pip install -r requirements.txt
 ```
 EDITORTRACK_TOKEN=<token>          # ต้องตรงกับ agent
 EDITORTRACK_STORE=data             # dir เก็บ JSONL (default: ./data)
-EDITORTRACK_INTERVAL_MIN=10        # 1 sample ≈ กี่นาที (ให้ตรง poll)
+EDITORTRACK_INTERVAL_MIN=1         # 1 sample ≈ กี่นาที (ให้ตรง poll; default 1)
 # ERP (creds — อย่า commit; ดู erp.py docstring / ../DATAFLOW.md §Config)
 ERP_BASE_URL / ERP_USERNAME / ERP_PASSWORD
 ERP_BOOKINGS_PATH / ERP_RECORDS_PATH / ERP_ROOM_MAP
