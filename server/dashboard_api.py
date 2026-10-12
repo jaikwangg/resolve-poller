@@ -232,3 +232,9 @@ def api_dashboard(days: int = 7):
 @app.get("/")
 def index():
     return FileResponse(HERE / "dashboard.html")
+
+
+@app.get("/deck")
+@app.get("/deck.html")
+def deck():
+    return FileResponse(HERE / "deck.html")
