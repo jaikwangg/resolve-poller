@@ -23,6 +23,9 @@ except Exception:
     erp = None
 import explain as _ex
 import report as _rep
+import pms_sync
+
+_last_pushed = {}          # (job_id, stage) -> % ล่าสุดที่ส่ง PMS สำเร็จ
 
 
 # ---------------- ingest ----------------
@@ -38,13 +41,19 @@ async def ingest(req: Request, authorization: str = Header(default="")):
     with open(STORE / f"{day}.jsonl", "a", encoding="utf-8") as f:
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     # push progress → ERP (best-effort; no-op ถ้ายังไม่ตั้ง ERP_PROGRESS_PATH) — นี่คือ "หน้าที่หลัก" ของระบบ
+    # ส่งเฉพาะ job ที่ได้จาก ERP (project_no จริง — ชื่อ project ของ Resolve PMS ตอบ 422) และเฉพาะตอน % เปลี่ยน
     pushed = False
     if erp:
         try:
             eff = _eff_job(rec)
             prog = rec.get("progress") or {}
-            if eff.get("job_id") and eff.get("stage") and prog.get("pct") is not None:
-                pushed = erp.push_progress(eff["job_id"], eff["stage"], prog["pct"])
+            pct = prog.get("pct")
+            k = (eff.get("job_id"), eff.get("stage"))
+            if eff.get("source") == "erp" and all(k) and pct is not None and _last_pushed.get(k) != pct:
+                pushed = erp.push_progress(k[0], k[1], round(float(pct), 2),
+                                           {"observed_at": rec.get("ts"), "host": rec.get("host")})
+                if pushed:
+                    _last_pushed[k] = pct
         except Exception:
             pass
     return {"ok": True, "pushed": pushed}
@@ -284,6 +293,20 @@ def api_inbox(limit: int = 50, host: str = "", days: int = 2):
 @app.get("/inbox")
 def inbox():
     return FileResponse(HERE / "inbox.html")
+
+
+# ---------------- PMS: ส่งเวลาทำงานเป็นช่วง (pms_sync) ----------------
+@app.on_event("startup")
+def _start_pms_sync():
+    if erp:
+        pms_sync.start(_load_recent, INTERVAL_MIN, _eff_job, erp)
+
+
+@app.get("/api/pms")
+def api_pms():
+    return JSONResponse({**pms_sync.status, "window_min": pms_sync.WINDOW_MIN,
+                         "progress_enabled": bool(erp and erp.ERP_PROGRESS_PATH and erp.ERP_BASE),
+                         "last_pushed": [{"job": k[0], "stage": k[1], "pct": v} for k, v in _last_pushed.items()]})
 
 
 # ---------------- /api/report : สรุปรายวันต่อเครื่อง ----------------

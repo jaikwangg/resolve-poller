@@ -15,7 +15,10 @@ ENV (ตั้งค่าจริงที่ server — อย่า commit �
   ERP_BOOKINGS_PATH=/api/schedule?start_dt={start}&end_dt={end}
   ERP_RECORDS_PATH=data.bookings
   ERP_ROOM_MAP={"grade-03":"RM-03","conform-01":"RM-01",...}   (host↔resource_code — IT กรอก)
-  ERP_TOKEN=<access_token>   # ทางเลือก: ใส่ token ตรง ๆ สำหรับเทสเร็ว (หมดใน 8 ชม)
+  ERP_TOKEN=<access_token>   # ทางเลือก: ใส่ token ตรง ๆ สำหรับเทสเร็ว (หมดใน 8 ชม) · PMS integration key (kpp_int_…) ใส่ที่นี่
+  ERP_ACTIVITY_PATH=/api/integrations/editortrack/activity   # เปิดการส่งช่วงเวลาทำงาน (pms_sync.py)
+  ERP_PROGRESS_PATH=/api/integrations/editortrack/progress   # เปิดการส่ง % (ส่งเมื่อค่าเปลี่ยน + observed_at)
+  สัญญาฝั่ง PMS: ~/github/pms docs/integrations/editortrack.md
 """
 import os, json, datetime, urllib.request, urllib.error
 
@@ -51,6 +54,9 @@ STAGE_MAP = {"grading": "color", "grade": "color", "color": "color", "colour": "
 # ---- push progress กลับ ERP (ตั้ง ERP_PROGRESS_PATH เพื่อเปิด; ว่าง=ไม่ push) — รอ spec จริงจาก ERP ----
 ERP_PROGRESS_PATH = os.environ.get("ERP_PROGRESS_PATH", "")   # เช่น /api/progress
 ERP_PROGRESS_METHOD = os.environ.get("ERP_PROGRESS_METHOD", "POST")
+# ---- push เวลาทำงานเป็นช่วง (PMS: /api/integrations/editortrack/activity) — ว่าง=ไม่ push ----
+ERP_ACTIVITY_PATH = os.environ.get("ERP_ACTIVITY_PATH", "")
+ACTIVITY_BATCH = 2000          # PMS รับสูงสุดต่อ POST
 PF = {"job":   os.environ.get("ERP_PF_JOB", "project_no"),
       "stage": os.environ.get("ERP_PF_STAGE", "activity"),
       "pct":   os.environ.get("ERP_PF_PCT", "progress_pct")}
@@ -181,6 +187,7 @@ def lookup(host, ts):
         if s and e and s <= t <= e:
             task = str(b.get(F["task"], "")).lower()
             return {"job_id": b.get(F["job"]),
+                    "booking_id": b.get("id"), "resource_code": room,
                     "title": b.get(F["title"]) or b.get(F["job"]),
                     "role": TASK_ROLE.get(task),          # compat เดิม
                     "stage": STAGE_MAP.get(task),         # 5-stage · None → caller fallback stage เครื่อง
@@ -220,3 +227,19 @@ def push_progress(job_id, stage, pct, extra=None):
         return True
     except Exception:
         return False
+
+
+def push_activity(records):
+    """ส่งช่วงเวลาทำงาน (window) ให้ PMS เป็นชุด ≤2000 → {"accepted","duplicates","rejected":[{index,reason}]}
+    index ใน rejected ปรับเป็นตำแหน่งใน records ทั้งก้อนแล้ว · None = ยังไม่ตั้งค่า (ไม่ได้ส่ง)
+    ส่งซ้ำปลอดภัย: PMS นับ (key, host, window_start) เดิมเป็น duplicates"""
+    if not ERP_ACTIVITY_PATH or not ERP_BASE or not records:
+        return None
+    out = {"accepted": 0, "duplicates": 0, "rejected": []}
+    for i in range(0, len(records), ACTIVITY_BATCH):
+        resp = _post_auth(f"{ERP_BASE}{ERP_ACTIVITY_PATH}", {"records": records[i:i + ACTIVITY_BATCH]})
+        d = _dig(resp, "data") or {}
+        out["accepted"] += d.get("accepted") or 0
+        out["duplicates"] += d.get("duplicates") or 0
+        out["rejected"] += [{**r, "index": r.get("index", 0) + i} for r in d.get("rejected") or []]
+    return out
