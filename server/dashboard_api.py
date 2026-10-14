@@ -22,6 +22,7 @@ try:
 except Exception:
     erp = None
 import explain as _ex
+import report as _rep
 
 
 # ---------------- ingest ----------------
@@ -283,6 +284,23 @@ def api_inbox(limit: int = 50, host: str = "", days: int = 2):
 @app.get("/inbox")
 def inbox():
     return FileResponse(HERE / "inbox.html")
+
+
+# ---------------- /api/report : สรุปรายวันต่อเครื่อง ----------------
+@app.get("/api/report")
+def api_report(day: str = "", host: str = ""):
+    day = day or datetime.date.today().isoformat()
+    try:
+        d = datetime.date.fromisoformat(day)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="day ต้องเป็น YYYY-MM-DD")
+    days = (datetime.date.today() - d).days + 2         # +1 วันเผื่อ record ข้ามเที่ยงคืน (ไฟล์ตั้งชื่อตามวันที่ server รับ)
+    return JSONResponse(_rep.build_report(_load_recent(max(days, 2)), day, INTERVAL_MIN, _eff_job, host or None))
+
+
+@app.get("/report")
+def report():
+    return FileResponse(HERE / "report.html")
 
 
 @app.get("/")
