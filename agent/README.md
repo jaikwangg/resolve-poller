@@ -11,6 +11,7 @@
 ```
 EDITORTRACK_ROLE=conform          # ห้อง edit · ห้อง color = colorist
 EDITORTRACK_DETECT_GRADE=0        # ห้อง edit=0 (ไม่สแกนสี) · ห้อง color=1
+EDITORTRACK_GRADE_METHOD=lut      # เกณฑ์ "เกรดแล้ว": lut (สีเปลี่ยนจริง, default) · nodes (node>1 แบบเดิม) — ยืนยันด้วย `python3 probe_grade.py`
 EDITORTRACK_SERVER=http://<server>:8000/ingest
 EDITORTRACK_TOKEN=<token>
 # Resolve scripting (per OS — ดู ../DATAFLOW.md §Config)

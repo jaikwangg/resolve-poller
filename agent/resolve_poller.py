@@ -2,6 +2,7 @@
 """A1 — snapshot metric จาก DaVinci Resolve Studio (read-only, ไม่ใช้ LLM).
 ดึง @scope / @job / @role markers ออกมาเป็น hint ให้ scope.py และ joblink.py ด้วย."""
 import os, sys, time, datetime, re
+from grade_detect import Detector
 
 def _envflag(name, default):
     v = os.environ.get(name)
@@ -70,6 +71,7 @@ def snapshot():
         vtracks = tl.GetTrackCount("video") or 0
         atracks = tl.GetTrackCount("audio") or 0
         t0 = time.time()
+        det = Detector(resolve, tl, key=f"{out.get('project')}/{_safe(tl, 'GetUniqueId') or tl.GetName()}") if DETECT_GRADE else None
         vclips, graded = 0, 0
         ranges = []          # (start, end, graded) ต่อ clip — ใช้ match marker→shot (สแกนรอบเดียว)
         clips_detail = []    # เปิดด้วย EXTRACT_CLIP_META เท่านั้น (ดึง meta ลึกราย clip)
@@ -77,7 +79,7 @@ def snapshot():
             items = tl.GetItemListInTrack("video", i) or []   # NOTE: transition ไม่รวม
             vclips += len(items)
             for it in items:
-                g = _is_graded(it) if DETECT_GRADE else None
+                g = det.graded(it) if det else None
                 if g:
                     graded += 1
                 if EXTRACT_SHOTS:
@@ -87,6 +89,7 @@ def snapshot():
                         pass
                 if EXTRACT_CLIP_META and (CLIP_META_MAX == 0 or len(clips_detail) < CLIP_META_MAX):
                     clips_detail.append(_clip_detail(it, "V%d" % i))
+        grade_info = det.finish() if det else None
         scan_ms = int((time.time() - t0) * 1000)
         out["timeline"] = {
             "name": tl.GetName(),
@@ -96,6 +99,7 @@ def snapshot():
             "graded_clips": graded if DETECT_GRADE else None,
             "markers": len(tl.GetMarkers() or {}),
             "scan_ms": scan_ms,          # ⏱️ เวลาสแกน clip ทั้งหมด (perf)
+            "grade": grade_info,         # method ที่ใช้จริง (lut/nodes) + exported/pending/failed/ms
         }
         out["scope_hint"] = _marker_kv(tl, "scope")
         out["job_hint"] = _job_hint(tl)
@@ -132,7 +136,7 @@ def snapshot():
 
 
 def _is_graded(item):
-    """HEURISTIC + version-dependent — เปิดหลัง probe. เกณฑ์: color node > 1."""
+    """เกณฑ์เดิม node > 1 — ใช้ใน clips_detail เท่านั้น · การนับ graded_clips ใช้ grade_detect.Detector"""
     try:
         g = item.GetNodeGraph()
         n = g.GetNumNodes() if g else 0
