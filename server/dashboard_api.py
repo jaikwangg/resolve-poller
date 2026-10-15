@@ -34,6 +34,9 @@ async def ingest(req: Request, authorization: str = Header(default="")):
     if not TOKEN or authorization != f"Bearer {TOKEN}":
         raise HTTPException(status_code=401, detail="unauthorized")
     rec = await req.json()
+    # record ที่ไม่มี host/ts ใช้นับอะไรไม่ได้ (เทส 8 ต.ค. มี {"host":"selftest"} หลุดเข้ามาปน) → ไม่เก็บ
+    if not isinstance(rec, dict) or not rec.get("host") or _ex._dt(rec.get("ts")) is None:
+        raise HTTPException(status_code=400, detail="record ต้องมี host และ ts (ISO มี timezone)")
     if isinstance(rec, dict):                       # เวลา/IP ฝั่ง server — ใช้ดูว่ามาสดหรือมาจาก offline queue
         rec["_rx"] = {"at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                       "ip": req.client.host if req.client else None}
@@ -76,7 +79,7 @@ def _load_recent(days):
                     recs.append(json.loads(ln))
                 except Exception:
                     pass
-    return recs
+    return _ex.dedupe(recs)
 
 
 def _day(ts):
@@ -94,7 +97,7 @@ def _daylabel(iso):
 def _eff_job(rec):
     """job_id + stage: ERP (zero-touch) ก่อน → fallback agent-side (record.job / record.stage)."""
     agent = rec.get("job") or {}
-    e = erp.lookup(rec.get("host"), rec.get("ts")) if erp else None
+    e = erp.lookup(rec.get("host"), rec.get("ts"), (rec.get("source") or {}).get("project")) if erp else None
     if e and e.get("job_id"):
         return {"job_id": e["job_id"], "title": e.get("title") or agent.get("title") or e["job_id"],
                 "stage": e.get("stage") or rec.get("stage") or agent.get("role"), "source": "erp"}

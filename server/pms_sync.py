@@ -3,7 +3,10 @@
 
 record ที่ ingest มาทุกนาที → รวมต่อ host ต่อ window → active_seconds (นับเฉพาะ sample ที่ explain.is_active)
 - ส่งเฉพาะ window ที่ปิดแล้ว (จบไปเกิน SETTLE_SEC) และมี active_seconds > 0
-- ไม่ส่ง user/ชื่อคน (PMS ไม่รับ — PDPA) · ผูกงานด้วย booking_id (จาก ERP lookup) หรือ resource_code ให้ PMS หาเอง
+- ไม่ส่ง user/ชื่อคน (PMS ไม่รับ — PDPA)
+- ทุกช่วงต้องมี booking_id (กติกา PMS 15 ต.ค.: ห้องรับหลายงานพร้อมกันได้ รหัสห้องอย่างเดียวถูกปฏิเสธ)
+  ช่วงที่หา booking ไม่ได้ หรือห้องมีหลาย booking แล้วเลือกจาก project ใน Resolve ไม่ได้ → ไม่ส่ง นับไว้ใน status["unbound"]
+  (เราไม่มี project_no ของ PMS สำหรับเวลานอก booking — ชื่อ project ใน Resolve ไม่ใช่ project_no)
 - ส่งซ้ำปลอดภัย (PMS dedupe ด้วย host+window_start) → restart แล้วส่ง LOOKBACK ใหม่ได้ นับเป็น duplicates
 ENV: PMS_WINDOW_MIN=10 · PMS_SYNC_EVERY_SEC=300 · PMS_LOOKBACK_HOURS=24 · (เปิดด้วย ERP_ACTIVITY_PATH ใน erp.py)
 """
@@ -19,7 +22,7 @@ EVERY_SEC = int(os.environ.get("PMS_SYNC_EVERY_SEC", "300"))
 LOOKBACK_HOURS = int(os.environ.get("PMS_LOOKBACK_HOURS", "24"))
 SETTLE_SEC = 120               # รอ record ที่มาช้า (offline queue) ก่อนปิด window
 
-status = {"enabled": False, "last_run": None, "last_result": None, "last_error": None, "sent": 0}
+status = {"enabled": False, "last_run": None, "last_result": None, "last_error": None, "sent": 0, "unbound": {}}
 _done = set()                  # (host, window_start) ที่ PMS ตอบแล้ว (accepted/duplicate/rejected) — ไม่ส่งซ้ำใน process นี้
 
 
@@ -31,8 +34,9 @@ def _iso(t):
     return t.astimezone(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def build_windows(recs, interval_min, eff_job, room_map, now=None, lookup=None):
-    """record → รายการ window ตามสัญญา PMS (ยังไม่กรองตัวที่ส่งแล้ว)"""
+def build_windows(recs, interval_min, eff_job, room_map, now=None, lookup=None, unbound=None):
+    """record → รายการ window ตามสัญญา PMS (ยังไม่กรองตัวที่ส่งแล้ว)
+    lookup(host, ts, project) -> (booking dict | None, เหตุผล) · ช่วงที่ไม่ได้ booking ไม่อยู่ในผล นับลง unbound"""
     now = now or datetime.datetime.now(datetime.timezone.utc)
     cutoff = now - datetime.timedelta(hours=LOOKBACK_HOURS)
     win = datetime.timedelta(minutes=WINDOW_MIN)
@@ -61,9 +65,13 @@ def build_windows(recs, interval_min, eff_job, room_map, now=None, lookup=None):
             rec["stage"] = stage
         if room_map.get(host):
             rec["resource_code"] = room_map[host]
-        b = lookup(host, first.get("ts")) if lookup else None
-        if b and b.get("booking_id"):
-            rec["booking_id"] = str(b["booking_id"])
+        projects = collections.Counter((r.get("source") or {}).get("project") for r in active)
+        b, why = lookup(host, first.get("ts"), projects.most_common(1)[0][0]) if lookup else (None, "no_lookup")
+        if not (b and b.get("booking_id")):
+            if unbound is not None:
+                unbound[why or "no_booking_id"] = unbound.get(why or "no_booking_id", 0) + 1
+            continue
+        rec["booking_id"] = str(b["booking_id"])
         out.append(rec)
     return out
 
@@ -76,7 +84,10 @@ def sync_once(load_recent, interval_min, eff_job, erp):
     status["last_run"] = datetime.datetime.now().astimezone().isoformat()
     try:
         days = LOOKBACK_HOURS // 24 + 2
-        wins = build_windows(load_recent(days), interval_min, eff_job, erp._room_map(), lookup=erp.lookup)
+        unbound = {}
+        wins = build_windows(load_recent(days), interval_min, eff_job, erp._room_map(),
+                             lookup=erp.lookup_detail, unbound=unbound)
+        status["unbound"] = unbound            # ช่วงที่ไม่ส่ง (ใน LOOKBACK) แยกตามเหตุผล
         todo = [w for w in wins if (w["host"], w["window_start"]) not in _done]
         if not todo:
             status["last_result"] = {"accepted": 0, "duplicates": 0, "rejected": [], "pending": 0}

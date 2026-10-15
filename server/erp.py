@@ -20,7 +20,7 @@ ENV (ตั้งค่าจริงที่ server — อย่า commit �
   ERP_PROGRESS_PATH=/api/integrations/editortrack/progress   # เปิดการส่ง % (ส่งเมื่อค่าเปลี่ยน + observed_at)
   สัญญาฝั่ง PMS: ~/github/pms docs/integrations/editortrack.md
 """
-import os, json, datetime, urllib.request, urllib.error
+import os, re, json, datetime, urllib.request, urllib.error
 
 ERP_BASE = os.environ.get("ERP_BASE_URL", "")
 ERP_LOGIN_PATH = os.environ.get("ERP_LOGIN_PATH", "/api/auth/login")
@@ -172,12 +172,36 @@ def _room_map():
         return {}
 
 
-def lookup(host, ts):
-    """หา booking ที่ห้อง (map จาก host) และเวลา ts อยู่ในช่วง → dict หรือ None."""
+def _norm(x):
+    return re.sub(r"[^0-9a-z]+", "", str(x or "").lower())
+
+
+def pick_booking(cands, project):
+    """เลือก booking เดียวจากหลายตัวที่ห้อง+เวลาตรง (PMS 15 ต.ค.: ห้องรับหลายงานพร้อมกันได้)
+    1 ตัว → ตัวนั้น · หลายตัว → ตัวที่ project_no หรือชื่อ project ตรงกับ project ที่เปิดใน Resolve
+    → (booking, None) หรือ (None, เหตุผล)"""
+    if not cands:
+        return None, "no_booking"
+    if len(cands) == 1:
+        return cands[0], None
+    p = _norm(project)
+    if p:
+        hit = [b for b in cands if _norm(b.get(F["job"])) and _norm(b.get(F["job"])) in p]
+        if len(hit) != 1:
+            hit = [b for b in cands if _norm(b.get(F["title"])) and
+                   (_norm(b.get(F["title"])) in p or p in _norm(b.get(F["title"])))]
+        if len(hit) == 1:
+            return hit[0], None
+    return None, "ambiguous_booking"
+
+
+def lookup_detail(host, ts, project=None):
+    """→ (dict ของ booking ที่ใช้ หรือ None, เหตุผลเมื่อไม่ได้: no_booking / ambiguous_booking / bad_ts)"""
     t = _parse_dt(ts)
     if not t:
-        return None
+        return None, "bad_ts"
     room = _room_map().get(host, host)              # host → resource_code (default = host เอง)
+    cands = []
     for b in _bookings():
         if str(b.get("status", "")).upper() in STATUS_DENY:
             continue
@@ -185,15 +209,24 @@ def lookup(host, ts):
             continue
         s, e = _parse_dt(b.get(F["start"])), _parse_dt(b.get(F["end"]))
         if s and e and s <= t <= e:
-            task = str(b.get(F["task"], "")).lower()
-            return {"job_id": b.get(F["job"]),
-                    "booking_id": b.get("id"), "resource_code": room,
-                    "title": b.get(F["title"]) or b.get(F["job"]),
-                    "role": TASK_ROLE.get(task),          # compat เดิม
-                    "stage": STAGE_MAP.get(task),         # 5-stage · None → caller fallback stage เครื่อง
-                    "target_duration_sec": b.get("target_duration_sec"),
-                    "status": b.get("status"), "source": "erp"}
-    return None
+            cands.append(b)
+    b, why = pick_booking(cands, project)
+    if b is None:
+        return None, why
+    task = str(b.get(F["task"], "")).lower()
+    return {"job_id": b.get(F["job"]),
+            "booking_id": b.get("id"), "resource_code": room,
+            "title": b.get(F["title"]) or b.get(F["job"]),
+            "role": TASK_ROLE.get(task),          # compat เดิม
+            "stage": STAGE_MAP.get(task),         # 5-stage · None → caller fallback stage เครื่อง
+            "target_duration_sec": b.get("target_duration_sec"),
+            "status": b.get("status"), "source": "erp"}, None
+
+
+def lookup(host, ts, project=None):
+    """หา booking ที่ห้อง (map จาก host) และเวลา ts อยู่ในช่วง → dict หรือ None.
+    project = ชื่อ project ที่เปิดใน Resolve ใช้เลือกเมื่อห้องมีหลาย booking พร้อมกัน"""
+    return lookup_detail(host, ts, project)[0]
 
 
 def _post_auth(url, payload, method="POST"):

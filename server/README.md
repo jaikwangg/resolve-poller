@@ -29,6 +29,8 @@ ERP_PF_JOB=project_no  ERP_PF_STAGE=stage  ERP_PF_PCT=progress_pct
 ERP_ROOM_MAP={"conform-01":"RM-…"}                    # host → resource_code ห้องใน PMS
 ```
 ไม่ตั้ง = ไม่ส่งอะไรให้ PMS · ดูสถานะการส่งที่ `GET /api/pms` · ไม่ส่ง user/ชื่อคน
+ทุกช่วงต้องผูก booking (กติกา PMS 15 ต.ค.) — ห้องมีหลาย booking พร้อมกัน → เลือกตัวที่ `project_no` หรือชื่อ project ตรงกับ project ที่เปิดใน Resolve · หาไม่ได้/ไม่ชัด = ไม่ส่ง นับไว้ที่ `unbound` ใน `/api/pms`
+→ ตั้งชื่อ project ใน Resolve ให้มี `project_no` (เช่น `KPP-2026-0005_…`) จะผูกได้แม่นสุด
 
 ## run
 ```
@@ -38,6 +40,9 @@ EDITORTRACK_TOKEN=xxx uvicorn dashboard_api:app --host 0.0.0.0 --port 8000
 
 ## endpoints
 `POST /ingest` · `GET /api/report` + `/report` (รายวัน) · `GET /api/pms` (สถานะส่ง PMS) · `GET /api/dashboard` · `GET /api/jobs` (2-track) · `GET /api/shots` (reconcile) · `GET /` (dashboard.html)
+
+## เทส
+`cd server && ~/.editortrack-venv/bin/python -m unittest tests.test_replay -v` — replay ข้อมูลเทสจริง 7–14 ต.ค. (ลบชื่อ/IP แล้ว)
 
 ## ไฟล์
 `dashboard_api.py` ingest+query+serve · `erp.py` ERP connector · `dashboard.html` UI

@@ -86,6 +86,23 @@ REASONS = {
 RESOLVE_STAGES = {"conform", "color"}        # stage ที่ทำใน Resolve — active ต้องมี Resolve อยู่หน้าสุดด้วย
 
 
+DUP_SEC = 30            # record จาก host เดียวกันห่างกันน้อยกว่านี้ = agent รันซ้อน (เทส 8 ต.ค.: 2 ตัวห่าง 0.29 วิ) นับครั้งเดียว
+
+
+def dedupe(recs):
+    """ตัด record ที่ไม่มี host/ts และ record ซ้อนของ host เดียวกัน (< DUP_SEC) — คืนเรียงตาม host, ts"""
+    out, last = [], {}
+    for r in sorted((r for r in recs if isinstance(r, dict) and r.get("host") and _dt(r.get("ts"))),
+                    key=lambda r: (r["host"], _dt(r["ts"]))):
+        t = _dt(r["ts"])
+        p = last.get(r["host"])
+        if p is not None and (t - p).total_seconds() < DUP_SEC:
+            continue
+        last[r["host"]] = t
+        out.append(r)
+    return out
+
+
 def is_active(rec):
     """เวลาทำงานที่ server นับ = มี input (activity.active) และ Resolve อยู่หน้าสุด
     stage ที่ไม่ได้ทำใน Resolve (data/subtitle/master) ดูแค่ input"""

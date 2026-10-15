@@ -1,4 +1,4 @@
-# NEXT STEPS — editortrack (อัปเดต 2026-10-08)
+# NEXT STEPS — editortrack (อัปเดต 2026-10-15)
 
 > สถานะหลังทดสอบ deploy บน Mac จริง (conform-01) · อ่าน `HANDOFF.md` สำหรับภารกิจ/กฎเหล็ก/architecture เต็ม
 > repo: https://github.com/jaikwangg/resolve-poller (push แล้ว ถึง commit network diagram)
@@ -31,6 +31,20 @@
 9. **cross-network** — ถ้ามี agent คนละ subnet: routed+DNS (องค์กรเดียว) / Tailscale-WireGuard (ข้ามไซต์) / Caddy+TLS · แก้แค่ `EDITORTRACK_SERVER` ใน env.sh + ใส่ TLS ถ้าข้าม network นอก
 
 ---
+
+## 🔬 สิ่งที่ข้อมูลเทส 7–14 ต.ค. บอก (264 record, conform-01 Mac · replay ได้ที่ `server/tests/test_replay.py`)
+| เรื่อง | ข้อมูลบอก | ผลต่อเครื่องจริง |
+|---|---|---|
+| active ต้องมี Resolve อยู่หน้าสุด **และ** มี input | 12 ต.ค. Resolve อยู่หน้าสุด ~20 นาทีแต่ idle 139→1225 วิ · 14 ต.ค. มี input ใน Terminal 17 นาที | ถูกแล้ว — ถ้านับแค่ "Resolve อยู่หน้าสุด" จะเกินจริงมาก |
+| idle threshold 90 วิ | Resolve หน้าสุด 57 sample: 60วิ→24 นาที · 90→30 · 120→30 · 300→38 | 90 กับ 120 ได้เท่ากัน เก็บ 90 · **ยังไม่มีข้อมูลตอนดู playback** (ไม่มี input แต่ทำงาน) — ต้องวัดในห้องเกรดจริง |
+| Mac ล็อก/หลับ | ตื่นราวชั่วโมงละครั้ง (gap ~3,650 วิ) และ idle เพิ่มแค่ ~60 วิต่อครั้ง = เครื่องหลับระหว่างนั้น | ข้อมูลขาดเป็นชั่วโมง ไม่ใช่ agent พัง · อยากได้ต่อเนื่อง → ปิด sleep |
+| agent รันซ้อน | 8 ต.ค. 2 record ห่างกัน 0.29 วิ (ช่วงติดตั้ง) | server ตัด record ซ้อน < 30 วิ แล้ว (`explain.dedupe`) |
+| record ทดสอบหลุดเข้า data | 8 ต.ค. `{"host":"selftest"}` ไม่มี ts | `/ingest` ตอบ 400 ถ้าไม่มี host/ts แล้ว |
+| เปิด project ใหม่ | `page` = null 1 รอบ (3 ครั้ง) ตอน Resolve กำลังโหลด | ปกติ — รอบถัดไปมาเอง |
+| scan ราย timeline | 3–37 ms (6–8 clip) · 309 clip วัดบน Windows ได้ 156 ms | เกณฑ์ node เบามาก · เกณฑ์ LUT ใหม่ยังไม่ได้วัด (probe_grade.py) |
+| % สี (เกณฑ์ node>1) | 1/6→6/6→5/6→6/8 ใน 5 นาที · blade ทำ clip 6→8 ความยาวเท่าเดิม | แก้เป็นเกณฑ์ LUT แล้ว (85bf2c8) · ตัวหาร = จำนวน clip ยังลดเมื่อ blade → ควรนับราย shot จาก marker |
+| offline queue | ทุก record มาถึง server ภายใน 0 วิ — **ไม่เคยถูกใช้เลย** | ยังไม่ได้พิสูจน์: เครื่องจริงลองหยุด server 3 นาที แล้วดูว่า record ย้อนหลังมาครบ (`/inbox` แสดง "ส่งย้อนหลัง") |
+| stage ของเครื่อง | conform-01 ส่ง `stage=color` ตลอด | ใช้ `deploy/stations/<host>.sh` ตอนลงจริง |
 
 ## ⚙️ บทเรียน deploy ที่เสียเวลาหาสุด (กันเครื่องอื่นเจอซ้ำ)
 | อาการ | ราก | แก้ |
