@@ -39,7 +39,7 @@ EDITORTRACK_TOKEN=xxx uvicorn dashboard_api:app --host 0.0.0.0 --port 8000
 เปิด `http://<server>:8000/` → dashboard
 
 ## endpoints
-`POST /ingest` · `GET /api/report` + `/report` (รายวัน) · `GET /api/pms` (สถานะส่ง PMS) · `GET /api/dashboard` · `GET /api/jobs` (2-track) · `GET /api/shots` (reconcile) · `GET /` (dashboard.html)
+`POST /ingest` · `GET /api/report` + `/report` (รายวัน) · `GET /api/projects?days=` + `/projects` (ตัวเลขนับรายโปรเจค: คลิป เกรด shot) · `GET /api/pms` (สถานะส่ง PMS) · `GET /api/dashboard` · `GET /api/jobs` (2-track) · `GET /api/shots` (reconcile) · `GET /` (dashboard.html)
 
 ## เทส
 `cd server && ~/.editortrack-venv/bin/python -m unittest tests.test_replay -v` — replay ข้อมูลเทสจริง 7–14 ต.ค. (ลบชื่อ/IP แล้ว)

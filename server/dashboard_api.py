@@ -23,6 +23,7 @@ except Exception:
     erp = None
 import explain as _ex
 import report as _rep
+import projects as _proj
 import pms_sync
 
 _last_pushed = {}          # (job_id, stage) -> % ล่าสุดที่ส่ง PMS สำเร็จ
@@ -327,6 +328,17 @@ def api_report(day: str = "", host: str = ""):
 @app.get("/report")
 def report():
     return FileResponse(HERE / "report.html")
+
+
+# ---------------- /api/projects : ตัวเลขนับรายโปรเจค (คลิป / เกรด / shot) ----------------
+@app.get("/api/projects")
+def api_projects(days: int = 30):
+    return JSONResponse(_proj.build_projects(_load_recent(max(1, min(days, 3650))), INTERVAL_MIN, _eff_job))
+
+
+@app.get("/projects")
+def projects_page():
+    return FileResponse(HERE / "projects.html")
 
 
 @app.get("/")

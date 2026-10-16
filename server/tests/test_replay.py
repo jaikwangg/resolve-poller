@@ -154,6 +154,25 @@ class PickBooking(unittest.TestCase):
         self.assertEqual(self.pick([], "TEST"), (None, "no_booking"))
 
 
+class Projects(unittest.TestCase):
+    def setUp(self):
+        import projects as pj
+        self.ps = {p["job_id"]: p for p in pj.build_projects(all_recs(), 1, api._eff_job)["projects"]}
+
+    def test_test_project_counts_and_history_14oct(self):
+        p = self.ps["TEST"]
+        self.assertEqual((p["counts"]["video_clips"], p["counts"]["graded_clips"]), (8, 6))
+        # เปลี่ยนเฉพาะตอนตัวเลขเปลี่ยน: 0/6 → 1/6 → 6/6 (กระโดด) → 5/6 (ลด) → 6/8
+        h = [(x["graded_clips"], x["video_clips"], x["jump"], x["drop"]) for x in reversed(p["history"])]
+        self.assertEqual(h, [(0, 6, False, False), (1, 6, False, False), (6, 6, True, False),
+                             (5, 6, False, True), (6, 8, False, False)])
+        self.assertEqual(p["records"], 234)
+
+    def test_project_without_timeline_has_no_counts(self):
+        self.assertIsNone(self.ps["Untitled Project"]["counts"])
+        self.assertEqual(self.ps["FILMS-REEL"]["counts"]["video_clips"], 55)
+
+
 class Ingest(unittest.TestCase):
     def setUp(self):
         from fastapi.testclient import TestClient
