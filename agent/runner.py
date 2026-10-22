@@ -2,7 +2,7 @@
 """A3 — poll (collector ตาม stage) → resolve job → POST (หลาย URL สำรองได้ + offline queue). record schema 3.
 stage จาก EDITORTRACK_STAGE (หรือ EDITORTRACK_ROLE เดิม): data/conform/color/subtitle/master
 """
-import json, os, socket, datetime, urllib.request, urllib.error, pathlib
+import json, os, socket, datetime, time, urllib.request, urllib.error, pathlib
 from activity_sampler import sample
 from collect import collect, canon
 from joblink import resolve_job
@@ -55,6 +55,11 @@ RETRY_STATUS = {401, 403, 408, 425, 429}
 QUEUE_MAX_LINES = int(os.environ.get("EDITORTRACK_QUEUE_MAX", "10080"))        # ~7 วันที่ 1 record/นาที
 QUEUE_MAX_AGE_H = float(os.environ.get("EDITORTRACK_QUEUE_MAX_AGE_H", "168"))  # record เก่ากว่านี้ทิ้ง (server/PMS ไม่ใช้แล้ว)
 QUEUE_MAX_BYTES = int(os.environ.get("EDITORTRACK_QUEUE_MAX_MB", "16")) * 1024 * 1024
+# งบต่อรอบของการส่ง backlog — unit Linux มี TimeoutStartSec=120 + CPUQuota=20%: queue ใกล้เพดาน (~10k บรรทัด) ส่งไม่ทันใน 120 วิ
+# → ถูก kill ก่อนเขียน queue ใหม่ → ส่งชุดเดิมซ้ำทุกรอบ ข้อมูลสดหยุด · จึงหยุดเมื่อหมดงบ (ที่เหลือรอบหน้าส่งต่อ)
+FLUSH_BUDGET_S = float(os.environ.get("EDITORTRACK_FLUSH_BUDGET_S", "60"))      # วิ ต่อรอบ (ต้องน้อยกว่า TimeoutStartSec พอสมควร)
+FLUSH_MAX_LINES = max(1, int(os.environ.get("EDITORTRACK_FLUSH_MAX_LINES", "2000")))    # บรรทัดสูงสุดต่อรอบ
+FLUSH_PERSIST_EVERY = max(1, int(os.environ.get("EDITORTRACK_FLUSH_PERSIST_EVERY", "50")))  # เขียน queue ที่เหลือ (atomic) ทุก N บรรทัด
 
 
 def _log(msg):
@@ -156,7 +161,7 @@ def _note_auth(status):
 def post(rec):
     """ส่ง backlog (queue) ก่อน แล้วค่อยส่ง record ใหม่ — server รับตามลำดับเวลา
     เดิมส่งตัวใหม่ก่อน: pms_sync.settled() เห็น record ใหม่ของเครื่องแล้วปิดช่วงเวลาก่อนหน้า (ส่ง PMS)
-    ก่อนที่ record ค้างของช่วงนั้นจะมาถึง · backlog ยังค้าง (server ล่ม/token ผิด) → ตัวใหม่ต่อท้าย queue ไม่ส่งแซง"""
+    ก่อนที่ record ค้างของช่วงนั้นจะมาถึง · backlog ยังค้าง (server ล่ม/token ผิด/หมดงบต่อรอบ) → ตัวใหม่ต่อท้าย queue ไม่ส่งแซง"""
     line = json.dumps(rec, ensure_ascii=False)
     drained, status = _flush_queue()
     if not drained:
@@ -173,29 +178,41 @@ def post(rec):
 
 
 def _flush_queue():
-    """ส่ง queue ทีละบรรทัดตามลำดับ → (ว่างแล้วหรือยัง, status ล่าสุดที่ทำให้หยุด)
-    ลบออกจากไฟล์เฉพาะตัวที่ส่งสำเร็จหรือ server ปฏิเสธถาวร (4xx ที่ไม่อยู่ใน RETRY_STATUS) — เขียนไฟล์ใหม่หลังจบรอบ
-    crash กลางทาง = ไฟล์เดิมยังอยู่ครบ (ส่งซ้ำได้: server เก็บ 1 record ต่อเครื่องต่อนาที)"""
+    """ส่ง queue ทีละบรรทัดตามลำดับ → (ว่างแล้วหรือยัง, status ล่าสุดที่ทำให้หยุด — None ถ้าหยุดเพราะหมดงบ)
+    ลบออกจากไฟล์เฉพาะตัวที่ส่งสำเร็จหรือ server ปฏิเสธถาวร (4xx ที่ไม่อยู่ใน RETRY_STATUS)
+    เขียนส่วนที่เหลือแบบ atomic ทุก FLUSH_PERSIST_EVERY บรรทัด และตอนจบ → ถูก kill กลางทางเสียแค่ไม่เกิน N บรรทัดล่าสุด
+    ที่ต้องส่งซ้ำ (server เก็บ 1 record ต่อเครื่องต่อนาที) ไม่หาย ไม่สลับลำดับ
+    หมดงบเวลา (FLUSH_BUDGET_S) หรือจำนวน (FLUSH_MAX_LINES) → หยุด ที่เหลือรอบหน้าส่งต่อ"""
     lines = _trim(_read_queue())
     if not lines:
         _write_queue([])
         return True, None
-    rest, stop = [], None
+    t0 = time.monotonic()
+    done = since = 0                                 # done = บรรทัดที่ประมวลผลแล้วรอบนี้ · since = นับตั้งแต่ persist ล่าสุด
     for i, ln in enumerate(lines):
+        if done >= FLUSH_MAX_LINES or time.monotonic() - t0 >= FLUSH_BUDGET_S:
+            _log(f"queue: หมดงบรอบนี้ ({done} บรรทัด, {time.monotonic() - t0:.0f} วิ) — เหลือ {len(lines) - i} ส่งรอบหน้า")
+            _write_queue(lines[i:])
+            return False, None
         try:
             rec = json.loads(ln)
         except Exception:
             _log("queue: บรรทัดเสีย — ทิ้ง")
-            continue
-        kind, status = _send(rec)
-        if kind == "final":
-            _log(f"queue: server ตอบ {status} — ทิ้ง record ts={rec.get('ts')}")
-            continue
-        if kind == "retry":                          # หลุดกลางทาง → เก็บที่เหลือไว้ รอบหน้าส่งต่อ
-            rest, stop = lines[i:], status
-            break
-    _write_queue(rest)
-    return not rest, stop
+            rec = None
+        if rec is not None:
+            kind, status = _send(rec)
+            if kind == "retry":                      # หลุดกลางทาง → เก็บที่เหลือไว้ รอบหน้าส่งต่อ
+                _write_queue(lines[i:])
+                return False, status
+            if kind == "final":
+                _log(f"queue: server ตอบ {status} — ทิ้ง record ts={rec.get('ts')}")
+        done += 1
+        since += 1
+        if since >= FLUSH_PERSIST_EVERY:
+            _write_queue(lines[i + 1:])
+            since = 0
+    _write_queue([])
+    return True, None
 
 
 def run_lock():

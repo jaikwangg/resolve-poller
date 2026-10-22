@@ -3,6 +3,7 @@ import datetime
 import http.server
 import json
 import threading
+import time
 import unittest
 
 try:
@@ -29,6 +30,7 @@ class Lock(unittest.TestCase):
 class FakeServer(http.server.BaseHTTPRequestHandler):
     codes = []            # status ที่จะตอบทีละ request (หมด = 200)
     got = []
+    delay = 0.0           # วิ ต่อ request — จำลอง server/เครื่องช้า (CPUQuota)
 
     def log_message(self, *a):
         pass
@@ -36,6 +38,8 @@ class FakeServer(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         n = int(self.headers.get("Content-Length") or 0)
         FakeServer.got.append(json.loads(self.rfile.read(n)))
+        if FakeServer.delay:
+            time.sleep(FakeServer.delay)
         code = FakeServer.codes.pop(0) if FakeServer.codes else 200
         self.send_response(code)
         self.send_header("Content-Length", "2")
@@ -64,11 +68,14 @@ class Queue(unittest.TestCase):
     def setUp(self):
         self._servers = runner.SERVERS
         runner.SERVERS = [self.url]
-        FakeServer.codes, FakeServer.got = [], []
+        FakeServer.codes, FakeServer.got, FakeServer.delay = [], [], 0.0
+        self._budget = runner.FLUSH_BUDGET_S, runner.FLUSH_MAX_LINES, runner.FLUSH_PERSIST_EVERY
         runner._write_queue([])
 
     def tearDown(self):
         runner.SERVERS = self._servers
+        runner.FLUSH_BUDGET_S, runner.FLUSH_MAX_LINES, runner.FLUSH_PERSIST_EVERY = self._budget
+        FakeServer.delay = 0.0
         runner._write_queue([])
 
     def queued(self):
@@ -155,6 +162,60 @@ class Queue(unittest.TestCase):
         finally:
             runner._send = old
         self.assertEqual(self.queued(), [0, 1, 2])             # เดิม: unlink ก่อนส่ง → หายหมด
+
+    def test_big_backlog_slow_server_stops_within_budget_and_continues(self):
+        """S1: backlog ใหญ่ + server ช้า → หยุดในงบเวลา, ความคืบหน้าถูกเขียนลงไฟล์, record ใหม่ต่อท้าย queue
+        ไม่หาย ไม่ซ้ำ ไม่สลับลำดับ · รอบถัดไปส่งต่อจากที่ค้าง (เดิม: ถูก kill ที่ 120 วิ → ส่งชุดเดิมซ้ำตลอด)"""
+        n = 60
+        runner._write_queue([json.dumps(rec(i)) for i in range(n)])
+        FakeServer.delay = 0.02
+        runner.FLUSH_BUDGET_S, runner.FLUSH_MAX_LINES, runner.FLUSH_PERSIST_EVERY = 0.3, 10_000, 5
+        fresh = 100
+        t0 = time.monotonic()
+        self.assertIsNone(runner.post(rec(fresh)))             # ยังไม่หมด → ไม่ส่งตัวใหม่แซง
+        took = time.monotonic() - t0
+        self.assertLess(took, 0.3 + 0.5)                       # งบ + 1 request ที่ค้างอยู่ตอนหมดงบ + เผื่อ
+        sent = [g["n"] for g in FakeServer.got]
+        self.assertTrue(0 < len(sent) < n, sent)
+        self.assertNotIn(fresh, sent)
+        self.assertEqual(sent + self.queued(), list(range(n)) + [fresh])   # ไม่หาย ไม่ซ้ำ ไม่สลับ
+        for _ in range(50):                                    # รอบต่อ ๆ ไป: ส่งต่อจากที่ค้างจนหมด
+            if not runner.QUEUE.exists():
+                break
+            fresh += 1
+            runner.post(rec(fresh))
+        self.assertFalse(runner.QUEUE.exists())
+        got = [g["n"] for g in FakeServer.got]
+        self.assertEqual(got, list(range(n)) + list(range(100, fresh + 1)))
+
+    def test_line_budget_per_run(self):
+        runner._write_queue([json.dumps(rec(i)) for i in range(10)])
+        runner.FLUSH_MAX_LINES = 4
+        runner.post(rec(50))
+        self.assertEqual([g["n"] for g in FakeServer.got], [0, 1, 2, 3])
+        self.assertEqual(self.queued(), [4, 5, 6, 7, 8, 9, 50])
+        runner.post(rec(51))
+        self.assertEqual(self.queued(), [8, 9, 50, 51])
+
+    def test_kill_mid_flush_keeps_persisted_progress(self):
+        """ถูก kill (TimeoutStartSec) กลางทาง → สิ่งที่ส่งไปแล้วถึงจุด persist ล่าสุดไม่ต้องส่งซ้ำ ที่เหลือครบตามลำดับ"""
+        runner._write_queue([json.dumps(rec(i)) for i in range(20)])
+        runner.FLUSH_PERSIST_EVERY = 3
+        old = runner._send
+        calls = []
+
+        def killed(r):
+            calls.append(r["n"])
+            if len(calls) == 8:                                # ส่ง 0..6 สำเร็จ แล้วตายตอนตัวที่ 7
+                raise SystemExit("SIGTERM")
+            return "ok", 200
+        runner._send = killed
+        try:
+            with self.assertRaises(SystemExit):
+                runner._flush_queue()
+        finally:
+            runner._send = old
+        self.assertEqual(self.queued(), list(range(6, 20)))   # persist หลัง 3 และ 6 · 6 ส่งซ้ำได้ (server dedupe ต่อนาที)
 
     def test_queue_capped_by_lines_and_age(self):
         old = runner.QUEUE_MAX_LINES

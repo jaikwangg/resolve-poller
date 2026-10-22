@@ -21,6 +21,8 @@ EDITORTRACK_RESOLVE_BUNDLES=com.blackmagic-design.DaVinciResolve,com.blackmagic-
 #   4xx อื่น (record เสีย 400, 413, 422) → ทิ้ง + log · ทุกรอบส่ง queue ตามลำดับก่อน แล้วค่อยส่ง record ใหม่ (ค้าง = ตัวใหม่ต่อท้าย ไม่ส่งแซง)
 EDITORTRACK_QUEUE_MAX=10080       # บรรทัดสูงสุด (~7 วัน) · EDITORTRACK_QUEUE_MAX_AGE_H=168 · EDITORTRACK_QUEUE_MAX_MB=16 — เกิน = ทิ้งตัวเก่าสุด (token ผิดถาวรจึงไม่ทำดิสก์เต็ม)
                                   # เขียนใหม่แบบ atomic (tmp+rename) และลบเฉพาะตัวที่ส่งสำเร็จแล้ว
+EDITORTRACK_FLUSH_BUDGET_S=60      # งบส่ง backlog ต่อรอบ (วิ) · EDITORTRACK_FLUSH_MAX_LINES=2000 · EDITORTRACK_FLUSH_PERSIST_EVERY=50 (เขียนความคืบหน้าทุก N บรรทัด)
+#   ส่งไม่หมดในงบ → ที่เหลือส่งรอบหน้า + record ใหม่ต่อท้าย queue (unit Linux: TimeoutStartSec=120 — งบต้องน้อยกว่านี้)
 # Resolve scripting (per OS — ดู ../DATAFLOW.md §Config)
 RESOLVE_SCRIPT_API / RESOLVE_SCRIPT_LIB / PYTHONPATH
 ```
