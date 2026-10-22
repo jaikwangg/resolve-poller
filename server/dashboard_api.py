@@ -40,6 +40,7 @@ _pending = {}              # (job_id, stage) -> (pct, extra) ล่าสุด�
 _pending_lock = threading.Lock()
 _pending_ev = threading.Event()
 _pusher = {"thread": None, "failures": 0, "last_error_at": None}
+_rejected = {}             # (job_id, stage) -> (pct, http status) ที่ ERP ปฏิเสธถาวร — ไม่ส่งค่าเดิมซ้ำ (ค่าใหม่ลองได้)
 PUSH_RETRY_SEC = int(os.environ.get("EDITORTRACK_PUSH_RETRY_SEC", "60"))
 
 
@@ -57,9 +58,14 @@ def _push_worker():
             ok = False
             try:
                 ok = erp.push_progress(k[0], k[1], round(float(pct), 2), extra)
+            except erp.Rejected as e:                          # 4xx ถาวร (เช่น 422) → log แล้วทิ้ง ไม่วนส่งซ้ำตลอดไป
+                log.warning("push progress %s/%s pct=%s: ERP ตอบ %s — ทิ้ง (ส่งซ้ำก็ไม่ผ่าน)", k[0], k[1], pct, e.code)
+                _rejected[k] = (pct, e.code)
+                continue
             except Exception:
                 ok = False
             if ok:
+                _rejected.pop(k, None)
                 _last_pushed[k] = pct
             else:
                 failed = True
@@ -189,7 +195,7 @@ async def ingest(req: Request, authorization: str = Header(default="")):
             pct = (rec.get("progress") or {}).get("pct")
             k = (eff.get("job_id"), eff.get("stage"))
             if (eff.get("source") == "erp" and all(k) and pct is not None and _last_pushed.get(k) != pct
-                    and erp.ERP_PROGRESS_PATH and erp.ERP_BASE):
+                    and (_rejected.get(k) or (None,))[0] != pct and erp.ERP_PROGRESS_PATH and erp.ERP_BASE):
                 _queue_push(k, pct, {"observed_at": rec.get("ts"), "host": rec.get("host")})
                 queued = True
         except Exception:
@@ -497,6 +503,8 @@ def api_pms():
                          "last_pushed": [{"job": k[0], "stage": k[1], "pct": v} for k, v in _last_pushed.items()],
                          "progress_pending": len(_pending), "progress_failures": _pusher["failures"],
                          "progress_last_error_at": _pusher["last_error_at"],
+                         "progress_rejected": [{"job": k[0], "stage": k[1], "pct": v[0], "status": v[1]}
+                                               for k, v in _rejected.items()],
                          "erp_cache": erp.cache_status() if erp else None})
 
 

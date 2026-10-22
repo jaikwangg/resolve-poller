@@ -307,9 +307,21 @@ def _post_auth(url, payload, method="POST"):
         raise
 
 
+# 4xx ที่ส่งใหม่แล้วอาจผ่าน (token หมดอายุ/สิทธิ์ช่วง rollout, timeout, rate limit) · 4xx อื่น (422 project_no ไม่รู้จัก ฯลฯ) = ถาวร
+RETRY_4XX = {401, 403, 408, 425, 429}
+
+
+class Rejected(Exception):
+    """ERP ปฏิเสธถาวร (4xx ที่ไม่อยู่ใน RETRY_4XX) — ส่งค่าเดิมซ้ำก็ไม่ผ่าน"""
+    def __init__(self, code, detail=""):
+        super().__init__(f"HTTP {code} {detail}".strip())
+        self.code = code
+
+
 def push_progress(job_id, stage, pct, extra=None):
     """ส่ง progress กลับ ERP (best-effort). no-op ถ้ายังไม่ตั้ง ERP_PROGRESS_PATH.
-    payload field ปรับผ่าน ERP_PF_* (รอ spec จริงจาก ERP)."""
+    payload field ปรับผ่าน ERP_PF_* (รอ spec จริงจาก ERP).
+    → True ส่งแล้ว · False ล้มชั่วคราว (ลองใหม่ได้) · raise Rejected = ERP ปฏิเสธถาวร (ไม่ต้องลองใหม่)"""
     if not ERP_PROGRESS_PATH or not ERP_BASE or not job_id or pct is None:
         return False
     payload = {PF["job"]: job_id, PF["stage"]: stage, PF["pct"]: pct}
@@ -318,6 +330,11 @@ def push_progress(job_id, stage, pct, extra=None):
     try:
         _post_auth(f"{ERP_BASE}{ERP_PROGRESS_PATH}", payload, ERP_PROGRESS_METHOD)
         return True
+    except urllib.error.HTTPError as e:
+        if 400 <= e.code < 500 and e.code not in RETRY_4XX:
+            raise Rejected(e.code, getattr(e, "reason", "") or "") from None
+        log.warning("push_progress %s/%s failed: %s", job_id, stage, e)
+        return False
     except Exception as e:
         log.warning("push_progress %s/%s failed: %s", job_id, stage, e)
         return False

@@ -4,8 +4,10 @@
 - EDITORTRACK_HOME / STORE / TOKENS / READ_USERS ชี้ไป temp dir (ไม่แตะ /srv/editortrack หรือ server/data)
 - ลบ ERP_* ทั้งหมด (ไม่ยิง PMS/ERP จริง)
 """
+import atexit
 import os
 import pathlib
+import shutil
 import sys
 import tempfile
 import time
@@ -13,6 +15,8 @@ import time
 HERE = pathlib.Path(__file__).parent
 FIX = HERE / "fixtures" / "replay"
 TMP = pathlib.Path(tempfile.mkdtemp(prefix="editortrack-test-"))
+tempfile.tempdir = str(TMP)                       # mkdtemp() ในเทสอื่น ๆ ไปอยู่ใต้ TMP ด้วย → ลบทีเดียวตอนจบ
+atexit.register(shutil.rmtree, TMP, True)         # เดิมทิ้ง /tmp/editortrack-test-* ไว้ทุกรอบที่รันเทส
 FAKE_HOME = TMP / "home"
 FAKE_HOME.mkdir(exist_ok=True)
 
@@ -23,7 +27,6 @@ if not os.environ.get("_EDITORTRACK_TEST_ENV"):
     time.tzset()
     os.environ["EDITORTRACK_TZ"] = "Asia/Bangkok"
     os.environ["EDITORTRACK_HOME"] = str(TMP / "srv")
-    import shutil
     shutil.copytree(FIX, TMP / "store")           # สำเนา fixture (server chmod 700 ที่เก็บ — ไม่แตะ dir ใน repo)
     os.environ["EDITORTRACK_STORE"] = str(TMP / "store")
     os.environ["EDITORTRACK_TOKENS_FILE"] = str(TMP / "srv" / "agent_tokens.json")

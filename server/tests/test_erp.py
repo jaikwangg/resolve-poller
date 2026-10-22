@@ -31,16 +31,17 @@ def booking(job, bid="b-1"):
 class FakeERP(http.server.BaseHTTPRequestHandler):
     schedule_delay = 0.0
     progress_delay = 0.0
+    progress_codes = []                           # status ที่ตอบ POST ทีละครั้ง (หมด = 200)
     bookings = [booking("KPP-1")]
     hits = []
 
     def log_message(self, *a):
         pass
 
-    def _reply(self, obj):
+    def _reply(self, obj, code=200):
         b = json.dumps(obj).encode()
         try:
-            self.send_response(200)
+            self.send_response(code)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(b)))
             self.end_headers()
@@ -58,7 +59,8 @@ class FakeERP(http.server.BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(n) or b"{}")
         FakeERP.hits.append(("POST", self.path, body))
         time.sleep(FakeERP.progress_delay)
-        self._reply({"data": {"stored": True}})
+        code = FakeERP.progress_codes.pop(0) if FakeERP.progress_codes else 200
+        self._reply({"data": {"stored": code == 200}}, code)
 
 
 class _ErpCase(unittest.TestCase):
@@ -87,7 +89,9 @@ class _ErpCase(unittest.TestCase):
         FakeERP.schedule_delay = FakeERP.progress_delay = 0.0
         FakeERP.bookings = [booking("KPP-1")]
         FakeERP.hits = []
+        FakeERP.progress_codes = []
         api._last_pushed.clear()
+        api._rejected.clear()
         self._store = api.STORE
         api.STORE = pathlib.Path(tempfile.mkdtemp())
 
@@ -179,6 +183,51 @@ class IngestPath(_ErpCase):
         self.assertLessEqual(len(posts), 2)               # 10 ส่งไปแล้ว ระหว่างนั้น 20 ถูก 30 ทับ
         self.assertEqual(posts[-1][2]["progress_pct"], 30.0)
         self.assertEqual(posts[-1][2]["observed_at"], TS)
+
+    def wait_for(self, cond, sec=5):
+        deadline = time.monotonic() + sec
+        while not cond() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        return cond()
+
+    def posts(self):
+        return [h for h in FakeERP.hits if h[0] == "POST"]
+
+    def test_permanent_4xx_dropped_after_logging_not_retried_forever(self):
+        erp.lookup("grade-03", TS)
+        old = api.PUSH_RETRY_SEC
+        api.PUSH_RETRY_SEC = 0.05                          # ถ้าวนซ้ำจะเห็นภายในไม่กี่รอบ
+        try:
+            FakeERP.progress_codes = [422]
+            with self.assertLogs("editortrack", level="WARNING") as cm:
+                self.assertTrue(self.c.post("/ingest", json=self.rec(10.0), headers=self.h).json()["queued"])
+                self.assertTrue(self.wait_for(lambda: ("KPP-1", "color") in api._rejected))
+            self.assertTrue(any("422" in m and "ทิ้ง" in m for m in cm.output))
+            time.sleep(0.4)
+            self.assertEqual(len(self.posts()), 1)                          # เดิม: ส่ง 422 ซ้ำทุก 60 วิ ตลอดไป
+            self.assertEqual(len(api._pending), 0)
+            self.assertEqual(self.c.post("/ingest", json=self.rec(10.0), headers=self.h).json()["queued"], False)
+            _env.ensure_read_user()
+            pms = self.c.get("/api/pms", headers=_env.basic()).json()
+            self.assertEqual(pms["progress_rejected"], [{"job": "KPP-1", "stage": "color", "pct": 10.0, "status": 422}])
+            self.assertTrue(self.c.post("/ingest", json=self.rec(20.0), headers=self.h).json()["queued"])   # ค่าใหม่ลองได้
+            self.assertTrue(self.wait_for(lambda: api._last_pushed.get(("KPP-1", "color")) == 20.0))
+            self.assertNotIn(("KPP-1", "color"), api._rejected)
+        finally:
+            api.PUSH_RETRY_SEC = old
+
+    def test_transient_errors_still_retried(self):
+        erp.lookup("grade-03", TS)
+        old = api.PUSH_RETRY_SEC
+        api.PUSH_RETRY_SEC = 0.05
+        try:
+            FakeERP.progress_codes = [503, 429]
+            self.c.post("/ingest", json=self.rec(40.0), headers=self.h)
+            self.assertTrue(self.wait_for(lambda: api._last_pushed.get(("KPP-1", "color")) == 40.0))
+            self.assertEqual(len(self.posts()), 3)
+            self.assertEqual(api._rejected, {})
+        finally:
+            api.PUSH_RETRY_SEC = old
 
     def test_booking_stored_at_ingest_survives_booking_edit(self):
         erp.lookup("grade-03", TS)
