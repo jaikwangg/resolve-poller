@@ -174,7 +174,8 @@ EDITORTRACK_READ_AUTH=basic      # ทุกหน้า + /api/* ต้อง l
 EDITORTRACK_BIND=127.0.0.1       # run.py · LAN ผ่าน reverse proxy TLS หรือ --lan
 EDITORTRACK_STORE=/srv/editortrack/data   # dir เก็บ JSONL (700) — default $EDITORTRACK_HOME/data · ของเดิม =data ยังใช้ได้
 EDITORTRACK_RETENTION_DAYS=180   # ลบไฟล์เก่ากว่านี้อัตโนมัติ (0 = ไม่ลบ)
-EDITORTRACK_INTERVAL_MIN=10      # 1 sample ≈ กี่นาที (ให้ตรง poll)
+EDITORTRACK_INTERVAL_MIN=1       # cadence agent (นาที) — 1 record = min(ช่องว่างจริง, interval×1.5) · 1 record ต่อ (host, นาที)
+EDITORTRACK_TZ=Asia/Bangkok      # ตัดวันทุกหน้า/รายงานตามเวลานี้
 # ERP (creds — อย่า commit)
 ERP_BASE_URL=http://<erp>:8010
 ERP_USERNAME=<user>  ERP_PASSWORD=<pass>

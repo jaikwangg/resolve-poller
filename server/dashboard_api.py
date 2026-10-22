@@ -17,7 +17,8 @@ if not os.environ.get("EDITORTRACK_STORE") and any((pathlib.Path(__file__).paren
     log.warning("พบข้อมูลเก่าใน server/data แต่ที่เก็บตอนนี้คือ %s — ย้ายไฟล์ (ดู server/README.md) "
                 "หรือตั้ง EDITORTRACK_STORE=data ชั่วคราว", STORE)
 MAX_BODY = int(os.environ.get("EDITORTRACK_MAX_BODY", str(1024 * 1024)))   # byte ต่อ record — เกิน = 413
-INTERVAL_MIN = int(os.environ.get("EDITORTRACK_INTERVAL_MIN", "1"))   # นาทีที่ 1 record แทน = cadence ของ agent (ปรับให้ตรง StartInterval/OnUnitActiveSec)
+# cadence ของ agent (นาที) — record 1 ตัวแทน min(ช่องว่างถึงตัวถัดไป, INTERVAL_MIN × 1.5) ไม่ใช่ค่าคงที่ (explain.assign_credit)
+INTERVAL_MIN = float(os.environ.get("EDITORTRACK_INTERVAL_MIN", "1"))
 HERE = pathlib.Path(__file__).parent
 STAGES = ["data", "conform", "color", "subtitle", "master"]
 # NOTE: ระบบนี้ไม่จัด queue/dependency (subtitle รอ color ฯลฯ) — ERP จัดการเอง
@@ -92,7 +93,7 @@ async def ingest(req: Request, authorization: str = Header(default="")):
     if isinstance(rec, dict):                       # เวลา/IP ฝั่ง server — ใช้ดูว่ามาสดหรือมาจาก offline queue
         rec["_rx"] = {"at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                       "ip": req.client.host if req.client else None}
-    day = datetime.date.today().isoformat()
+    day = _ex.today().isoformat()                   # ชื่อไฟล์ = วันที่รับตามเวลาท้องถิ่น (EDITORTRACK_TZ)
     with open(STORE / f"{day}.jsonl", "a", encoding="utf-8") as f:
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     # push progress → ERP (best-effort; no-op ถ้ายังไม่ตั้ง ERP_PROGRESS_PATH) — นี่คือ "หน้าที่หลัก" ของระบบ
@@ -116,7 +117,7 @@ async def ingest(req: Request, authorization: str = Header(default="")):
 
 # ---------------- load / helpers ----------------
 def _load_recent(days):
-    cutoff = datetime.date.today() - datetime.timedelta(days=days - 1)
+    cutoff = _ex.today() - datetime.timedelta(days=days)      # +1 วันเผื่อไฟล์ที่ตั้งชื่อตาม TZ เดิม/ข้ามเที่ยงคืน
     recs = []
     for fp in sorted(glob.glob(str(STORE / "*.jsonl"))):
         try:
@@ -131,14 +132,12 @@ def _load_recent(days):
                     recs.append(_store.minimise(json.loads(ln)))   # ไฟล์เก่าที่ยังมี user/ชื่อแอป → ไม่ส่งออกทาง API
                 except Exception:
                     pass
-    return _ex.dedupe(recs)
+    return _ex.assign_credit(_ex.dedupe(recs), INTERVAL_MIN)
 
 
 def _day(ts):
-    try:
-        return datetime.datetime.fromisoformat(ts.replace("Z", "+00:00")).date().isoformat()
-    except Exception:
-        return None
+    """วันที่ของ ts ตามเวลาท้องถิ่น (EDITORTRACK_TZ) — ตรงกับ /report, /projects และ "วันนี้" """
+    return _ex.local_day(ts)
 
 
 def _daylabel(iso):
@@ -194,7 +193,7 @@ def build_jobs(days=7):
                     "overall_pct": round(sum(pcts) / len(pcts), 1) if pcts else None,
                     "stage_order": order, "tracks": tracks, "flags": flags})
     out.sort(key=lambda x: (x["overall_pct"] is None, -(x["overall_pct"] or 0)))
-    return {"generated_at": datetime.datetime.now().astimezone().isoformat(), "stages": STAGES, "jobs": out}
+    return {"generated_at": _ex.now_local().isoformat(), "stages": STAGES, "jobs": out}
 
 
 @app.get("/api/jobs")
@@ -220,7 +219,7 @@ def build_shots(days=7):
         out.append({"job_id": jid, "title": d["title"], "total_shots": len(codes),
                     "conformed": sum(1 for s in shots if s["conformed"]),
                     "graded": sum(1 for s in shots if s["graded"]), "shots": shots})
-    return {"generated_at": datetime.datetime.now().astimezone().isoformat(), "jobs": out}
+    return {"generated_at": _ex.now_local().isoformat(), "jobs": out}
 
 
 @app.get("/api/shots")
@@ -231,7 +230,8 @@ def api_shots(days: int = 7):
 # ---------------- /api/dashboard : tiles + progress-over-time + phase-time + active/idle ----------------
 def build_dashboard(days=7):
     recs = _load_recent(days)
-    labels_days = [(datetime.date.today() - datetime.timedelta(days=days - 1 - i)).isoformat() for i in range(days)]
+    t0 = _ex.today()
+    labels_days = [(t0 - datetime.timedelta(days=days - 1 - i)).isoformat() for i in range(days)]
     labels = [_daylabel(d) for d in labels_days]
 
     phase_time = collections.defaultdict(lambda: collections.Counter())   # host -> page/stage -> min (รายเครื่อง ไม่ใช่รายคน)
@@ -246,13 +246,14 @@ def build_dashboard(days=7):
         act = r.get("activity") or {}
         day = _day(r.get("ts", ""))
         key = r.get("page") or r.get("stage")          # resolve=page · อื่น=stage
+        cmin = _ex.credit_sec(r, INTERVAL_MIN) / 60.0
         if _ex.is_active(r) and key:
-            phase_time["__team__"][key] += INTERVAL_MIN
-            phase_time[who][key] += INTERVAL_MIN
+            phase_time["__team__"][key] += cmin
+            phase_time[who][key] += cmin
         if day in ai["__team__"]:
             b = "active" if _ex.is_active(r) else "idle"
-            ai["__team__"][day][b] += INTERVAL_MIN / 60.0
-            ai[who][day][b] += INTERVAL_MIN / 60.0
+            ai["__team__"][day][b] += cmin / 60.0
+            ai[who][day][b] += cmin / 60.0
         try:
             if _ex.is_active(r) and (now - datetime.datetime.fromisoformat(r["ts"].replace("Z", "+00:00"))).total_seconds() < 1800:
                 active_recent.add(who)
@@ -275,20 +276,20 @@ def build_dashboard(days=7):
 
     jobs = build_jobs(days)["jobs"]
     pcts = [j["overall_pct"] for j in jobs if j["overall_pct"] is not None]
-    today = datetime.date.today().isoformat()
+    today = t0.isoformat()
 
     def ai_shape(w):
         return {"active": [round(ai[w][d]["active"], 1) for d in labels_days],
                 "idle": [round(ai[w][d]["idle"], 1) for d in labels_days]}
 
     return {
-        "generated_at": now.astimezone().isoformat(), "sample": False,
+        "generated_at": now.astimezone(_ex.tz()).isoformat(), "sample": False,
         "summary": {"projects": len(jobs),
                     "avg_progress": round(sum(pcts) / len(pcts), 1) if pcts else 0,
                     "active_hours_today": round(ai["__team__"].get(today, {}).get("active", 0), 1),
                     "workers_active": len(active_recent), "workers_total": len(workers)},
         "progress_series": {"labels": labels, "series": series},
-        "phase_time": {w: dict(c) for w, c in phase_time.items()},
+        "phase_time": {w: {k: int(round(v)) for k, v in c.items()} for w, c in phase_time.items()},
         "active_idle": {"labels": labels, "workers": {w: ai_shape(w) for w in ai}},
     }
 
@@ -307,7 +308,7 @@ def build_inbox(limit=50, host=None, days=2):
         room_map = None
     room_map = room_map or None                     # ยังไม่ตั้ง map → ไม่เตือนเรื่อง room
     now = datetime.datetime.now(datetime.timezone.utc)
-    today = datetime.date.today().isoformat()
+    today = _ex.today().isoformat()
 
     hosts = {}
     for r in recs:
@@ -336,7 +337,7 @@ def build_inbox(limit=50, host=None, days=2):
     out = []
     for r in rows[:max(1, min(limit, 500))]:
         out.append({"explain": _ex.explain(r, _eff_job(r), room_map), "delay_sec": _ex.delay_sec(r), "record": r})
-    return {"generated_at": now.astimezone().isoformat(), "stale_sec": _ex.STALE_SEC,
+    return {"generated_at": now.astimezone(_ex.tz()).isoformat(), "stale_sec": _ex.STALE_SEC,
             "hosts": summary, "total": len(rows), "records": out}
 
 
@@ -353,7 +354,7 @@ def inbox():
 # ---------------- PMS: ส่งเวลาทำงานเป็นช่วง (pms_sync) ----------------
 @app.on_event("startup")
 def _start_retention():
-    _store.start_retention(lambda: STORE, datetime.date.today)
+    _store.start_retention(lambda: STORE, _ex.today)
 
 
 @app.on_event("startup")
@@ -372,12 +373,12 @@ def api_pms():
 # ---------------- /api/report : สรุปรายวันต่อเครื่อง ----------------
 @app.get("/api/report")
 def api_report(day: str = "", host: str = ""):
-    day = day or datetime.date.today().isoformat()
+    day = day or _ex.today().isoformat()
     try:
         d = datetime.date.fromisoformat(day)
     except ValueError:
         raise HTTPException(status_code=400, detail="day ต้องเป็น YYYY-MM-DD")
-    days = (datetime.date.today() - d).days + 2         # +1 วันเผื่อ record ข้ามเที่ยงคืน (ไฟล์ตั้งชื่อตามวันที่ server รับ)
+    days = (_ex.today() - d).days + 2         # +1 วันเผื่อ record ข้ามเที่ยงคืน (ไฟล์ตั้งชื่อตามวันที่ server รับ)
     return JSONResponse(_rep.build_report(_load_recent(max(days, 2)), day, INTERVAL_MIN, _eff_job, host or None))
 
 

@@ -3,6 +3,7 @@
 explain(rec, eff) -> {summary, lines[], warnings[], fields[]}
 """
 import datetime
+import os
 
 LATE_SEC = 120          # ts ของ agent ช้ากว่าเวลาที่ server รับเกินนี้ = มาจาก offline queue
 STALE_SEC = 300         # host เงียบเกินนี้ = ขาดการติดต่อ
@@ -65,6 +66,7 @@ GLOSSARY = {
     "progress.detail.video_clips": "ตัวหารของ color %",
     "_rx.at": "เวลาที่ server ได้รับ record นี้ (UTC)",
     "_rx.ip": "IP ของเครื่องที่ส่งเข้ามา",
+    "_credit_sec": "เวลาที่ record นี้แทน (วินาที) = min(ช่องว่างถึง record ถัดไปของเครื่องนี้, interval × 1.5) — server คำนวณ ไม่ได้เก็บ",
 }
 
 RESOLVED_BY = {
@@ -87,21 +89,93 @@ REASONS = {
 RESOLVE_STAGES = {"conform", "color"}        # stage ที่ทำใน Resolve — active ต้องมี Resolve อยู่หน้าสุดด้วย
 
 
-DUP_SEC = 30            # record จาก host เดียวกันห่างกันน้อยกว่านี้ = agent รันซ้อน (เทส 8 ต.ค.: 2 ตัวห่าง 0.29 วิ) นับครั้งเดียว
+CREDIT_FACTOR = 1.5      # record 1 ตัวแทนเวลาได้ไม่เกิน interval × นี้ (ช่องว่างยาวกว่านี้ = ข้อมูลขาด ไม่นับ)
+
+
+# ---------------- เวลา: ตัดวันตามเวลาท้องถิ่น (EDITORTRACK_TZ, default Asia/Bangkok) ----------------
+_TZ = {}
+
+
+def tz():
+    """timezone ที่ใช้ตัดวัน/แสดงเวลา — ไม่ขึ้นกับ TZ ของ process (ทุกหน้า/รายงานใช้ค่าเดียวกัน)"""
+    name = os.environ.get("EDITORTRACK_TZ", "Asia/Bangkok")
+    if name not in _TZ:
+        try:
+            from zoneinfo import ZoneInfo
+            _TZ[name] = ZoneInfo(name)
+        except Exception:                        # ไม่มี tzdata → ไทยไม่มี DST ใช้ +07:00 ได้ตรง
+            _TZ[name] = (datetime.timezone(datetime.timedelta(hours=7), "ICT") if name == "Asia/Bangkok"
+                         else datetime.datetime.now().astimezone().tzinfo)
+    return _TZ[name]
+
+
+def to_local(d):
+    if d is None:
+        return None
+    if d.tzinfo is None:                         # ts ไม่มี timezone — ถือเป็น UTC (agent ส่ง UTC เสมอ)
+        d = d.replace(tzinfo=datetime.timezone.utc)
+    return d.astimezone(tz())
+
+
+def local_day(ts):
+    """ts (ISO) → 'YYYY-MM-DD' ตามเวลาท้องถิ่น · None ถ้า parse ไม่ได้"""
+    d = to_local(_dt(ts))
+    return d.date().isoformat() if d else None
+
+
+def today():
+    return datetime.datetime.now(tz()).date()
+
+
+def now_local():
+    return datetime.datetime.now(tz())
 
 
 def dedupe(recs):
-    """ตัด record ที่ไม่มี host/ts และ record ซ้อนของ host เดียวกัน (< DUP_SEC) — คืนเรียงตาม host, ts"""
-    out, last = [], {}
+    """ตัด record ที่ไม่มี host/ts และเก็บ record เดียวต่อ (host, นาที) — agent รันซ้อน (install --system,
+    รันมือระหว่าง loop, เทส 8 ต.ค. ห่าง 0.29 วิ) นับครั้งเดียว · cadence ปกติ ≥ 60 วิ ไม่มี 2 ตัวในนาทีเดียว
+    → คืนเรียงตาม host, ts"""
+    out, seen = [], set()
     for r in sorted((r for r in recs if isinstance(r, dict) and r.get("host") and _dt(r.get("ts"))),
-                    key=lambda r: (r["host"], _dt(r["ts"]))):
-        t = _dt(r["ts"])
-        p = last.get(r["host"])
-        if p is not None and (t - p).total_seconds() < DUP_SEC:
+                    key=lambda r: (r["host"], _utc(_dt(r["ts"])))):
+        k = (r["host"], _utc(_dt(r["ts"])).replace(second=0, microsecond=0))
+        if k in seen:
             continue
-        last[r["host"]] = t
+        seen.add(k)
         out.append(r)
     return out
+
+
+def assign_credit(recs, interval_min):
+    """เวลาที่ record แต่ละตัวแทน (วินาที) = min(ช่องว่างถึง record ถัดไปของ host เดียวกัน, interval × 1.5)
+    record สุดท้ายของ host = interval · เขียนลง r["_credit_sec"] · คืน recs"""
+    nominal = float(interval_min) * 60.0
+    cap = nominal * CREDIT_FACTOR
+    by_host = {}
+    for r in recs:
+        t = _dt(r.get("ts")) if isinstance(r, dict) else None
+        if t is not None and r.get("host"):
+            by_host.setdefault(r["host"], []).append((_utc(t), r))
+    for items in by_host.values():
+        items.sort(key=lambda x: x[0])
+        for i, (t, r) in enumerate(items):
+            if i + 1 < len(items):
+                r["_credit_sec"] = max(0.0, min((items[i + 1][0] - t).total_seconds(), cap))
+            else:
+                r["_credit_sec"] = nominal
+    return recs
+
+
+def ensure_credit(recs, interval_min):
+    """คำนวณ credit ถ้ายังไม่มี (ให้ caller ที่ส่ง record ทั้งชุดมาคำนวณครั้งเดียวก่อนกรอง)"""
+    if any(isinstance(r, dict) and "_credit_sec" not in r for r in recs):
+        assign_credit(recs, interval_min)
+    return recs
+
+
+def credit_sec(r, interval_min):
+    v = r.get("_credit_sec")
+    return float(v) if v is not None else float(interval_min) * 60.0
 
 
 def is_active(rec):
@@ -138,8 +212,12 @@ def _dt(s):
         return None
 
 
+def _utc(d):
+    return (d if d.tzinfo else d.replace(tzinfo=datetime.timezone.utc)).astimezone(datetime.timezone.utc)
+
+
 def _local(d):
-    return d.astimezone().strftime("%d/%m %H:%M:%S") if d else "?"
+    return to_local(d).strftime("%d/%m %H:%M:%S") if d else "?"
 
 
 def _dur(sec):

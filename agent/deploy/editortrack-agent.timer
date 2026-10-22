@@ -4,6 +4,8 @@ Description=run editortrack agent ทุก 1 นาที
 [Timer]
 OnBootSec=1min
 OnUnitActiveSec=1min
+# default AccuracySec=1min ทำให้ยิงห่าง 60–120 วิ (server นับต่อ record ได้ไม่เกิน 90 วิ → เวลาหาย) → ให้ตรงวินาที
+AccuracySec=1s
 Persistent=true
 
 [Install]

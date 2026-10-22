@@ -100,8 +100,10 @@ class PmsWindows(unittest.TestCase):
         finally:
             pms_sync.LOOKBACK_HOURS = old
         mine = [x for x in w if x["window_start"].startswith("2026-10-14")]
+        # วินาที = ผลรวม credit (ช่องว่างจริงถึง record ถัดไป ≤ 90 วิ) ไม่ใช่ 60 × จำนวน record — loop จริงห่าง ~61 วิ
+        # 10:20 ยังไม่ส่ง: เครื่องเงียบหลัง 10:28 → ถือไว้รอ record ช้าจนครบ PMS_MAX_HOLD_SEC
         self.assertEqual([(x["window_start"][11:16], x["active_seconds"]) for x in mine],
-                         [("09:50", 240), ("10:00", 600), ("10:10", 540), ("10:20", 60)])
+                         [("09:50", 241), ("10:00", 600), ("10:10", 543)])
         self.assertTrue(all(x["resource_code"] == "RM-CS-01" and x["booking_id"] == "b-1" for x in mine))
         self.assertFalse(any("user" in x for x in w))     # PMS ไม่รับชื่อคน
 
@@ -114,7 +116,7 @@ class PmsWindows(unittest.TestCase):
         w = pms_sync.build_windows(all_recs(), 1, api._eff_job, {"conform-01": "RM-CS-01"}, now=now,
                                    lookup=lambda h, ts, p: (None, "ambiguous_booking"), unbound=unbound)
         self.assertEqual(w, [])
-        self.assertEqual(unbound, {"ambiguous_booking": 4})
+        self.assertEqual(unbound, {"ambiguous_booking": 3})          # 10:20 ยังถือไว้ (ไม่นับ)
 
     def test_window_passes_resolve_project_to_lookup(self):
         import datetime
@@ -122,7 +124,7 @@ class PmsWindows(unittest.TestCase):
         seen = []
         pms_sync.build_windows(all_recs(), 1, api._eff_job, {}, now=now,
                                lookup=lambda h, ts, p: (seen.append(p), ({"booking_id": "x"}, None))[1])
-        self.assertEqual(seen, ["Untitled Project", "TEST", "TEST", "TEST"])   # project ที่เปิดมากสุดในช่วง
+        self.assertEqual(seen, ["Untitled Project", "TEST", "TEST"])   # project ที่เปิดมากสุดในช่วง
 
 
 class PickBooking(unittest.TestCase):

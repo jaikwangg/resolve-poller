@@ -15,6 +15,7 @@ SERVERS = [u.strip() for u in os.environ.get("EDITORTRACK_SERVER", "http://local
 TOKEN = os.environ.get("EDITORTRACK_TOKEN", "")
 HTTP_TIMEOUT = int(os.environ.get("EDITORTRACK_HTTP_TIMEOUT", "5"))   # วิ; server ค้าง → เข้า offline queue ไม่ค้าง agent
 QUEUE = pathlib.Path(os.path.expanduser("~/.editortrack/queue.jsonl"))
+LOCK = QUEUE.with_name("runner.lock")           # กันรันซ้อนบนเครื่องเดียวกัน
 LAST_OK = QUEUE.with_name("last_server")        # URL ที่ส่งสำเร็จล่าสุด — รอบหน้าลองตัวนี้ก่อน ไม่ต้องรอ timeout ของตัวที่ล่ม
 
 
@@ -101,5 +102,26 @@ def _flush_queue():
             return
 
 
+def run_lock():
+    """กันรันซ้อน (install.sh --system + รันมือระหว่าง loop) → คืน file object ที่ถือ lock หรือ None ถ้ามีตัวอื่นรันอยู่
+    Windows ไม่มี fcntl → ไม่ล็อก (server ตัดซ้อนด้วย 1 record ต่อ host ต่อนาทีอยู่แล้ว)"""
+    try:
+        import fcntl
+    except ImportError:
+        return True
+    LOCK.parent.mkdir(parents=True, exist_ok=True)
+    f = open(LOCK, "a")
+    try:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        f.close()
+        return None
+    return f
+
+
 if __name__ == "__main__":
-    print(post(build_record()))
+    _lock = run_lock()
+    if _lock is None:
+        print("skip: agent อีกตัวกำลังรันอยู่ (lock)")
+    else:
+        print(post(build_record()))

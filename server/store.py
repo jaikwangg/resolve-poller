@@ -133,7 +133,8 @@ if __name__ == "__main__":
         for fp in sorted(d.glob("*.jsonl")):
             print(fp.name, scrub_file(fp))
     elif cmd == "retention":
-        print(apply_retention(d, retention_days(), datetime.date.today()))
+        import explain
+        print(apply_retention(d, retention_days(), explain.today()))
     else:
         print("ใช้: python store.py scrub|retention [dir]")
         sys.exit(2)

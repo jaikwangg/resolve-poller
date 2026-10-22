@@ -3,7 +3,6 @@
 build_projects(recs, interval_min, eff_job) -> {projects:[{counts, rooms, shots, history, ...}]}
 ใช้ข้อมูลจริงที่ server รับเท่านั้น · ตัวเลขมาจาก timeline ที่เปิดอยู่ในห้องตอน agent อ่าน
 """
-import datetime
 
 import explain as _ex
 from report import JUMP_CLIPS
@@ -12,8 +11,8 @@ HISTORY_MAX = 30        # จำนวนครั้งที่ตัวเล
 
 
 def _local(ts):
-    d = _ex._dt(ts)
-    return d.astimezone().strftime("%d/%m %H:%M") if d else "?"
+    d = _ex.to_local(_ex._dt(ts))
+    return d.strftime("%d/%m %H:%M") if d else "?"
 
 
 def _counts(r):
@@ -30,6 +29,7 @@ def _counts(r):
 
 
 def build_projects(recs, interval_min, eff_job):
+    _ex.ensure_credit(recs, interval_min)
     projects = {}
     for r in sorted(recs, key=lambda x: x.get("ts", "")):
         eff = eff_job(r)
@@ -44,7 +44,7 @@ def build_projects(recs, interval_min, eff_job):
                                       "rooms": {}, "history": [], "_prev": {}, "_shots": {}})
         p["records"] += 1
         p["last_ts"] = r.get("ts")
-        p["active_min"] += interval_min if _ex.is_active(r) else 0
+        p["active_min"] += _ex.credit_sec(r, interval_min) / 60 if _ex.is_active(r) else 0
         rp = (r.get("source") or {}).get("project")
         if rp and rp not in p["resolve_projects"]:
             p["resolve_projects"].append(rp)
@@ -88,6 +88,7 @@ def build_projects(recs, interval_min, eff_job):
         if any(h["jump"] or h["drop"] for h in p["history"]):
             notes.append(f"มีครั้งที่จำนวนคลิปที่เกรดเพิ่มเกิน {JUMP_CLIPS} ในรอบเดียวหรือลดลง: ตัวเลขการเกรดยังเป็นค่าประมาณ")
         p["history"] = p["history"][::-1][:HISTORY_MAX]
+        p["active_min"] = int(round(p["active_min"]))
         out.append({**p, "first_at": _local(p["first_ts"]), "last_at": _local(p["last_ts"]),
                     "stages": sorted({r["stage"] for r in rooms}), "hosts": sorted({r["host"] for r in rooms}),
                     "counts": None if latest is None else {
@@ -98,5 +99,5 @@ def build_projects(recs, interval_min, eff_job):
                               "graded": sum(d["graded"] for d in shots.values())},
                     "notes": notes})
     out.sort(key=lambda x: x["last_ts"] or "", reverse=True)
-    return {"generated_at": datetime.datetime.now().astimezone().isoformat(), "interval_min": interval_min,
+    return {"generated_at": _ex.now_local().isoformat(), "interval_min": interval_min,
             "projects": out}

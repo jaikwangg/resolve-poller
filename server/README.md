@@ -18,7 +18,9 @@ EDITORTRACK_BIND=127.0.0.1  EDITORTRACK_PORT=8000   # run.py · LAN ตรง = 
 EDITORTRACK_ALLOW_SHARED_TOKEN=0   # 1 = ยอมรับ token รวมเดิม (EDITORTRACK_TOKEN) ชั่วคราวช่วงย้าย เฉพาะ host ที่ยังไม่มี token ของตัวเอง
 EDITORTRACK_STORE=…                # dir เก็บ JSONL — default $EDITORTRACK_HOME/data = /srv/editortrack/data (สร้าง/ลดสิทธิ์เป็น 700) · ของเดิม =data ยังใช้ได้
 EDITORTRACK_RETENTION_DAYS=180     # ลบไฟล์ YYYY-MM-DD.jsonl ที่เก่ากว่า N วัน (ตอน start + ทุก 24 ชม.) · 0 = ไม่ลบ
-EDITORTRACK_INTERVAL_MIN=1         # 1 sample ≈ กี่นาที (ให้ตรง poll; default 1)
+EDITORTRACK_INTERVAL_MIN=1         # cadence ของ agent (นาที, default 1) — record 1 ตัวนับ min(ช่องว่างถึง record ถัดไปของเครื่องเดียวกัน, interval × 1.5)
+                                   #   ช่องว่างยาวกว่านั้น = ข้อมูลขาด (เครื่องหลับ/หลุด) ไม่นับ · 1 record ต่อ (host, นาที) — agent รันซ้อนไม่นับซ้ำ
+EDITORTRACK_TZ=Asia/Bangkok        # ตัดวัน ("วันนี้", /api/dashboard, /report, /projects, ชื่อไฟล์ data) ตามเวลานี้ ไม่ขึ้นกับ TZ ของเครื่อง
 # ERP (creds — อย่า commit; ดู erp.py docstring / ../DATAFLOW.md §Config)
 ERP_BASE_URL / ERP_USERNAME / ERP_PASSWORD
 ERP_BOOKINGS_PATH / ERP_RECORDS_PATH / ERP_ROOM_MAP
@@ -36,6 +38,11 @@ ERP_PF_JOB=project_no  ERP_PF_STAGE=stage  ERP_PF_PCT=progress_pct
 ERP_ROOM_MAP={"conform-01":"RM-…"}                    # host → resource_code ห้องใน PMS
 ```
 ไม่ตั้ง = ไม่ส่งอะไรให้ PMS · ดูสถานะการส่งที่ `GET /api/pms` · ไม่ส่ง user/ชื่อคน
+**record มาช้า (offline queue):** PMS เก็บ window ด้วย key `(integration key, host, window_start)` แบบ `ON CONFLICT DO NOTHING` — ส่งซ้ำนับเป็น `duplicates` และ**ไม่อัปเดตค่าเดิม** (สัญญา PMS ไม่มีวิธีส่งแก้)
+→ server **ถือ window ไว้จนนิ่ง**: ส่งเมื่อได้รับ record ของเครื่องนั้นที่หลังปลาย window มาแล้ว ≥ `PMS_SETTLE_SEC` (120) (= queue flush แล้ว) หรือปิดไปแล้ว ≥ `PMS_MAX_HOLD_SEC` (21600 = 6 ชม., เครื่องปิด/หาย)
+→ ถ้ายังมี record มาช้ากว่านั้นจนเวลาเพิ่ม: ส่ง window เดิมซ้ำด้วย key เดิม (ปลอดภัย — PMS ไม่นับซ้ำ) และนับเวลาที่ PMS ไม่รับไว้ที่ `/api/pms` → `corrections.ignored_seconds` (gap ที่รู้แล้ว)
+→ ถ้าฝั่ง PMS เปลี่ยนเป็น upsert (เช่น `ON CONFLICT DO UPDATE SET active_seconds = GREATEST(...)`) การส่งแก้จะมีผลทันทีโดยไม่ต้องแก้ฝั่งนี้ · `held` = จำนวน window ที่ยังรอ
+→ **ห้ามเปลี่ยน `PMS_WINDOW_MIN` หลังเริ่มส่งจริง** — ขอบ window เปลี่ยน = key ใหม่ = PMS นับซ้ำช่วงที่ทับกัน · record ที่มาช้ากว่า `PMS_LOOKBACK_HOURS` (24) ไม่ถึง PMS
 ทุกช่วงต้องผูก booking (กติกา PMS 15 ต.ค.) — ห้องมีหลาย booking พร้อมกัน → เลือกตัวที่ `project_no` หรือชื่อ project ตรงกับ project ที่เปิดใน Resolve · หาไม่ได้/ไม่ชัด = ไม่ส่ง นับไว้ที่ `unbound` ใน `/api/pms`
 → ตั้งชื่อ project ใน Resolve ให้มี `project_no` (เช่น `KPP-2026-0005_…`) จะผูกได้แม่นสุด
 

@@ -3,7 +3,6 @@
 build_report(recs, day, interval_min, eff_job, host=None) -> {day, hosts:[{summary, by_job, by_page, segments, progress, gaps, warnings}]}
 """
 import collections
-import datetime
 
 import explain as _ex
 
@@ -12,8 +11,7 @@ JUMP_CLIPS = 3          # graded เพิ่มเกินนี้ใน 1 �
 
 
 def _local(ts):
-    d = _ex._dt(ts)
-    return d.astimezone() if d else None
+    return _ex.to_local(_ex._dt(ts))          # EDITORTRACK_TZ (default Asia/Bangkok) — ไม่ขึ้นกับ TZ ของ process
 
 
 def _hm(d):
@@ -21,6 +19,7 @@ def _hm(d):
 
 
 def _mins(n):
+    n = int(round(n))
     if n < 60:
         return f"{n} นาที"
     return f"{n // 60} ชม. {n % 60} นาที" if n % 60 else f"{n // 60} ชม."
@@ -41,7 +40,7 @@ def _state(r):
 def _host_report(recs, interval_min, eff_job):
     recs = sorted(recs, key=lambda r: r.get("ts", ""))
     gap_sec = interval_min * 60 * GAP_FACTOR
-    by_job, by_page = collections.Counter(), collections.Counter()
+    by_job, by_page = collections.Counter(), collections.Counter()      # วินาที (credit ต่อ record)
     segments, gaps, progress, warnings = [], [], [], []
     last_pct = {}                  # (job, stage) -> (pct, detail)
     first_active = last_active = None
@@ -66,8 +65,9 @@ def _host_report(recs, interval_min, eff_job):
         if _ex.is_active(r):
             first_active = first_active or t
             last_active = t
-            by_job[eff.get("title") or eff.get("job_id") or "(ไม่มี job)"] += interval_min
-            by_page[r.get("page") or r.get("stage") or "?"] += interval_min
+            c = _ex.credit_sec(r, interval_min)
+            by_job[eff.get("title") or eff.get("job_id") or "(ไม่มี job)"] += c
+            by_page[r.get("page") or r.get("stage") or "?"] += c
 
         prog = r.get("progress") or {}
         pct = prog.get("pct")
@@ -101,7 +101,8 @@ def _host_report(recs, interval_min, eff_job):
     if any((eff_job(r).get("source") == "fallback") for r in recs):
         warnings.append("บาง record ยังไม่ผูกกับ job จริง — ใช้ชื่อ project ของ Resolve เป็น job แทน")
 
-    active_min = sum(by_job.values())
+    active_min = int(round(sum(by_job.values()) / 60))
+    m = lambda sec: int(round(sec / 60))       # noqa: E731
     return {
         "host": last.get("host"), "stage": last.get("stage"),
         "summary": {"records": len(recs), "first": _hm(_local(recs[0].get("ts"))), "last": _hm(_local(last.get("ts"))),
@@ -109,14 +110,15 @@ def _host_report(recs, interval_min, eff_job):
                     "first_active": _hm(first_active) if first_active else None,
                     "last_active": _hm(last_active) if last_active else None,
                     "gap_count": len(gaps), "gap_min": sum(g["minutes"] for g in gaps)},
-        "by_job": [{"job": k, "minutes": v, "text": _mins(v)} for k, v in by_job.most_common()],
-        "by_page": [{"page": k, "minutes": v, "text": _mins(v)} for k, v in by_page.most_common()],
+        "by_job": [{"job": k, "minutes": m(v), "text": _mins(m(v))} for k, v in by_job.most_common()],
+        "by_page": [{"page": k, "minutes": m(v), "text": _mins(m(v))} for k, v in by_page.most_common()],
         "segments": segments, "progress": progress, "gaps": gaps, "warnings": warnings,
     }
 
 
 def build_report(recs, day, interval_min, eff_job, host=None):
-    """day = วันที่ตามเวลาเครื่อง server (YYYY-MM-DD)"""
+    """day = วันที่ตามเวลาท้องถิ่น EDITORTRACK_TZ (YYYY-MM-DD) · credit คิดจาก record ทั้งชุดก่อนตัดวัน"""
+    _ex.ensure_credit(recs, interval_min)
     by_host = collections.defaultdict(list)
     hosts_all = set()
     for r in recs:
@@ -128,5 +130,5 @@ def build_report(recs, day, interval_min, eff_job, host=None):
             continue
         by_host[r.get("host") or "?"].append(r)
     return {"day": day, "interval_min": interval_min, "hosts_available": sorted(hosts_all),
-            "generated_at": datetime.datetime.now().astimezone().isoformat(),
+            "generated_at": _ex.now_local().isoformat(),
             "hosts": [_host_report(v, interval_min, eff_job) for _, v in sorted(by_host.items())]}
