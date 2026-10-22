@@ -12,14 +12,15 @@ GLOSSARY = {
     "schema": "เวอร์ชันรูปแบบ record (ปัจจุบัน = 3)",
     "ts": "เวลาที่ agent เก็บข้อมูล (UTC) — ไม่ใช่เวลาที่ server ได้รับ",
     "host": "ชื่อเครื่อง workstation — server ใช้แยกห้อง (ต้องตรงกับ room_map)",
-    "user": "ชื่อ user ที่ login บนเครื่อง",
+    "user": "(record เก่า) ชื่อ user ที่ login — ตั้งแต่ 2026-10-22 agent ไม่ส่ง และ server ตัดทิ้งก่อนเก็บ",
     "stage": "stage ที่เครื่องนี้ถูกตั้งให้วัด (EDITORTRACK_STAGE): data/conform/color/subtitle/master",
     "page": "หน้า Resolve ที่ worker เปิดอยู่ตอนเก็บ (edit/color/fusion/deliver ...)",
     "activity.idle_sec": "จำนวนวินาทีนับจาก input ล่าสุด (เมาส์/คีย์บอร์ด)",
     "activity.active": "ค่าดิบจาก agent: มี input ภายใน threshold (default 90 วิ) — server นับเป็นเวลาทำงานเฉพาะเมื่อ Resolve อยู่หน้าด้วย (stage conform/color)",
-    "activity.frontmost_name": "ชื่อแอปที่อยู่หน้าสุดตอนเก็บ",
-    "activity.frontmost_bundle": "bundle id ของแอปหน้าสุด (macOS)",
-    "activity.resolve_frontmost": "DaVinci Resolve อยู่หน้าสุดหรือไม่",
+    "activity.frontmost_name": "(record เก่า) ชื่อแอป/หน้าต่างหน้าสุด — ไม่ส่ง/ไม่เก็บแล้ว",
+    "activity.frontmost_bundle": "(record เก่า) bundle id ของแอปหน้าสุด — ไม่ส่ง/ไม่เก็บแล้ว",
+    "activity.resolve_frontmost": "DaVinci Resolve อยู่หน้าสุดหรือไม่ (ตัดสินจาก bundle id / executable ตรงตัว ไม่ใช่ชื่อหน้าต่าง)",
+    "activity.locked": "จอล็อก/หน้า login (macOS, Windows) · null = OS นี้ไม่รู้",
     "activity.platform": "ระบบปฏิบัติการของเครื่อง agent",
     "source.ok": "collector อ่านข้อมูลต้นทางสำเร็จหรือไม่ (false = ดู reason)",
     "source.reason": "สาเหตุที่ collector อ่านไม่ได้",
@@ -114,6 +115,22 @@ def is_active(rec):
     return True
 
 
+def is_locked(act):
+    """จอล็อก — field ใหม่ locked (bool) · record เก่าดูจาก frontmost_name == loginwindow"""
+    if act.get("locked") is not None:
+        return bool(act.get("locked"))
+    return act.get("frontmost_name") == "loginwindow"
+
+
+def front_label(act):
+    """ป้ายสั้นแทนชื่อแอป (ไม่แสดงชื่อแอป/หน้าต่างแม้ record เก่าจะมี)"""
+    if is_locked(act):
+        return "จอล็อก"
+    if act.get("idle_sec") is None and act.get("unavailable"):
+        return "?"
+    return "Resolve" if act.get("resolve_frontmost") else "แอปอื่น"
+
+
 def _dt(s):
     try:
         return datetime.datetime.fromisoformat(str(s).replace("Z", "+00:00"))
@@ -158,7 +175,7 @@ def explain(rec, eff=None, room_map=None):
     rx = rec.get("_rx") or {}
 
     # --- ใคร / เมื่อไหร่ / มาทางไหน ---
-    lines.append(f"เครื่อง {host} (user {rec.get('user') or '?'}) รายงาน stage {stage} · เก็บเมื่อ {_local(ts)}")
+    lines.append(f"เครื่อง {host} รายงาน stage {stage} · เก็บเมื่อ {_local(ts)}")
     d = delay_sec(rec)
     if d is None:
         lines.append("ไม่มีเวลารับของ server (record ก่อนเปิดใช้การบันทึก _rx)")
@@ -174,17 +191,16 @@ def explain(rec, eff=None, room_map=None):
     # --- activity ---
     act = rec.get("activity") or {}
     idle = act.get("idle_sec")
-    front = act.get("frontmost_name") or "ไม่ทราบ"
+    front = front_label(act)
     if idle is None:
-        lines.append(f"อ่านค่า idle ไม่ได้ · แอปหน้าสุด: {front}")
+        lines.append(f"อ่านค่า idle ไม่ได้ · หน้าสุด: {front}")
         warns.append("อ่าน idle ไม่ได้ — นับเป็น idle เสมอ (Linux ต้องมี libxss1 + X11, macOS ต้องรันเป็น LaunchAgent ของ user)")
     else:
         state = "ACTIVE" if is_active(rec) else "IDLE"
-        lines.append(f"{state}: ไม่มี input มา {_dur(idle)} · แอปหน้าสุด: {front}"
-                     + (" (Resolve)" if act.get("resolve_frontmost") else " (ไม่ใช่ Resolve)"))
+        lines.append(f"{state}: ไม่มี input มา {_dur(idle)} · หน้าสุด: {front}")
         if act.get("active") and not is_active(rec):
-            lines.append(f"มี input แต่ Resolve ไม่ได้อยู่หน้าสุด ({front}) — ไม่นับเป็นเวลาทำงาน")
-        if front == "loginwindow":
+            lines.append("มี input แต่ Resolve ไม่ได้อยู่หน้าสุด — ไม่นับเป็นเวลาทำงาน")
+        if is_locked(act):
             lines.append("หน้าจอล็อกหรืออยู่หน้า login")
 
     # --- source ---

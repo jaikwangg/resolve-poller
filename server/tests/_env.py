@@ -23,7 +23,9 @@ if not os.environ.get("_EDITORTRACK_TEST_ENV"):
     time.tzset()
     os.environ["EDITORTRACK_TZ"] = "Asia/Bangkok"
     os.environ["EDITORTRACK_HOME"] = str(TMP / "srv")
-    os.environ["EDITORTRACK_STORE"] = str(FIX)    # replay อ่าน fixture · เทส ingest เปลี่ยน api.STORE เป็น temp
+    import shutil
+    shutil.copytree(FIX, TMP / "store")           # สำเนา fixture (server chmod 700 ที่เก็บ — ไม่แตะ dir ใน repo)
+    os.environ["EDITORTRACK_STORE"] = str(TMP / "store")
     os.environ["EDITORTRACK_TOKENS_FILE"] = str(TMP / "srv" / "agent_tokens.json")
     os.environ["EDITORTRACK_READ_USERS_FILE"] = str(TMP / "srv" / "read_users.json")
     os.environ["EDITORTRACK_RETENTION_DAYS"] = "0"   # ห้ามลบ fixture (0 = ปิด retention)

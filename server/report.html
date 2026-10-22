@@ -66,7 +66,7 @@ function hostCard(h){
   const pct = v => v==null ? "–" : v+"%";
   return `<section class="host">
     <h2>${esc(h.host)}</h2>
-    <div class="meta">user ${esc(h.user)} · stage ${esc(h.stage)} · record ${s.records} ตัว (${s.first}–${s.last})</div>
+    <div class="meta">stage ${esc(h.stage)} · record ${s.records} ตัว (${s.first}–${s.last})</div>
     <div class="tiles">
       <div class="tile"><div class="l">เวลาทำงาน</div><div class="n">${esc(s.active_text)}</div></div>
       <div class="tile"><div class="l">เริ่ม – เลิก (active)</div><div class="n">${s.first_active ? s.first_active+"–"+s.last_active : "–"}</div></div>
@@ -84,7 +84,7 @@ function hostCard(h){
         <td class="num ${p.jump?"jump":""}">${pct(p.from)} → ${pct(p.to)}${p.jump?" ⚠":""}</td><td>${esc(p.detail||"")}</td></tr>`).join("") || "<tr><td colspan=5>–</td></tr>"}
     </table>
     <h3>ไทม์ไลน์</h3>
-    <table><tr><th>ช่วงเวลา</th><th>record</th><th>กำลังทำ</th><th>แอปหน้าสุด</th></tr>
+    <table><tr><th>ช่วงเวลา</th><th>record</th><th>กำลังทำ</th><th>หน้าสุด</th></tr>
       ${h.segments.map(g=>`<tr><td class="num"><span class="dot ${g.active?"on":""}"></span>${g.start}${g.end!==g.start?"–"+g.end:""}</td>
         <td class="num">${g.n}</td><td>${esc(g.what)}</td><td>${esc(g.front)}</td></tr>`).join("")}
     </table>

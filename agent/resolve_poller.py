@@ -11,7 +11,7 @@ def _envflag(name, default):
 # ตั้งค่าต่อเครื่องผ่าน env ได้ — ห้อง color กับ ห้อง edit ใช้ค่าต่างกัน
 DETECT_GRADE = _envflag("EDITORTRACK_DETECT_GRADE", True)    # color room=on · **edit room ตั้ง =0** (ไม่ต้องสแกนสี → poll เบา)
 POLL_RENDER = _envflag("EDITORTRACK_POLL_RENDER", False)     # ⚠️ on = GetRenderJobList เด้งหน้า Deliver → รบกวน worker (deliver ไม่ใช้แล้ว)
-EXTRACT_SHOTS = _envflag("EDITORTRACK_EXTRACT_SHOTS", True)  # ดึง shots จาก marker (code + graded/conformed)
+EXTRACT_SHOTS = _envflag("EDITORTRACK_EXTRACT_SHOTS", False)  # ดึง shots จาก marker (code + graded) — ปิดเป็น default: shot code เป็นข้อมูลลูกค้า · เปิด =1 เฉพาะเมื่อตกลงกับเจ้าของงานแล้ว
 RESTORE_PAGE = _envflag("EDITORTRACK_RESTORE_PAGE", True)    # กันเหนียว: ถ้าหน้าเปลี่ยนระหว่าง poll → คืนหน้าเดิม
 EXTRACT_CLIP_META = _envflag("EDITORTRACK_EXTRACT_CLIP_META", False)  # ⚠️ หนัก: ดึง meta ราย clip (source/metadata/node label/version/fusion) — เปิดเฉพาะตอนต้องการ detail ลึก + ยืนยันด้วย probe ก่อน
 try:

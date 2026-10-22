@@ -8,11 +8,14 @@ from fastapi import FastAPI, Request, Header, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
 
 import auth
+import store as _store
 
 log = logging.getLogger("editortrack")
 app = FastAPI()
-STORE = pathlib.Path(os.environ.get("EDITORTRACK_STORE", "data"))
-STORE.mkdir(parents=True, exist_ok=True)
+STORE = _store.ensure_dir(_store.default_store())   # default /srv/editortrack/data (700) · EDITORTRACK_STORE ทับได้
+if not os.environ.get("EDITORTRACK_STORE") and any((pathlib.Path(__file__).parent / "data").glob("*.jsonl")):
+    log.warning("พบข้อมูลเก่าใน server/data แต่ที่เก็บตอนนี้คือ %s — ย้ายไฟล์ (ดู server/README.md) "
+                "หรือตั้ง EDITORTRACK_STORE=data ชั่วคราว", STORE)
 MAX_BODY = int(os.environ.get("EDITORTRACK_MAX_BODY", str(1024 * 1024)))   # byte ต่อ record — เกิน = 413
 INTERVAL_MIN = int(os.environ.get("EDITORTRACK_INTERVAL_MIN", "1"))   # นาทีที่ 1 record แทน = cadence ของ agent (ปรับให้ตรง StartInterval/OnUnitActiveSec)
 HERE = pathlib.Path(__file__).parent
@@ -85,6 +88,7 @@ async def ingest(req: Request, authorization: str = Header(default="")):
         log.warning("ingest from %r ใช้ token รวม (EDITORTRACK_TOKEN) — ออก token ต่อเครื่องด้วย manage_tokens.py", host)
     if _ex._dt(rec.get("ts")) is None:
         raise HTTPException(status_code=400, detail="record ต้องมี host และ ts (ISO มี timezone)")
+    _store.minimise(rec)                            # ไม่เก็บ user / ชื่อแอป-หน้าต่าง แม้ agent เก่าจะส่งมา
     if isinstance(rec, dict):                       # เวลา/IP ฝั่ง server — ใช้ดูว่ามาสดหรือมาจาก offline queue
         rec["_rx"] = {"at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                       "ip": req.client.host if req.client else None}
@@ -124,7 +128,7 @@ def _load_recent(days):
         with open(fp, encoding="utf-8") as f:
             for ln in f:
                 try:
-                    recs.append(json.loads(ln))
+                    recs.append(_store.minimise(json.loads(ln)))   # ไฟล์เก่าที่ยังมี user/ชื่อแอป → ไม่ส่งออกทาง API
                 except Exception:
                     pass
     return _ex.dedupe(recs)
@@ -179,7 +183,7 @@ def build_jobs(days=7):
             prog = r.get("progress") or {}
             act = r.get("activity") or {}
             pct = prog.get("pct")
-            tracks[stage] = {"pct": pct, "worker": r.get("user"), "host": r.get("host"),
+            tracks[stage] = {"pct": pct, "worker": r.get("host"), "host": r.get("host"),   # worker = เครื่อง (ไม่เก็บชื่อคน)
                              "page": r.get("page"), "active": _ex.is_active(r),
                              "last_seen": r.get("ts"), "detail": prog.get("detail")}
             if pct is not None:
@@ -230,28 +234,28 @@ def build_dashboard(days=7):
     labels_days = [(datetime.date.today() - datetime.timedelta(days=days - 1 - i)).isoformat() for i in range(days)]
     labels = [_daylabel(d) for d in labels_days]
 
-    phase_time = collections.defaultdict(lambda: collections.Counter())   # worker -> page/stage -> min
+    phase_time = collections.defaultdict(lambda: collections.Counter())   # host -> page/stage -> min (รายเครื่อง ไม่ใช่รายคน)
     ai = collections.defaultdict(lambda: {d: {"active": 0.0, "idle": 0.0} for d in labels_days})
     byjobday = collections.defaultdict(lambda: collections.defaultdict(dict))   # job -> day -> stage -> pct
     workers, active_recent = set(), set()
     now = datetime.datetime.now(datetime.timezone.utc)
 
     for r in sorted(recs, key=lambda x: x.get("ts", "")):
-        user = r.get("user", "?")
-        workers.add(user)
+        who = r.get("host") or "?"                    # แยกตามเครื่อง — ไม่เก็บ/ไม่แสดงชื่อคน
+        workers.add(who)
         act = r.get("activity") or {}
         day = _day(r.get("ts", ""))
         key = r.get("page") or r.get("stage")          # resolve=page · อื่น=stage
         if _ex.is_active(r) and key:
             phase_time["__team__"][key] += INTERVAL_MIN
-            phase_time[user][key] += INTERVAL_MIN
+            phase_time[who][key] += INTERVAL_MIN
         if day in ai["__team__"]:
             b = "active" if _ex.is_active(r) else "idle"
             ai["__team__"][day][b] += INTERVAL_MIN / 60.0
-            ai[user][day][b] += INTERVAL_MIN / 60.0
+            ai[who][day][b] += INTERVAL_MIN / 60.0
         try:
             if _ex.is_active(r) and (now - datetime.datetime.fromisoformat(r["ts"].replace("Z", "+00:00"))).total_seconds() < 1800:
-                active_recent.add(user)
+                active_recent.add(who)
         except Exception:
             pass
         eff = _eff_job(r)
@@ -322,7 +326,7 @@ def build_inbox(limit=50, host=None, days=2):
             age = (now - datetime.datetime.fromisoformat(last["ts"].replace("Z", "+00:00"))).total_seconds()
         except Exception:
             age = None
-        summary.append({**d, "stage": last.get("stage"), "user": last.get("user"),
+        summary.append({**d, "stage": last.get("stage"),
                         "ip": (last.get("_rx") or {}).get("ip"), "last_ts": last.get("ts"),
                         "age_sec": age, "online": age is not None and age < _ex.STALE_SEC})
     summary.sort(key=lambda x: x["host"])
@@ -347,6 +351,11 @@ def inbox():
 
 
 # ---------------- PMS: ส่งเวลาทำงานเป็นช่วง (pms_sync) ----------------
+@app.on_event("startup")
+def _start_retention():
+    _store.start_retention(lambda: STORE, datetime.date.today)
+
+
 @app.on_event("startup")
 def _start_pms_sync():
     if erp:

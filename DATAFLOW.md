@@ -38,23 +38,38 @@ end-to-end ตั้งแต่ Resolve/ERP → agent → server → dashboard 
 | ไฟล์ | function | อ่าน/ทำอะไร |
 |---|---|---|
 | `resolve_poller.py` | `snapshot()` | Resolve API (read-only): `page`, timeline (duration/clips/**graded**/scan_ms/markers), **shots** (จาก marker), `scope_hint`/`job_hint` · POLL_RENDER off (ไม่เด้ง Deliver) · จำ+คืนหน้า |
-| `activity_sampler.py` | `sample()` | idle-time + frontmost app (mac/win/linux) → `active_in_resolve` |
+| `activity_sampler.py` | `sample()` | idle-time + "Resolve อยู่หน้าสุดไหม" (bool, ตัดสินจาก process identity — ไม่ส่งชื่อแอป/หน้าต่าง) mac/win/linux |
 | `scope.py` | `compute_progress()` | คิด % ต่อเฟส: edit = avg(duration/target, shots/expected) · color = graded/total |
 | `joblink.py` | `resolve_job()` | ผูก project → job_id/role (marker > registry > naming > fallback + host role) |
-| `runner.py` | `build_record()` → `post()` | รวมทั้งหมด → record schema 2 → POST /ingest (มี offline queue) |
+| `runner.py` | `build_record()` → `post()` | รวมทั้งหมด → record schema 3 → POST /ingest (มี offline queue) |
 
-**record ที่ส่ง (schema 2):**
+**record ที่ส่ง (schema 3 — ตัวอย่าง stage color):**
 ```json
-{ "schema":2, "ts":"<UTC>", "host":"grade-03", "user":"...",
-  "resolve":{ "ok":true, "page":"color", "project":"...",
-              "timeline":{"duration_sec":1421.9,"video_clips":309,"graded_clips":278,
-                          "markers":59,"scan_ms":156},
-              "shots":[{"code":"PST_R04_00010","graded":true}], "job_hint":null },
-  "activity":{ "idle_sec":3.2,"resolve_frontmost":true,"active_in_resolve":true,"platform":"win32" },
-  "job":{ "job_id":"...","role":"colorist","linked":true },
-  "progress":{ "bounded":true,"overall_pct":90.0,"phases":{"color":90.0},
-               "edit_detail":null,"shots_seen":57 } }
+{ "schema":3, "ts":"<UTC>", "host":"grade-03", "stage":"color", "page":"color",
+  "activity":{ "idle_sec":3.2, "active":true, "resolve_frontmost":true, "locked":null, "platform":"linux" },
+  "source":{ "ok":true, "page":"color", "project":"KPP-2026-0005_grade",
+             "timeline":{"name":"R04_v3","duration_sec":1421.9,"video_clips":309,"graded_clips":278,
+                         "markers":59,"scan_ms":156,"grade":{"method":"lut"}},
+             "job_hint":null, "scope_hint":null },
+  "job":{ "job_id":"KPP-2026-0005","resolved_by":"naming","linked":true },
+  "progress":{ "stage":"color","pct":90.0,"detail":{"graded_clips":278,"video_clips":309} } }
 ```
+
+### ข้อมูลที่เก็บ / ไม่เก็บ (data sheet — ตรงกับโค้ด ณ 2026-10-22)
+| เก็บ | ใช้ทำอะไร |
+|---|---|
+| `host` (ชื่อเครื่อง) | แยกห้อง → join booking (ไม่ใช่ตัวคน) |
+| `ts`, `_rx.at`, `_rx.ip` (server เติม) | เวลา, ดูว่ามาจาก offline queue ไหม |
+| `activity.idle_sec`, `active`, `resolve_frontmost` (bool), `locked` (bool) | เวลาทำงานใน Resolve |
+| ชื่อ project / timeline ใน Resolve, จำนวน clip/clip ที่เกรด/marker, หน้า Resolve | % ความคืบหน้า + ผูก booking |
+
+| **ไม่เก็บ** (ตั้งแต่ 2026-10-22) | หมายเหตุ |
+|---|---|
+| `user` (ชื่อ login) | agent ไม่ส่ง · server ตัดทิ้งแม้ agent เก่าส่งมา |
+| ชื่อแอป/ชื่อหน้าต่างหน้าสุด (`frontmost_name`, `frontmost_bundle`) | agent ส่งแค่ boolean · ตัดสินจาก bundle id (mac) / executable ของ process (Linux `/proc/<pid>/exe`, Windows `QueryFullProcessImageName`) ตรงตัว — แท็บ browser ที่มีคำว่า "resolve" ไม่นับ |
+| shot code จาก marker | ปิดเป็น default (`EDITORTRACK_EXTRACT_SHOTS=0`) — เปิดเมื่อตกลงกับเจ้าของงานแล้วเท่านั้น |
+
+ที่เก็บ: `/srv/editortrack/data` (สิทธิ์ 700, นอก git checkout) · ลบอัตโนมัติเมื่อเก่ากว่า `EDITORTRACK_RETENTION_DAYS` (default 180 วัน) · ไฟล์เดิมที่ยังมี user/ชื่อแอป: `python store.py scrub <dir>` · ทุกหน้า/API ต้อง login
 
 **คำสั่ง — ทดสอบ agent แบบ manual (บนเครื่องมี Resolve):**
 ```bash
@@ -69,7 +84,7 @@ EDITORTRACK_SERVER=http://<server>:8000/ingest EDITORTRACK_TOKEN=xxx python runn
 
 ## Stage 2 — Ingest (server)
 
-**`dashboard_api.py` → `POST /ingest`**: body ≤ 1 MB + ต้องเป็น JSON → token ต้องเป็นของ `host` ใน record (hash ใน `agent_tokens.json`) → append `data/YYYY-MM-DD.jsonl`
+**`dashboard_api.py` → `POST /ingest`**: body ≤ 1 MB + ต้องเป็น JSON → token ต้องเป็นของ `host` ใน record (hash ใน `agent_tokens.json`) → ตัด `user`/ชื่อแอป → append `$EDITORTRACK_STORE/YYYY-MM-DD.jsonl` (ชื่อไฟล์ = วันที่ server รับ)
 
 ```bash
 cd server && pip install -r requirements.txt     # โค้ด server อยู่ในโฟลเดอร์ server/
@@ -142,7 +157,7 @@ RESOLVE_SCRIPT_API / RESOLVE_SCRIPT_LIB / PYTHONPATH
 # role + behaviour
 EDITORTRACK_ROLE=conform|colorist          # 1 เครื่อง = 1 role
 EDITORTRACK_DETECT_GRADE=1                  # color room=1 · edit room=0
-EDITORTRACK_EXTRACT_SHOTS=1                 # ดึง shots จาก marker
+EDITORTRACK_EXTRACT_SHOTS=0                 # ดึง shot code จาก marker — default ปิด (ข้อมูลลูกค้า)
 EDITORTRACK_POLL_RENDER=0                   # ห้ามเปิด (เด้งหน้า Deliver)
 EDITORTRACK_RESTORE_PAGE=1                  # กันเหนียว คืนหน้า
 EDITORTRACK_IDLE=90                         # วิ, เกิน=idle
@@ -157,7 +172,8 @@ EDITORTRACK_TOKENS_FILE=/srv/editortrack/agent_tokens.json   # token ต่อ�
 EDITORTRACK_READ_USERS_FILE=/srv/editortrack/read_users.json # user อ่าน dashboard — python manage_tokens.py read-user <ชื่อ>
 EDITORTRACK_READ_AUTH=basic      # ทุกหน้า + /api/* ต้อง login · none = ให้ proxy ทำ (bind 127.0.0.1 เท่านั้น)
 EDITORTRACK_BIND=127.0.0.1       # run.py · LAN ผ่าน reverse proxy TLS หรือ --lan
-EDITORTRACK_STORE=data           # dir เก็บ JSONL
+EDITORTRACK_STORE=/srv/editortrack/data   # dir เก็บ JSONL (700) — default $EDITORTRACK_HOME/data · ของเดิม =data ยังใช้ได้
+EDITORTRACK_RETENTION_DAYS=180   # ลบไฟล์เก่ากว่านี้อัตโนมัติ (0 = ไม่ลบ)
 EDITORTRACK_INTERVAL_MIN=10      # 1 sample ≈ กี่นาที (ให้ตรง poll)
 # ERP (creds — อย่า commit)
 ERP_BASE_URL=http://<erp>:8010

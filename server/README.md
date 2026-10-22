@@ -16,7 +16,8 @@ EDITORTRACK_READ_AUTH=basic        # basic (default) · none = ปิด login �
 EDITORTRACK_MAX_BODY=1048576       # byte ต่อ record ที่ /ingest — เกิน = 413
 EDITORTRACK_BIND=127.0.0.1  EDITORTRACK_PORT=8000   # run.py · LAN ตรง = --lan
 EDITORTRACK_ALLOW_SHARED_TOKEN=0   # 1 = ยอมรับ token รวมเดิม (EDITORTRACK_TOKEN) ชั่วคราวช่วงย้าย เฉพาะ host ที่ยังไม่มี token ของตัวเอง
-EDITORTRACK_STORE=data             # dir เก็บ JSONL (default: ./data)
+EDITORTRACK_STORE=…                # dir เก็บ JSONL — default $EDITORTRACK_HOME/data = /srv/editortrack/data (สร้าง/ลดสิทธิ์เป็น 700) · ของเดิม =data ยังใช้ได้
+EDITORTRACK_RETENTION_DAYS=180     # ลบไฟล์ YYYY-MM-DD.jsonl ที่เก่ากว่า N วัน (ตอน start + ทุก 24 ชม.) · 0 = ไม่ลบ
 EDITORTRACK_INTERVAL_MIN=1         # 1 sample ≈ กี่นาที (ให้ตรง poll; default 1)
 # ERP (creds — อย่า commit; ดู erp.py docstring / ../DATAFLOW.md §Config)
 ERP_BASE_URL / ERP_USERNAME / ERP_PASSWORD
@@ -64,6 +65,14 @@ python run.py --lan                            # bind 0.0.0.0 ตรง (HTTP �
   macOS: เพิ่มใน System keychain + `SSL_CERT_FILE` · Linux: `/usr/local/share/ca-certificates` + `update-ca-certificates`)
   proxy อยู่เครื่องอื่น: ตั้ง `EDITORTRACK_BIND=<IP ภายใน>` + `EDITORTRACK_TRUSTED_PROXIES=<IP proxy>` + firewall ให้เข้าได้เฉพาะ proxy
   เลือกได้ว่าจะให้ proxy ทำ Basic auth แทน (`basic_auth` ของ Caddy) แล้วตั้ง `EDITORTRACK_READ_AUTH=none` — ต้อง bind 127.0.0.1 (run.py ไม่ยอม start ถ้าไม่ใช่)
+
+### ข้อมูลที่เก็บ (ย้ายที่เก็บ — ครั้งเดียวตอนอัปเดต)
+server ไม่เก็บ `user` และชื่อแอป/หน้าต่าง (ตัดตอน ingest แม้ agent เก่าจะส่งมา · ไฟล์เก่าก็ถูกตัดก่อนส่งออก API) — ตาราง field ดู `../DATAFLOW.md` §data sheet
+1. `sudo install -d -m 700 -o <user ที่รัน server> /srv/editortrack /srv/editortrack/data`
+2. หยุด server → `mv server/data/*.jsonl /srv/editortrack/data/` (ข้อมูลจริงอยู่นอก repo · ไม่ commit) → `python store.py scrub /srv/editortrack/data` (ตัด user/ชื่อแอปออกจากไฟล์เดิม) → start
+   ยังไม่พร้อมย้าย: ตั้ง `EDITORTRACK_STORE=data` ชั่วคราว (server เตือนใน log ถ้าเจอข้อมูลใน server/data แต่ที่เก็บเป็นที่อื่น)
+3. retention 180 วันเริ่มทำงานทันทีที่ start — ตัดสินระยะจริงกับทนาย/เจ้าของข้อมูล (NEXT_STEPS เฟส 0) แล้วตั้ง `EDITORTRACK_RETENTION_DAYS`
+4. อัปเดต agent ทุกเครื่อง (ไม่ส่ง user/ชื่อแอป, shot code ปิด) — ไม่ต้องแก้ env ยกเว้นเครื่องที่ตั้งใจเปิด `EDITORTRACK_EXTRACT_SHOTS=1`
 
 ### เจ้าของระบบต้องทำ (เปลี่ยน token — ครั้งเดียวตอนอัปเดตเป็นเวอร์ชันนี้)
 1. ถือว่า `kpp-et-test` หลุดแล้ว: เวอร์ชันนี้ปฏิเสธเสมอ — record ที่เคยรับด้วย token นั้นเชื่อไม่ได้ 100% (ใครใน LAN ก็ส่งได้)

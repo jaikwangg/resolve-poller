@@ -2,7 +2,7 @@
 """A3 — poll (collector ตาม stage) → resolve job → POST (หลาย URL สำรองได้ + offline queue). record schema 3.
 stage จาก EDITORTRACK_STAGE (หรือ EDITORTRACK_ROLE เดิม): data/conform/color/subtitle/master
 """
-import json, os, socket, getpass, datetime, urllib.request, pathlib
+import json, os, socket, datetime, urllib.request, pathlib
 from activity_sampler import sample
 from collect import collect, canon
 from joblink import resolve_job
@@ -25,8 +25,7 @@ def build_record():
     rec = {
         "schema": 3,
         "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        "host": socket.gethostname(),
-        "user": getpass.getuser(),
+        "host": socket.gethostname(),            # ไม่ส่ง user (ชื่อ login) — วัดรายเครื่อง/รายงาน ไม่ใช่รายคน (PDPA)
         "stage": STAGE,
         "activity": {**act, "active": bool(idle is not None and idle < IDLE_THRESHOLD)},
         "source": col.get("raw") if col.get("ok") else {"ok": False, "reason": col.get("reason"), "detail": col.get("detail")},

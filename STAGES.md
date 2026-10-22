@@ -29,13 +29,14 @@
 
 ## record schema 3
 ```json
-{ "schema":3, "ts":"<UTC>", "host":"grade-03", "user":"ploy", "stage":"color",
-  "activity":{ "idle_sec":3.2, "active":true, "resolve_frontmost":true },
+{ "schema":3, "ts":"<UTC>", "host":"grade-03", "stage":"color",
+  "activity":{ "idle_sec":3.2, "active":true, "resolve_frontmost":true, "locked":null },
   "source":{ ...raw ของ collector (resolve snap / files / cues)... },
   "job":{ "job_id":"KPP-2026-5871", "role":null, "linked":false },
   "progress":{ "stage":"color", "pct":60.0, "done":null, "total":null, "detail":{...} },
   "page":"color" }
 ```
+> ไม่มี `user` และไม่มีชื่อแอป/หน้าต่าง (ตั้งแต่ 2026-10-22) — ดู data sheet ใน `DATAFLOW.md`
 
 ## รัน agent ต่อ stage (env)
 ```sh

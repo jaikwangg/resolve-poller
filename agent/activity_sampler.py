@@ -1,18 +1,42 @@
 #!/usr/bin/env python3
-"""A2 — idle + frontmost (metric #2). cross-platform: macOS / Linux(X11) / Windows.
+"""A2 — idle + "Resolve อยู่หน้าสุดไหม" (metric #2). cross-platform: macOS / Linux(X11) / Windows.
 ไม่ต้องขอ permission (idle เป็นตัวเลขล้วน). import แบบ defensive → ไม่ crash ถ้า OS ไม่รองรับ.
+
+ส่งออกแค่ boolean — **ไม่ส่งชื่อแอป/ชื่อหน้าต่าง** (ชื่อหน้าต่างบน Windows/Linux = แท็บ browser, หัวข้ออีเมล, ชื่อไฟล์)
+ตัดสินจาก identity ของ process ตรง ๆ ไม่ใช่ substring ของชื่อ ("how to resolve…" ในแท็บ ≠ Resolve):
+  macOS   = bundle id ของแอปหน้าสุด ∈ EDITORTRACK_RESOLVE_BUNDLES
+  Windows = ชื่อไฟล์ exe ของ process เจ้าของหน้าต่างหน้าสุด ∈ EDITORTRACK_RESOLVE_PROCS (GetWindowThreadProcessId)
+  Linux   = /proc/<pid>/exe (หรือ comm) ของ _NET_WM_PID หน้าต่างหน้าสุด ∈ EDITORTRACK_RESOLVE_PROCS · ไม่มี pid → WM_CLASS ตรงตัว
 
 เทสด้วยตา:  python activity_sampler.py --watch   (พิมพ์ทุก 2 วิ)
   - ขยับเมาส์/พิมพ์ → idle_sec เล็ก · หยุด → โตขึ้นเรื่อย ๆ
-  - โฟกัส Resolve → resolve_frontmost=true · สลับแอปอื่น → false
+  - โฟกัส Resolve → resolve_frontmost=true · สลับแอปอื่น (รวม browser ที่มีคำว่า resolve) → false
 
 หมายเหตุห้อง grade (Linux): Resolve มักเต็มจอตลอด → สัญญาณหลักคือ idle
-  frontmost บน Linux เป็น best-effort (ต้องมี xdotool หรือ xprop; ไม่มีก็คืน "")
+  frontmost บน Linux ต้องมี xdotool หรือ xprop (ไม่มี → resolve_frontmost=false)
 """
-import sys, time, json
+import os, sys, time, json
 
-RESOLVE_HINTS = ("davinci", "resolve")
-RESOLVE_BUNDLE_IDS = {"com.blackmagic-design.DaVinciResolve"}   # macOS
+
+def _set(env, default):
+    return {x.strip().lower() for x in os.environ.get(env, default).split(",") if x.strip()}
+
+
+RESOLVE_BUNDLE_IDS = _set("EDITORTRACK_RESOLVE_BUNDLES",
+                          "com.blackmagic-design.DaVinciResolve,com.blackmagic-design.DaVinciResolveLite")   # macOS
+RESOLVE_PROCS = _set("EDITORTRACK_RESOLVE_PROCS", "resolve,resolve.exe")      # ชื่อไฟล์ executable (Linux/Windows)
+LOCK_BUNDLES = {"com.apple.loginwindow"}                                     # macOS: จอล็อก/หน้า login
+LOCK_PROCS = {"lockapp.exe", "logonui.exe"}                                  # Windows: จอล็อก
+
+
+def is_resolve_bundle(bid):
+    return (bid or "").strip().lower() in RESOLVE_BUNDLE_IDS
+
+
+def is_resolve_proc(exe):
+    """exe = path หรือชื่อไฟล์ของ executable → ตรงตัว (ไม่ใช่ substring)"""
+    base = os.path.basename((exe or "").strip().replace("\\", "/")).lower()
+    return bool(base) and base in RESOLVE_PROCS
 
 
 # ---------- macOS ----------
@@ -22,9 +46,8 @@ def _macos():
     from AppKit import NSWorkspace
     idle = CGEventSourceSecondsSinceLastEventType(kCGEventSourceStateHIDSystemState, kCGAnyInputEventType)
     app = NSWorkspace.sharedWorkspace().frontmostApplication()
-    name = (app.localizedName() or "") if app else ""
-    bid = (app.bundleIdentifier() or "") if app else ""
-    return float(idle), name, bid
+    bid = ((app.bundleIdentifier() or "") if app else "").lower()
+    return float(idle), is_resolve_bundle(bid), bid in LOCK_BUNDLES
 
 
 # ---------- Windows ----------
@@ -41,11 +64,22 @@ def _windows():
     li.cbSize = ctypes.sizeof(LASTINPUTINFO)
     user32.GetLastInputInfo(ctypes.byref(li))
     idle = ((kernel32.GetTickCount() - li.dwTime) & 0xFFFFFFFF) / 1000.0   # modular → กัน 32-bit wrap
+    exe = ""
     hwnd = user32.GetForegroundWindow()
-    n = user32.GetWindowTextLengthW(hwnd)
-    buf = ctypes.create_unicode_buffer(n + 1)
-    user32.GetWindowTextW(hwnd, buf, n + 1)
-    return idle, (buf.value or ""), ""
+    if hwnd:
+        pid = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        h = kernel32.OpenProcess(0x1000, False, pid.value)       # PROCESS_QUERY_LIMITED_INFORMATION
+        if h:
+            try:
+                buf = ctypes.create_unicode_buffer(1024)
+                size = wintypes.DWORD(1024)
+                if kernel32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
+                    exe = buf.value
+            finally:
+                kernel32.CloseHandle(h)
+    base = os.path.basename(exe.replace("\\", "/")).lower()
+    return idle, is_resolve_proc(exe), base in LOCK_PROCS
 
 
 # ---------- Linux (X11) ----------
@@ -75,44 +109,81 @@ def _linux():
         idle_ms = ctypes.cast(info, ctypes.POINTER(XSS)).contents.idle
     finally:
         x11.XCloseDisplay(dpy)
-    return idle_ms / 1000.0, _linux_active_window(), ""
+    return idle_ms / 1000.0, _linux_resolve_frontmost(), None
 
 
-def _linux_active_window():
-    """best-effort: xdotool → xprop → "" (frontmost ไม่ critical กับห้อง grade)"""
+def _run(cmd):
     import subprocess
-    for cmd in (["xdotool", "getactivewindow", "getwindowname"],
-                ["sh", "-c", "xprop -id $(xprop -root _NET_ACTIVE_WINDOW | grep -o '0x[0-9a-f]*') _NET_WM_NAME"]):
-        try:
-            out = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
-            if out.returncode == 0 and out.stdout.strip():
-                s = out.stdout.strip()
-                if "_NET_WM_NAME" in s and '"' in s:
-                    s = s.split('"', 2)[1]
-                return s
-        except Exception:
-            continue
-    return ""
+    try:
+        out = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
+        return out.stdout.strip() if out.returncode == 0 else ""
+    except Exception:
+        return ""
+
+
+def parse_xprop_pid(s):
+    """'_NET_WM_PID(CARDINAL) = 1234' → 1234"""
+    try:
+        return int(s.rsplit("=", 1)[1].strip()) if "=" in s else int(s.strip())
+    except (ValueError, IndexError):
+        return None
+
+
+def parse_wm_class(s):
+    """'WM_CLASS(STRING) = "resolve", "Resolve"' → ["resolve", "resolve"]"""
+    return [x.strip().strip('"').lower() for x in s.split("=", 1)[1].split(",")] if "=" in s else []
+
+
+def proc_exe(pid, proc="/proc"):
+    """ชื่อ executable ของ pid (Linux): /proc/pid/exe → ไม่ได้ (สิทธิ์) ใช้ /proc/pid/comm"""
+    try:
+        return os.readlink(f"{proc}/{pid}/exe")
+    except OSError:
+        pass
+    try:
+        with open(f"{proc}/{pid}/comm", encoding="utf-8") as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def _linux_resolve_frontmost():
+    """pid ของหน้าต่างหน้าสุด → executable ตรงตัว · ไม่มี pid → WM_CLASS ตรงตัว · อ่านไม่ได้ = False
+    ไม่อ่านชื่อหน้าต่าง (_NET_WM_NAME) เลย"""
+    win = _run(["xdotool", "getactivewindow"])
+    if not win:
+        root = _run(["xprop", "-root", "_NET_ACTIVE_WINDOW"])
+        win = root.split()[-1] if root and "0x" in root else ""
+    if not win:
+        return False
+    pid = parse_xprop_pid(_run(["xdotool", "getwindowpid", win])) if win.isdigit() else None
+    if pid is None:
+        pid = parse_xprop_pid(_run(["xprop", "-id", win, "_NET_WM_PID"]))
+    if pid:
+        exe = proc_exe(pid)
+        if exe:
+            return is_resolve_proc(exe)
+    return any(c in RESOLVE_PROCS for c in parse_wm_class(_run(["xprop", "-id", win, "WM_CLASS"])))
 
 
 def sample():
+    """→ {idle_sec, resolve_frontmost, locked, platform} · ไม่มีชื่อแอป/หน้าต่าง
+    locked = จอล็อก/หน้า login (macOS, Windows) · None = OS นี้ไม่รู้"""
     plat = sys.platform
     try:
         if plat == "darwin":
-            idle, name, bid = _macos()
+            idle, is_resolve, locked = _macos()
         elif plat.startswith("linux"):
-            idle, name, bid = _linux()
+            idle, is_resolve, locked = _linux()
         elif plat.startswith("win"):
-            idle, name, bid = _windows()
+            idle, is_resolve, locked = _windows()
         else:
-            return {"idle_sec": None, "frontmost_name": "", "resolve_frontmost": False,
-                    "unavailable": True, "platform": plat}
+            return {"idle_sec": None, "resolve_frontmost": False, "unavailable": True, "platform": plat}
     except Exception as e:
-        return {"idle_sec": None, "frontmost_name": "", "resolve_frontmost": False,
-                "unavailable": True, "error": str(e)[:70], "platform": plat}
-    is_resolve = bid in RESOLVE_BUNDLE_IDS or any(h in (name or "").lower() for h in RESOLVE_HINTS)
-    return {"idle_sec": round(float(idle), 1), "frontmost_name": name, "frontmost_bundle": bid,
-            "resolve_frontmost": bool(is_resolve), "platform": plat}
+        return {"idle_sec": None, "resolve_frontmost": False,
+                "unavailable": True, "error": type(e).__name__, "platform": plat}
+    return {"idle_sec": round(float(idle), 1), "resolve_frontmost": bool(is_resolve),
+            "locked": locked, "platform": plat}
 
 
 if __name__ == "__main__":
