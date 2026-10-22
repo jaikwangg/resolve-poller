@@ -103,7 +103,8 @@ login (POST /api/auth/login) → access_token (8h, cache+refresh)
   → match: resources[is_primary].resource_code == ROOM_MAP[host]  และ  start_dt ≤ ts ≤ end_dt
   → job_id = project_no · role = TASK_ROLE[activity]  (Grading→colorist, Conform/Edit→conform)
 ```
-ใช้ใน `build_jobs._eff_job()`: **ERP ก่อน → fallback agent-side (joblink)**
+ใช้ใน `_eff_job()`: **booking ที่จับคู่ไว้ตอน ingest (`record._job`) → ERP lookup สด (record ที่ยังไม่มี) → fallback agent-side (joblink)**
+ตอน ingest ใช้ cache อย่างเดียว (ไม่รอ ERP) · ดึงไม่ได้ = negative cache 60 วิ + ใช้ cache เดิม · push % ใน background (server/README.md §PMS)
 
 **คำสั่ง — เทส ERP:**
 ```bash

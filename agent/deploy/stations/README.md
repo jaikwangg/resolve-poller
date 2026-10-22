@@ -21,7 +21,7 @@ sh deploy/install.sh                             # หลายกะ: sh deploy
 ```
 
 ## ฝั่ง server (ครั้งเดียว)
-ก็อป `server/room_map.example.json` → `~/.editortrack/room_map.json` แล้วแก้ค่าขวา (`GRADE1`...)
+ก็อป `server/room_map.example.json` → `~/.editortrack/room_map.json` (หรือ path ใน `ERP_ROOM_MAP_FILE`) แล้วแก้ค่าขวา (`GRADE1`...)
 ให้ตรง **resource_code จริงของห้องใน ERP** · server ใช้ map นี้ join `host → ห้อง → booking → job`
 
 ## การแยก (สรุป)

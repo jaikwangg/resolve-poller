@@ -38,6 +38,11 @@ ERP_PF_JOB=project_no  ERP_PF_STAGE=stage  ERP_PF_PCT=progress_pct
 ERP_ROOM_MAP={"conform-01":"RM-…"}                    # host → resource_code ห้องใน PMS
 ```
 ไม่ตั้ง = ไม่ส่งอะไรให้ PMS · ดูสถานะการส่งที่ `GET /api/pms` · ไม่ส่ง user/ชื่อคน
+**ERP/PMS ล่มหรือช้า:** `/ingest` ไม่รอ ERP เลย — จับคู่ booking จาก cache เท่านั้น (cache หมดอายุ → ดึงใหม่ใน background) และ push % ใน background thread (`pms-progress`: เก็บแค่ค่าล่าสุดต่อ job+stage, ล้มแล้วรอ `EDITORTRACK_PUSH_RETRY_SEC`=60 ค่อยลองใหม่)
+ดึง booking ไม่ได้ → จำว่าล้ม (`ERP_FAIL_TTL`=60 วิ ไม่ลองใหม่) และใช้ cache เดิม · `ERP_TIMEOUT`=10 วิ/request · `ERP_CACHE_TTL`=300 · room map (`ERP_ROOM_MAP` หรือไฟล์ `ERP_ROOM_MAP_FILE`, default `~/.editortrack/room_map.json`) อ่านใหม่เมื่อไฟล์เปลี่ยนเท่านั้น
+สถานะ: `/api/pms` → `erp_cache` (fetched_at / failed_at / error), `progress_pending`, `progress_failures` · response ของ `/ingest` = `{"ok", "pushed": false (คงไว้เพื่อเข้ากันได้), "queued"}`
+**booking ที่จับคู่ตอนรับ record ถูกเก็บไว้กับ record** (`_job`: job_id, booking_id, stage, matched_at) → แก้/ลบ booking ใน ERP ทีหลังไม่เขียนประวัติใหม่ · record ที่ตอนรับยังจับคู่ไม่ได้ (ไม่มี booking, ERP ล่มตอน start) ยังจับคู่สดตอนอ่าน (booking ที่ลงย้อนหลังจึงยังผูกได้) · record เก่าก่อนเวอร์ชันนี้ไม่มี `_job` = จับคู่สดเหมือนเดิม (ERP ดึงย้อนหลังแค่ `ERP_LOOKBACK_DAYS`=8 วัน — เก่ากว่านั้นใช้ชื่อ project ของ Resolve)
+
 **record มาช้า (offline queue):** PMS เก็บ window ด้วย key `(integration key, host, window_start)` แบบ `ON CONFLICT DO NOTHING` — ส่งซ้ำนับเป็น `duplicates` และ**ไม่อัปเดตค่าเดิม** (สัญญา PMS ไม่มีวิธีส่งแก้)
 → server **ถือ window ไว้จนนิ่ง**: ส่งเมื่อได้รับ record ของเครื่องนั้นที่หลังปลาย window มาแล้ว ≥ `PMS_SETTLE_SEC` (120) (= queue flush แล้ว) หรือปิดไปแล้ว ≥ `PMS_MAX_HOLD_SEC` (21600 = 6 ชม., เครื่องปิด/หาย)
 → ถ้ายังมี record มาช้ากว่านั้นจนเวลาเพิ่ม: ส่ง window เดิมซ้ำด้วย key เดิม (ปลอดภัย — PMS ไม่นับซ้ำ) และนับเวลาที่ PMS ไม่รับไว้ที่ `/api/pms` → `corrections.ignored_seconds` (gap ที่รู้แล้ว)

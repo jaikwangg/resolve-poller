@@ -3,7 +3,7 @@
 stage: data → conform → color → subtitle → master
 job_id/stage หลัก = ERP booking (room+time) · fallback = agent-side (record.job / record.stage)
 """
-import os, json, glob, datetime, collections, pathlib, logging
+import os, json, glob, datetime, collections, pathlib, logging, threading
 from fastapi import FastAPI, Request, Header, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
 
@@ -34,6 +34,50 @@ import projects as _proj
 import pms_sync
 
 _last_pushed = {}          # (job_id, stage) -> % ล่าสุดที่ส่ง PMS สำเร็จ
+# ---- push % → PMS ใน background (ไม่อยู่ใน request /ingest: ERP ล่ม/ช้าไม่ทำให้ agent timeout) ----
+_pending = {}              # (job_id, stage) -> (pct, extra) ล่าสุดที่ยังไม่ได้ส่ง (รวมค่าเก่าทับ = คิวไม่โต)
+_pending_lock = threading.Lock()
+_pending_ev = threading.Event()
+_pusher = {"thread": None, "failures": 0, "last_error_at": None}
+PUSH_RETRY_SEC = int(os.environ.get("EDITORTRACK_PUSH_RETRY_SEC", "60"))
+
+
+def _push_worker():
+    while True:
+        _pending_ev.wait()
+        with _pending_lock:
+            items = dict(_pending)
+            _pending.clear()
+            _pending_ev.clear()
+        failed = False
+        for k, (pct, extra) in items.items():
+            if _last_pushed.get(k) == pct:
+                continue
+            ok = False
+            try:
+                ok = erp.push_progress(k[0], k[1], round(float(pct), 2), extra)
+            except Exception:
+                ok = False
+            if ok:
+                _last_pushed[k] = pct
+            else:
+                failed = True
+                _pusher["failures"] += 1
+                _pusher["last_error_at"] = _ex.now_local().isoformat()
+                with _pending_lock:
+                    _pending.setdefault(k, (pct, extra))       # ค่าใหม่กว่ามาแล้วก็ใช้ค่าใหม่
+        if failed:                                             # ERP ล่ม → พักก่อนลองใหม่ ไม่ยิงถี่
+            threading.Event().wait(PUSH_RETRY_SEC)
+            _pending_ev.set()
+
+
+def _queue_push(k, pct, extra):
+    with _pending_lock:
+        _pending[k] = (pct, extra)
+        if _pusher["thread"] is None or not _pusher["thread"].is_alive():
+            _pusher["thread"] = threading.Thread(target=_push_worker, name="pms-progress", daemon=True)
+            _pusher["thread"].start()
+    _pending_ev.set()
 OPEN_PATHS = {"/healthz"}  # ไม่ต้อง login (ไม่มีข้อมูล)
 
 
@@ -90,6 +134,16 @@ async def ingest(req: Request, authorization: str = Header(default="")):
     if _ex._dt(rec.get("ts")) is None:
         raise HTTPException(status_code=400, detail="record ต้องมี host และ ts (ISO มี timezone)")
     _store.minimise(rec)                            # ไม่เก็บ user / ชื่อแอป-หน้าต่าง แม้ agent เก่าจะส่งมา
+    rec.pop("_job", None)                           # field ของ server — agent ใส่เองไม่ได้
+    eff = None
+    if erp:                                         # จับคู่ booking ตอนรับ (ใช้ cache อย่างเดียว ไม่รอ ERP) แล้วเก็บไว้กับ record
+        try:                                        # → แก้ booking ใน ERP ทีหลังไม่เปลี่ยนประวัติ
+            eff = _eff_job(rec, block=False)
+            if eff.get("source") == "erp":
+                rec["_job"] = {**{k: eff.get(k) for k in ("job_id", "title", "stage", "booking_id", "resource_code")},
+                               "source": "erp", "matched_at": datetime.datetime.now(datetime.timezone.utc).isoformat()}
+        except Exception as e:
+            log.warning("booking match at ingest failed: %s", e)
     if isinstance(rec, dict):                       # เวลา/IP ฝั่ง server — ใช้ดูว่ามาสดหรือมาจาก offline queue
         rec["_rx"] = {"at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                       "ip": req.client.host if req.client else None}
@@ -98,21 +152,19 @@ async def ingest(req: Request, authorization: str = Header(default="")):
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
     # push progress → ERP (best-effort; no-op ถ้ายังไม่ตั้ง ERP_PROGRESS_PATH) — นี่คือ "หน้าที่หลัก" ของระบบ
     # ส่งเฉพาะ job ที่ได้จาก ERP (project_no จริง — ชื่อ project ของ Resolve PMS ตอบ 422) และเฉพาะตอน % เปลี่ยน
-    pushed = False
-    if erp:
+    # ส่งใน background (pms-progress thread) — "pushed" คงไว้เพื่อเข้ากันได้ (false เสมอ) · ดูผลที่ /api/pms
+    queued = False
+    if erp and eff:
         try:
-            eff = _eff_job(rec)
-            prog = rec.get("progress") or {}
-            pct = prog.get("pct")
+            pct = (rec.get("progress") or {}).get("pct")
             k = (eff.get("job_id"), eff.get("stage"))
-            if eff.get("source") == "erp" and all(k) and pct is not None and _last_pushed.get(k) != pct:
-                pushed = erp.push_progress(k[0], k[1], round(float(pct), 2),
-                                           {"observed_at": rec.get("ts"), "host": rec.get("host")})
-                if pushed:
-                    _last_pushed[k] = pct
+            if (eff.get("source") == "erp" and all(k) and pct is not None and _last_pushed.get(k) != pct
+                    and erp.ERP_PROGRESS_PATH and erp.ERP_BASE):
+                _queue_push(k, pct, {"observed_at": rec.get("ts"), "host": rec.get("host")})
+                queued = True
         except Exception:
             pass
-    return {"ok": True, "pushed": pushed}
+    return {"ok": True, "pushed": False, "queued": queued}
 
 
 # ---------------- load / helpers ----------------
@@ -145,13 +197,20 @@ def _daylabel(iso):
     return f"{d.month}/{d.day}"
 
 
-def _eff_job(rec):
-    """job_id + stage: ERP (zero-touch) ก่อน → fallback agent-side (record.job / record.stage)."""
+def _eff_job(rec, block=True):
+    """job_id + stage: booking ที่จับคู่ไว้ตอน ingest (record._job) → ERP lookup สด (record เก่า) → agent-side
+    block=False = ใช้ cache booking อย่างเดียว (ไม่รอ ERP)"""
     agent = rec.get("job") or {}
-    e = erp.lookup(rec.get("host"), rec.get("ts"), (rec.get("source") or {}).get("project")) if erp else None
+    st = rec.get("_job")
+    if isinstance(st, dict) and st.get("job_id"):
+        return {"job_id": st["job_id"], "title": st.get("title") or st["job_id"],
+                "stage": st.get("stage") or rec.get("stage") or agent.get("role"), "source": "erp",
+                "booking_id": st.get("booking_id"), "resource_code": st.get("resource_code")}
+    e = erp.lookup(rec.get("host"), rec.get("ts"), (rec.get("source") or {}).get("project"), block) if erp else None
     if e and e.get("job_id"):
         return {"job_id": e["job_id"], "title": e.get("title") or agent.get("title") or e["job_id"],
-                "stage": e.get("stage") or rec.get("stage") or agent.get("role"), "source": "erp"}
+                "stage": e.get("stage") or rec.get("stage") or agent.get("role"), "source": "erp",
+                "booking_id": e.get("booking_id"), "resource_code": e.get("resource_code")}
     return {"job_id": agent.get("job_id"), "title": agent.get("title"),
             "stage": rec.get("stage") or agent.get("role"), "source": agent.get("resolved_by")}
 
@@ -367,7 +426,10 @@ def _start_pms_sync():
 def api_pms():
     return JSONResponse({**pms_sync.status, "window_min": pms_sync.WINDOW_MIN,
                          "progress_enabled": bool(erp and erp.ERP_PROGRESS_PATH and erp.ERP_BASE),
-                         "last_pushed": [{"job": k[0], "stage": k[1], "pct": v} for k, v in _last_pushed.items()]})
+                         "last_pushed": [{"job": k[0], "stage": k[1], "pct": v} for k, v in _last_pushed.items()],
+                         "progress_pending": len(_pending), "progress_failures": _pusher["failures"],
+                         "progress_last_error_at": _pusher["last_error_at"],
+                         "erp_cache": erp.cache_status() if erp else None})
 
 
 # ---------------- /api/report : สรุปรายวันต่อเครื่อง ----------------
