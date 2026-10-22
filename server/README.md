@@ -94,6 +94,7 @@ server ไม่เก็บ `user` และชื่อแอป/หน้า�
 4. อัปเดต agent ทุกเครื่อง (ไม่ส่ง user/ชื่อแอป, shot code ปิด) — ไม่ต้องแก้ env ยกเว้นเครื่องที่ตั้งใจเปิด `EDITORTRACK_EXTRACT_SHOTS=1`
 
 ### เจ้าของระบบต้องทำ (เปลี่ยน token — ครั้งเดียวตอนอัปเดตเป็นเวอร์ชันนี้)
+ลำดับจริงบน server (autodeploy, unit, agent ทีละเครื่อง, เก็บกวาด) อยู่ใน `../docs/ROLLOUT.md` — ทำตามนั้น
 1. ถือว่า `kpp-et-test` หลุดแล้ว: เวอร์ชันนี้ปฏิเสธเสมอ — record ที่เคยรับด้วย token นั้นเชื่อไม่ได้ 100% (ใครใน LAN ก็ส่งได้)
 2. บน server: `python manage_tokens.py issue <hostname>` ทีละเครื่อง (ชื่อต้องตรง `socket.gethostname()` ของเครื่อง เช่น `conform-01`) — ส่ง token ทางช่องทางที่ไม่ใช่แชต
 3. แต่ละเครื่อง: แก้ `EDITORTRACK_TOKEN` ใน `agent/deploy/env.sh` (หรือ `sh deploy/make-env.sh` ใหม่) — ไม่ต้อง reinstall scheduler (run-agent.sh อ่าน env.sh ทุกรอบ)
