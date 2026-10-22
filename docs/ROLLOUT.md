@@ -64,10 +64,18 @@ git -C ~/github/editortrack branch --show-current   # main
 แก้ `~/.config/systemd/user/editortrack-server.service`:
 ```ini
 # ลบ: Environment=EDITORTRACK_TOKEN=kpp-et-test   (โค้ดใหม่ปฏิเสธเสมอ และ shared token ปิดเป็น default)
-ExecStart=/home/worakij/.editortrack-venv/bin/python run.py --lan
+ExecStart=%h/.editortrack-venv/bin/python run.py --lan
 ```
 `--lan` = bind 0.0.0.0 แบบที่ agent ใช้อยู่ตอนนี้ (`http://192.168.140.126:8000/ingest`, HTTP ไม่เข้ารหัส — run.py เตือนทุกครั้ง)
 มี Caddy/TLS แล้ว (server/README.md §TLS) → `python run.py` เฉย ๆ (127.0.0.1) และเปลี่ยน `EDITORTRACK_SERVER` ของ agent เป็น https
+- **gateway ของ IT-KHO มีชื่อ HTTPS ให้อยู่แล้ว**: `~/github/IT-KHO/deploy/gateway/Caddyfile` มี `import site editortrack 127.0.0.1:8000`
+  → `https://editortrack.192.168.140.126.nip.io` (`tls internal` — root cert `kho-gateway-root.crt` ใน folder นั้น, README §5)
+  และ `http://editortrack.192.168.140.126.nip.io` (port 80) · ไม่ต้องตั้ง Caddy เอง: agent ใช้
+  `EDITORTRACK_SERVER=https://editortrack.192.168.140.126.nip.io/ingest` (python ของ agent ต้องเชื่อ root cert นั้น —
+  `SSL_CERT_FILE` หรือ store ของ OS, ดู server/README.md §TLS) แล้ว server เลิก `--lan` ได้เมื่อทุกเครื่องย้ายมาแล้ว
+- ⚠️ **หลัง gateway นั้นต้องใช้ `EDITORTRACK_READ_AUTH=basic` (default) เท่านั้น** — gateway ไม่ทำ auth และอยู่บน host network
+  ทุก request จาก LAN จึงเข้ามาทาง loopback · `none` ต้องมี proxy ที่ทำ auth และส่ง `X-Editortrack-Proxy-Secret`
+  (`EDITORTRACK_PROXY_SECRET`, server/README.md §TLS) — gateway ไม่ส่ง → `none` ที่นั่นตอบ 401 ทุกหน้า
 ```sh
 systemctl --user daemon-reload && systemctl --user restart editortrack-server.service
 journalctl --user -u editortrack-server -n 30 --no-pager    # ต้องไม่มี "!!! editortrack:" เหลือ
@@ -88,13 +96,21 @@ curl -s -o /dev/null -w '%{http_code}\n' -u <ชื่อ> http://127.0.0.1:8000
 
 ## 6. agent ทีละเครื่อง — token ก่อน แล้วค่อยอัปเดตโค้ด
 ทีละเครื่อง เริ่มจาก conform-01 · เครื่องถัดไปเมื่อเครื่องก่อนขึ้นเขียวใน `/inbox`
-1. **token ก่อน** (ใช้ได้ทั้งกับ agent เก่าและใหม่): แก้ `EDITORTRACK_TOKEN=<token ของเครื่องนี้>` ใน `agent/deploy/env.sh`
-   (หรือ `sh deploy/make-env.sh` ใหม่ — ตั้ง 600 ให้แม้ไฟล์มีอยู่แล้ว · แก้มือ = `chmod 600 deploy/env.sh` เอง)
+1. **token ก่อน** (ใช้ได้ทั้งกับ agent เก่าและใหม่): **แก้มือ** `EDITORTRACK_TOKEN=<token ของเครื่องนี้>` ใน `agent/deploy/env.sh` แล้ว
+   ```sh
+   chmod 600 agent/deploy/env.sh
+   ```
+   **อย่ารัน `make-env.sh` ตอนนี้** — เครื่องยังเป็นโค้ดเก่า (main): make-env เก่ามี default `kpp-et-test`, พิมพ์ token ออกจอ
+   และไม่ลดสิทธิ์ไฟล์ที่มีอยู่แล้ว (env.sh ที่ `cp` มาจาก `stations/*.sh` = 644) · อยากใช้ make-env → หลังขั้น 3 (`git pull`) ค่อยรัน
    ไม่ต้อง reinstall scheduler (`run-agent.sh` อ่าน env.sh ทุกรอบ)
 2. รอ 1–2 นาที: `/inbox` เห็นเครื่อง online · log server ไม่มี `ingest rejected: host=<เครื่องนี้>` · queue เก่าทยอยเข้า (ชิป "ย้อนหลัง")
-   ยัง 401 (`bad_token`) → ชื่อ host ใน log ไม่ตรงกับที่ issue ไว้ หรือ token พิมพ์ผิด
+   ยัง 401: agent เห็นแค่ `bad_token` (server ไม่บอกคนนอกว่า host ไหนมี token) แต่ **log server แยกให้**:
+   - `ingest rejected: host='…' reason=unknown_host` → ชื่อ host ไม่ตรงกับที่ issue ไว้ (ดูชื่อใน log แล้ว `manage_tokens.py issue <ชื่อนั้น>`)
+   - `reason=bad_token` → host ถูก แต่ token พิมพ์ผิด/ตกหล่น (หรือ issue `--force` ใหม่ทีหลัง)
+   - `reason=leaked_token` → ยังเป็น `kpp-et-test` (env.sh ไม่ถูกแก้ / แก้ผิดไฟล์)
 3. แล้วค่อยอัปเดตโค้ด agent (`git pull` ใน checkout ของเครื่องนั้น) — ไม่ส่ง user/ชื่อแอป, queue มีเพดาน, 401/403 เก็บใน queue,
-   ส่ง backlog ก่อน record ใหม่
+   ส่ง backlog ก่อน record ใหม่ · backlog ใหญ่ทยอยส่งรอบละไม่เกิน 60 วิ / 2,000 บรรทัด (`EDITORTRACK_FLUSH_BUDGET_S` / `_MAX_LINES`)
+   — queue ~10k บรรทัดจึงใช้หลายนาที (ระหว่างนั้น record ใหม่ต่อท้าย queue, `/inbox` ขึ้น "ย้อนหลัง") ไม่ใช่ค้าง
 4. เครื่องถัดไป
 
 ## 7. เก็บกวาด (หลังครบทุกเครื่อง) — ตามลำดับนี้
