@@ -227,7 +227,14 @@ def _room_map():
                 m = json.load(f)
         except Exception:
             m = {}
-    _rm_cache["key"], _rm_cache["map"] = key, m if isinstance(m, dict) else {}
+    m = m if isinstance(m, dict) else {}
+    # key → รูปเดียวกับ host ที่ /ingest เก็บ (ตัดช่องว่าง + ตัวเล็ก) — map ที่พิมพ์ 'Grade-01' ก็ยังจับคู่ได้
+    norm = {}
+    for k, v in m.items():
+        nk = k.strip().lower() if isinstance(k, str) else k
+        if nk not in norm or k == nk:
+            norm[nk] = v
+    _rm_cache["key"], _rm_cache["map"] = key, norm
     return _rm_cache["map"]
 
 

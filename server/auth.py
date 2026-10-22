@@ -90,10 +90,23 @@ def norm_host(h):
     return h.strip().lower() if isinstance(h, str) else h
 
 
+def _norm_hosts(hosts):
+    """key ของ hosts → norm_host · ไฟล์เก่ามีทั้ง 'Grade-01' และ 'grade-01' → เหลืออันเดียว
+    (เลือกตัวที่ key เป็นรูป normalise อยู่แล้ว = ตัวที่ออกด้วยโค้ดใหม่ล่าสุด)"""
+    out = {}
+    for h, v in (hosts or {}).items():
+        k = norm_host(h)
+        if not isinstance(k, str) or not k:
+            continue
+        if k not in out or h == k:
+            out[k] = v
+    return out
+
+
 def host_tokens():
     """host -> sha256 ของ token (host เป็นตัวเล็ก — ไฟล์เก่าที่ออกด้วยตัวใหญ่ก็ยังใช้ได้)"""
-    hosts = _load(tokens_file()).get("hosts") or {}
-    return {norm_host(h): (v.get("sha256") if isinstance(v, dict) else v) for h, v in hosts.items() if v}
+    hosts = _norm_hosts(_load(tokens_file()).get("hosts"))
+    return {h: (v.get("sha256") if isinstance(v, dict) else v) for h, v in hosts.items() if v}
 
 
 # เหตุผลที่ตอบกลับ agent — unknown_host กับ bad_token รวมเป็นอันเดียว (ไม่บอกว่า host ไหนมี token แล้ว)
@@ -132,7 +145,7 @@ def issue_token(host, force=False):
     host = norm_host(host)
     path = tokens_file()
     data = _load(path) or {}
-    hosts = dict(data.get("hosts") or {})
+    hosts = _norm_hosts(data.get("hosts"))           # เขียนกลับเป็น key ตัวเล็กเสมอ — entry เก่าตัวใหญ่ไม่ค้างเป็น key ซ้ำ
     if host in hosts and not force:
         raise ValueError(f"{host} มี token อยู่แล้ว — ใช้ --force เพื่อออกใหม่ (token เดิมใช้ไม่ได้ทันที)")
     tok = "et_" + secrets.token_urlsafe(32)
@@ -145,9 +158,10 @@ def revoke_token(host):
     host = norm_host(host)
     path = tokens_file()
     data = _load(path) or {}
-    hosts = dict(data.get("hosts") or {})
-    if hosts.pop(host, None) is None:
+    raw = data.get("hosts") or {}
+    if not any(norm_host(h) == host for h in raw):   # 'Grade-01' ในไฟล์เก่าก็ถอนได้ด้วย grade-01
         return False
+    hosts = {h: v for h, v in _norm_hosts(raw).items() if h != host}
     save_json(path, {**data, "hosts": hosts})
     return True
 

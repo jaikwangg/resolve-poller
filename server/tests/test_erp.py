@@ -259,6 +259,12 @@ class RoomMap(unittest.TestCase):
             os.utime(f, ns=(1, 1))
             f.write_text(json.dumps({"grade-01": "RM-09"}))
             self.assertEqual(erp._room_map(), {"grade-01": "RM-09"})
+            os.utime(f, ns=(2, 2))
+            f.write_text(json.dumps({" Grade-02 ": "RM-02", "Grade-01": "RM-old", "grade-01": "RM-01"}))
+            self.assertEqual(erp._room_map(), {"grade-02": "RM-02", "grade-01": "RM-01"})   # key = รูปที่ ingest เก็บ
+            os.environ["ERP_ROOM_MAP"] = json.dumps({"Conform-01": "RM-C1"})
+            self.assertEqual(erp._room_map(), {"conform-01": "RM-C1"})
+            os.environ.pop("ERP_ROOM_MAP")
             os.environ.pop("ERP_ROOM_MAP_FILE")
             self.assertEqual(erp.room_map_file(), os.path.join(_env.FAKE_HOME, ".editortrack", "room_map.json"))
         finally:

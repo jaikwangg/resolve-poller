@@ -232,6 +232,39 @@ class HostTokensNormalised(unittest.TestCase):
         self.assertEqual(auth.check_agent("conform-09", f"Bearer {tok}"), (True, "ok"))
         self.assertTrue(auth.revoke_token("CONFORM-09"))
 
+    def _legacy(self, hosts):
+        auth.save_json(auth.tokens_file(), {"hosts": hosts})
+
+    def _keys(self):
+        return list(json.loads(auth.tokens_file().read_text(encoding="utf-8"))["hosts"])
+
+    def test_legacy_mixed_case_entry_can_be_revoked(self):
+        """S2: ไฟล์เก่าออกด้วย 'Grade-07' → revoke grade-07 ต้องได้ (เดิม pop('grade-07') ไม่เจอ → token ยังใช้ได้)"""
+        self._legacy({"Grade-07": {"sha256": auth.sha256("et_old")}, "grade-01": {"sha256": "x"}})
+        self.assertEqual(auth.check_agent("grade-07", "Bearer et_old"), (True, "ok"))
+        self.assertTrue(auth.revoke_token("grade-07"))
+        self.assertEqual(auth.check_agent("grade-07", "Bearer et_old")[0], False)
+        self.assertEqual(self._keys(), ["grade-01"])
+        self.assertFalse(auth.revoke_token("GRADE-07"))
+
+    def test_legacy_mixed_case_entry_is_replaced_not_duplicated(self):
+        self._legacy({"Grade-08": {"sha256": auth.sha256("et_old")}})
+        with self.assertRaises(ValueError):                    # มีอยู่แล้ว (ต่างแค่ตัวพิมพ์) → ต้อง --force
+            auth.issue_token("grade-08")
+        tok = auth.issue_token("grade-08", force=True)
+        self.assertEqual(self._keys(), ["grade-08"])           # ไม่มี key ซ้ำ 'Grade-08' + 'grade-08'
+        self.assertEqual(auth.check_agent("grade-08", f"Bearer {tok}"), (True, "ok"))
+        self.assertEqual(auth.check_agent("grade-08", "Bearer et_old")[0], False)
+
+    def test_duplicate_legacy_keys_collapse_on_write(self):
+        self._legacy({"Grade-09": {"sha256": auth.sha256("et_old")}, "grade-09": {"sha256": auth.sha256("et_new")},
+                      "Conform-03": {"sha256": "y"}})
+        self.assertEqual(auth.check_agent("grade-09", "Bearer et_new"), (True, "ok"))   # รูปตัวเล็ก (ใหม่กว่า) ชนะ
+        auth.issue_token("grade-02", force=True)               # เขียนไฟล์ครั้งใดก็ normalise ทั้งไฟล์
+        self.assertEqual(sorted(self._keys()), ["conform-03", "grade-02", "grade-09"])
+        self.assertTrue(auth.revoke_token("grade-09"))
+        self.assertNotIn("grade-09", auth.host_tokens())
+
     def test_public_reason_hides_unknown_host(self):
         self.assertEqual(auth.public_reason("unknown_host"), auth.public_reason("bad_token"))
         self.assertEqual(auth.public_reason("no_token"), "no_token")
