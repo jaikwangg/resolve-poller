@@ -81,6 +81,9 @@ python run.py --lan                            # bind 0.0.0.0 ตรง (HTTP �
   macOS: เพิ่มใน System keychain + `SSL_CERT_FILE` · Linux: `/usr/local/share/ca-certificates` + `update-ca-certificates`)
   proxy อยู่เครื่องอื่น: ตั้ง `EDITORTRACK_BIND=<IP ภายใน>` + `EDITORTRACK_TRUSTED_PROXIES=<IP proxy>` + firewall ให้เข้าได้เฉพาะ proxy
   เลือกได้ว่าจะให้ proxy ทำ Basic auth แทน (`basic_auth` ของ Caddy) แล้วตั้ง `EDITORTRACK_READ_AUTH=none` — ต้อง bind 127.0.0.1 (run.py ไม่ยอม start ถ้าไม่ใช่)
+  `READ_AUTH=none` บังคับใน app ด้วย: เปิดเฉพาะ connection ที่เข้ามาทาง loopback — รัน `uvicorn --host 0.0.0.0` ตรงก็ไม่เปิดโล่งให้ LAN
+- **รันด้วย `python run.py` เท่านั้น** (systemd `ExecStart=…/python run.py`) — app log `!!! editortrack: …` ตอน start ถ้าถูกรันด้วย uvicorn ตรง
+  หรือยังไม่มี read user (หน้าอ่านตอบ 401 จนกว่าจะรัน `manage_tokens.py read-user`) · ขั้นตอนเปลี่ยน unit ดู `../docs/ROLLOUT.md`
 
 ### ข้อมูลที่เก็บ (ย้ายที่เก็บ — ครั้งเดียวตอนอัปเดต)
 server ไม่เก็บ `user` และชื่อแอป/หน้าต่าง (ตัดตอน ingest แม้ agent เก่าจะส่งมา · ไฟล์เก่าก็ถูกตัดก่อนส่งออก API) — ตาราง field ดู `../DATAFLOW.md` §data sheet

@@ -194,10 +194,40 @@ def remove_read_user(name):
     return True
 
 
-def check_read(authorization):
-    """→ True ถ้าอ่านได้ · mode none = ทุกคนอ่านได้ (ต้องมี proxy ทำ auth ให้)"""
-    if read_auth_mode() == "none":
+def local_is_loopback(local_addr):
+    """local_addr = scope["server"] ของ ASGI (ที่อยู่ฝั่ง server ที่ connection นี้วิ่งเข้ามา) → มาทาง loopback ไหม
+    bind 0.0.0.0 แล้วต่อจาก LAN = IP ของการ์ด LAN (ไม่ใช่ loopback) · unix socket (str/None port) = เครื่องเดียวกัน"""
+    import ipaddress
+    if not local_addr:
+        return False
+    host, port = (tuple(local_addr) + (None, None))[:2]
+    if port is None and isinstance(host, str) and host.startswith("/"):
         return True
+    try:
+        return ipaddress.ip_address(str(host).split("%")[0]).is_loopback
+    except ValueError:
+        return host == "localhost"
+
+
+def read_auth_problem():
+    """ข้อความเตือนตอน start ถ้าตั้ง read auth ไม่ครบ · None = ครบ"""
+    mode = read_auth_mode()
+    if mode == "none":
+        return ("EDITORTRACK_READ_AUTH=none — หน้าอ่านเปิดเฉพาะ connection ที่เข้ามาทาง loopback (reverse proxy เครื่องเดียวกัน) "
+                "· connection จาก LAN ตรงถูกปฏิเสธ 401")
+    if mode != "basic":
+        return f"EDITORTRACK_READ_AUTH={mode!r} ไม่รู้จัก — ใช้ basic (ต้อง login)"
+    if not read_users():
+        return (f"ยังไม่มี read user ใน {read_users_file()} — ทุกหน้า/API อ่านตอบ 401 จนกว่าจะรัน "
+                "`python manage_tokens.py read-user <ชื่อ>` (ด้วย EDITORTRACK_HOME เดียวกับ server)")
+    return None
+
+
+def check_read(authorization, local_addr=("127.0.0.1", 0)):
+    """→ True ถ้าอ่านได้ · mode none = ไม่ต้อง login แต่เฉพาะ connection ที่เข้ามาทาง loopback
+    (กันกรณีรัน uvicorn ตรง --host 0.0.0.0 ข้าม guard ของ run.py แล้วเปิดโล่งทั้ง LAN)"""
+    if read_auth_mode() == "none":
+        return local_is_loopback(local_addr)
     a = authorization or ""
     if a[:6].lower() != "basic ":
         return False

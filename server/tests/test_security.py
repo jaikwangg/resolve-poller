@@ -137,9 +137,24 @@ class ReadAuth(_Client):
         self.assertEqual(self.c.get("/api/jobs", headers=h).status_code, 401)
 
     def test_mode_none_opens_reads_but_not_ingest(self):
+        from fastapi.testclient import TestClient
         os.environ["EDITORTRACK_READ_AUTH"] = "none"
-        self.assertEqual(self.c.get("/api/jobs").status_code, 200)
-        self.assertEqual(self.c.post("/ingest", json=REC).status_code, 401)
+        lo = TestClient(api.app, base_url="http://127.0.0.1:8000")     # connection เข้าทาง loopback (proxy เครื่องเดียวกัน)
+        self.assertEqual(lo.get("/api/jobs").status_code, 200)
+        self.assertEqual(lo.post("/ingest", json=REC).status_code, 401)
+
+    def test_mode_none_refused_on_lan_interface(self):
+        """uvicorn ตรง --host 0.0.0.0 ข้าม guard ของ run.py → connection จาก LAN ต้องยังถูกปฏิเสธ"""
+        from fastapi.testclient import TestClient
+        os.environ["EDITORTRACK_READ_AUTH"] = "none"
+        for base in ("http://192.168.140.126:8000", "http://10.0.0.5", "http://editortrack.lan"):
+            self.assertEqual(TestClient(api.app, base_url=base).get("/api/jobs").status_code, 401, base)
+        self.assertEqual(TestClient(api.app, base_url="http://[::1]:8000").get("/api/jobs").status_code, 200)
+
+    def test_local_is_loopback(self):
+        for a, want in [(("127.0.0.1", 8000), True), (("::1", 8000), True), (("/run/et.sock", None), True),
+                        (("0.0.0.0", 8000), False), (("192.168.1.5", 8000), False), (None, False), (("testserver", 80), False)]:
+            self.assertEqual(auth.local_is_loopback(a), want, a)
 
     def test_healthz_open(self):
         self.assertEqual(self.c.get("/healthz").json(), {"ok": True})
@@ -148,6 +163,48 @@ class ReadAuth(_Client):
         h = auth.hash_password("abc", iterations=1000)
         self.assertTrue(auth.verify_password("abc", h))
         self.assertFalse(auth.verify_password("abd", h))
+
+
+class StartupChecks(unittest.TestCase):
+    """guard ไม่ได้อยู่แค่ใน run.py: `uvicorn dashboard_api:app` ตรงก็ต้องเตือน และยังปฏิเสธการอ่าน"""
+    def setUp(self):
+        self._env = dict(os.environ)
+
+    def tearDown(self):
+        os.environ.clear()
+        os.environ.update(self._env)
+
+    def test_no_read_users_is_loud_and_reads_still_refused(self):
+        from fastapi.testclient import TestClient
+        os.environ["EDITORTRACK_READ_USERS_FILE"] = str(pathlib.Path(tempfile.mkdtemp()) / "none.json")
+        os.environ.pop(api.VIA_RUN_ENV, None)
+        with self.assertLogs("editortrack", level="ERROR") as cm:
+            msgs = api.startup_checks()
+        self.assertTrue(any("read user" in m for m in msgs))
+        self.assertTrue(any("run.py" in m for m in msgs))                # unit ยังเรียก uvicorn ตรง
+        self.assertTrue(all("!!!" in m for m in cm.output))
+        with TestClient(api.app) as c:                                   # startup event รันจริง (ไม่ล้ม)
+            self.assertEqual(c.get("/api/jobs").status_code, 401)
+            self.assertEqual(c.get("/healthz").status_code, 200)
+
+    def test_quiet_when_configured_via_run_py(self):
+        _env.ensure_read_user()
+        os.environ[api.VIA_RUN_ENV] = "1"
+        self.assertEqual(api.startup_checks(), [])
+
+    def test_run_py_marks_launch(self):
+        import uvicorn
+        called = {}
+        old = uvicorn.run
+        uvicorn.run = lambda *a, **k: called.update(k)
+        try:
+            os.environ.pop(api.VIA_RUN_ENV, None)
+            os.environ.pop("EDITORTRACK_BIND", None)
+            self.assertEqual(run.main([]), 0)
+        finally:
+            uvicorn.run = old
+        self.assertEqual(os.environ.get(api.VIA_RUN_ENV), "1")
+        self.assertEqual(called["host"], "127.0.0.1")
 
 
 class Bind(unittest.TestCase):

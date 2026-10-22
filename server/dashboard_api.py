@@ -88,10 +88,34 @@ async def _read_auth(request: Request, call_next):
     path = request.url.path
     if path == "/ingest" or path in OPEN_PATHS:
         return await call_next(request)
-    if not auth.check_read(request.headers.get("authorization")):
+    if not auth.check_read(request.headers.get("authorization"), request.scope.get("server")):
         return JSONResponse({"detail": "ต้อง login (ดู server/README.md §auth)"}, status_code=401,
                             headers={"WWW-Authenticate": 'Basic realm="editortrack", charset="UTF-8"'})
     return await call_next(request)
+
+
+# ---------------- guard ตอน start — ใช้ได้ทั้ง `python run.py` และ `uvicorn dashboard_api:app` ตรง ----------------
+VIA_RUN_ENV = "EDITORTRACK_VIA_RUN"      # run.py ตั้งให้ — ไม่มี = มีคนรัน uvicorn ตรง (unit เก่า)
+
+
+def startup_checks():
+    """log เตือนดัง ๆ ถ้า config ไม่ปลอดภัย/ไม่ครบ → รายการข้อความ (ไว้เทส) · ไม่หยุด server (/ingest ยังรับได้)
+    read auth ยังบังคับใน middleware ทุก request อยู่แล้ว — ตรงนี้แค่บอกให้รู้ตัว"""
+    msgs = []
+    p = auth.read_auth_problem()
+    if p:
+        msgs.append(p)
+    if os.environ.get(VIA_RUN_ENV) != "1":
+        msgs.append("start ด้วย uvicorn ตรง (ไม่ผ่าน run.py) — bind/proxy ตามที่สั่ง uvicorn เอง: "
+                    "แก้ ExecStart ของ editortrack-server.service เป็น `python run.py` (ดู docs/ROLLOUT.md)")
+    for m in msgs:
+        log.error("!!! editortrack: %s", m)
+    return msgs
+
+
+@app.on_event("startup")
+def _startup_checks():
+    startup_checks()
 
 
 @app.get("/healthz")
