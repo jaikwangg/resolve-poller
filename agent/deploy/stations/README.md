@@ -2,6 +2,8 @@
 
 ก็อปไฟล์ของเครื่องนั้นเป็น `deploy/env.sh` แล้วแก้ 2 ค่า (`SERVER_IP`, `TOKEN`) → `sh deploy/install.sh`
 
+> `TOKEN` = token **ของเครื่องนั้น** (ผูกกับ hostname) — ผู้ดูแล server ออกด้วย `python manage_tokens.py issue grade-03` · ใช้ token ของเครื่องอื่นจะถูกปฏิเสธ 401 · ไม่มีค่า default
+
 | hostname | ไฟล์ | stage | DETECT_GRADE | OS | room (ERP) |
 |---|---|---|---|---|---|
 | grade-01..06 | `grade-0N.sh` | color | 1 | Linux | GRADE1..6 |
@@ -14,7 +16,7 @@
 # ตัวอย่าง grade-03
 sudo hostnamectl set-hostname grade-03          # Mac: sudo scutil --set HostName conform-01
 cp deploy/stations/grade-03.sh deploy/env.sh
-nano deploy/env.sh                               # แก้ SERVER_IP + TOKEN
+nano deploy/env.sh                               # แก้ SERVER_IP + TOKEN (ของ grade-03)
 sh deploy/install.sh                             # หลายกะ: sh deploy/install.sh --system
 ```
 

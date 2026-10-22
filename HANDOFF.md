@@ -161,7 +161,7 @@ python3 -m venv venv && ./venv/bin/pip install fastapi uvicorn httpx \
 python3 probe.py               # → เซฟ ~/.editortrack/probe_report.json + พ่นค่า config
 
 # 2) server (ingest + dashboard)
-EDITORTRACK_TOKEN=xxx ./venv/bin/uvicorn dashboard_api:app --host 0.0.0.0 --port 8000
+./venv/bin/python manage_tokens.py issue $(hostname) && ./venv/bin/python manage_tokens.py read-user me && ./venv/bin/python run.py
 # เปิด http://localhost:8000/  → dashboard ดึง /api/dashboard เอง (ไม่มีข้อมูล = fallback sample)
 
 # 3) ยิง record เทส 1 ครั้ง (ต้องมี Resolve เปิด)

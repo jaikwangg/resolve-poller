@@ -9,7 +9,13 @@ pip install -r requirements.txt
 
 ## env
 ```
-EDITORTRACK_TOKEN=<token>          # ต้องตรงกับ agent
+EDITORTRACK_HOME=/srv/editortrack  # ไฟล์ token/user (agent_tokens.json, read_users.json) — สิทธิ์ 700/600
+EDITORTRACK_TOKENS_FILE=…          # (ไม่บังคับ) ทับ path ไฟล์ token ต่อเครื่อง
+EDITORTRACK_READ_USERS_FILE=…      # (ไม่บังคับ) ทับ path ไฟล์ user ที่อ่าน dashboard
+EDITORTRACK_READ_AUTH=basic        # basic (default) · none = ปิด login — ใช้ได้เฉพาะหลัง proxy ที่ทำ auth และ bind 127.0.0.1
+EDITORTRACK_MAX_BODY=1048576       # byte ต่อ record ที่ /ingest — เกิน = 413
+EDITORTRACK_BIND=127.0.0.1  EDITORTRACK_PORT=8000   # run.py · LAN ตรง = --lan
+EDITORTRACK_ALLOW_SHARED_TOKEN=0   # 1 = ยอมรับ token รวมเดิม (EDITORTRACK_TOKEN) ชั่วคราวช่วงย้าย เฉพาะ host ที่ยังไม่มี token ของตัวเอง
 EDITORTRACK_STORE=data             # dir เก็บ JSONL (default: ./data)
 EDITORTRACK_INTERVAL_MIN=1         # 1 sample ≈ กี่นาที (ให้ตรง poll; default 1)
 # ERP (creds — อย่า commit; ดู erp.py docstring / ../DATAFLOW.md §Config)
@@ -34,15 +40,45 @@ ERP_ROOM_MAP={"conform-01":"RM-…"}                    # host → resource_code
 
 ## run
 ```
-EDITORTRACK_TOKEN=xxx uvicorn dashboard_api:app --host 0.0.0.0 --port 8000
+python manage_tokens.py issue grade-03         # token ต่อเครื่อง (แสดงครั้งเดียว) → ใส่ env.sh ของเครื่องนั้น
+python manage_tokens.py read-user director     # user/รหัสผ่านสำหรับเปิด dashboard
+python run.py                                  # bind 127.0.0.1:8000 (default) — ให้ reverse proxy รับจาก LAN
+python run.py --lan                            # bind 0.0.0.0 ตรง (HTTP ไม่เข้ารหัส — ใช้เมื่อยังไม่มี proxy)
 ```
-เปิด `http://<server>:8000/` → dashboard
+เปิด `https://<server>/` (ผ่าน proxy) หรือ `http://<server>:8000/` (`--lan`) → browser ถาม user/รหัสผ่าน
+
+## ความปลอดภัย (auth · TLS)
+- **`POST /ingest`** — `Authorization: Bearer <token ของเครื่อง>` · server เก็บแค่ SHA-256 ต่อ host (`agent_tokens.json`)
+  token ผูกกับ `host` ใน record: ส่งแทนเครื่องอื่นไม่ได้ · host ที่ไม่มี token = 401 · `kpp-et-test` (เคยอยู่ใน repo) ถูกปฏิเสธเสมอ
+  ออก/ถอนมีผลทันทีไม่ต้อง restart · body เกิน `EDITORTRACK_MAX_BODY` = 413 · ไม่ใช่ JSON = 400
+- **ทุกหน้า + `/api/*`** — HTTP Basic (PBKDF2-SHA256 ใน `read_users.json`) · ยังไม่มี user = เปิดไม่ได้เลย · `/healthz` เปิด (ไม่มีข้อมูล)
+  สคริปต์: `curl -u director https://<server>/api/jobs`
+- **TLS** — server ไม่ทำ TLS เอง: bind 127.0.0.1 แล้วให้ reverse proxy ทำ (Basic auth/token ส่งเป็นข้อความเปล่าถ้าไม่มี TLS) ตัวอย่าง Caddy (`/etc/caddy/Caddyfile`):
+  ```
+  editortrack.lan {
+      tls internal                    # CA ภายในของ Caddy — แจก root cert (caddy trust) ให้ workstation/browser
+      reverse_proxy 127.0.0.1:8000
+  }
+  ```
+  agent ชี้ `EDITORTRACK_SERVER=https://editortrack.lan/ingest` (ถ้าใช้ CA ภายใน ต้องให้ python ของ agent เชื่อ root cert —
+  macOS: เพิ่มใน System keychain + `SSL_CERT_FILE` · Linux: `/usr/local/share/ca-certificates` + `update-ca-certificates`)
+  proxy อยู่เครื่องอื่น: ตั้ง `EDITORTRACK_BIND=<IP ภายใน>` + `EDITORTRACK_TRUSTED_PROXIES=<IP proxy>` + firewall ให้เข้าได้เฉพาะ proxy
+  เลือกได้ว่าจะให้ proxy ทำ Basic auth แทน (`basic_auth` ของ Caddy) แล้วตั้ง `EDITORTRACK_READ_AUTH=none` — ต้อง bind 127.0.0.1 (run.py ไม่ยอม start ถ้าไม่ใช่)
+
+### เจ้าของระบบต้องทำ (เปลี่ยน token — ครั้งเดียวตอนอัปเดตเป็นเวอร์ชันนี้)
+1. ถือว่า `kpp-et-test` หลุดแล้ว: เวอร์ชันนี้ปฏิเสธเสมอ — record ที่เคยรับด้วย token นั้นเชื่อไม่ได้ 100% (ใครใน LAN ก็ส่งได้)
+2. บน server: `python manage_tokens.py issue <hostname>` ทีละเครื่อง (ชื่อต้องตรง `socket.gethostname()` ของเครื่อง เช่น `conform-01`) — ส่ง token ทางช่องทางที่ไม่ใช่แชต
+3. แต่ละเครื่อง: แก้ `EDITORTRACK_TOKEN` ใน `agent/deploy/env.sh` (หรือ `sh deploy/make-env.sh` ใหม่) — ไม่ต้อง reinstall scheduler (run-agent.sh อ่าน env.sh ทุกรอบ)
+4. ตั้ง user อ่าน: `python manage_tokens.py read-user <ชื่อ>` · แจ้ง user/รหัสกับคนที่มีสิทธิ์ดูเท่านั้น
+5. เปลี่ยนคำสั่งรัน server เป็น `python run.py` (bind 127.0.0.1) + ตั้ง Caddy/TLS ตามด้านบน หรือ `python run.py --lan` ชั่วคราว
+6. ช่วงย้าย (ถ้าลงไม่ครบทุกเครื่องในวันเดียว): `EDITORTRACK_ALLOW_SHARED_TOKEN=1` + `EDITORTRACK_TOKEN=<token รวมใหม่ ไม่ใช่ kpp-et-test>` — ปิดทันทีที่ทุกเครื่องมี token ของตัวเอง
+7. รอบต่อไป: token เครื่องหลุด/เครื่องเลิกใช้ → `python manage_tokens.py revoke <host>` (หรือ `issue <host> --force` ออกใหม่) · ดู log server `ingest rejected: host=… reason=…`
 
 ## endpoints
 `POST /ingest` · `GET /api/report` + `/report` (รายวัน) · `GET /api/projects?days=` + `/projects` (ตัวเลขนับรายโปรเจค: คลิป เกรด shot) · `GET /api/pms` (สถานะส่ง PMS) · `GET /api/dashboard` · `GET /api/jobs` (2-track) · `GET /api/shots` (reconcile) · `GET /` (dashboard.html)
 
 ## เทส
-`cd server && ~/.editortrack-venv/bin/python -m unittest tests.test_replay -v` — replay ข้อมูลเทสจริง 7–14 ต.ค. (ลบชื่อ/IP แล้ว)
+`cd server && ~/.editortrack-venv/bin/python -m unittest discover -s tests -t . -v` — offline ทั้งหมด (HOME ปลอม + temp dir ใน `tests/_env.py` · ไม่อ่าน `~/.editortrack` ไม่ยิง ERP) · `test_replay` = replay ข้อมูลเทสจริง 7–14 ต.ค. (ลบชื่อ/IP แล้ว)
 
 ## ไฟล์
-`dashboard_api.py` ingest+query+serve · `erp.py` ERP connector · `dashboard.html` UI
+`dashboard_api.py` ingest+query+serve · `auth.py` token ต่อเครื่อง + Basic auth · `manage_tokens.py` ออก/ถอน token/user · `run.py` รัน (bind 127.0.0.1) · `erp.py` ERP connector · `dashboard.html` UI

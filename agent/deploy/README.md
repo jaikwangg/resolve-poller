@@ -20,10 +20,11 @@
 cd agent
 # a) ตัวช่วย: ถามค่า + auto-detect OS (path Resolve ให้เอง) — ง่ายสุด
 sh deploy/make-env.sh
-#    ไม่อยากถาม:  STAGE=color SERVER=http://IP:8000/ingest TOKEN=xxx sh deploy/make-env.sh
+#    ไม่อยากถาม:  STAGE=color SERVER=http://IP:8000/ingest TOKEN=<token ของเครื่องนี้> sh deploy/make-env.sh
+#    token ต่อเครื่อง: ผู้ดูแล server ออกให้ด้วย  python manage_tokens.py issue <hostname>  (ไม่มี default · token เครื่องอื่นใช้ไม่ได้)
 # b) หรือก็อป template ของเครื่องนั้นแล้วแก้เอง
 cp deploy/stations/<STATION>.sh deploy/env.sh    # grade-01..06 (color) หรือ conform-01
-nano deploy/env.sh                               # แก้ SERVER_IP + TOKEN
+nano deploy/env.sh                               # แก้ SERVER_IP + TOKEN (token ของ hostname เครื่องนี้)
 ```
 จากนั้นติดตั้ง:
 ```sh
@@ -32,7 +33,7 @@ sh deploy/install.sh                             # ทดสอบ 1 รอบ �
 ```
 
 ### ทดสอบเร็วบนเครื่องเดียว (ยังไม่มี server จริง)
-สร้าง env.sh ชี้ localhost + token ทดสอบ แล้วรัน server local ควบคู่ (ชั้น 5)
+สร้าง env.sh ชี้ localhost + token ทดสอบ แล้วรัน server local ควบคู่ (ชั้น 5) · `testtoken` ใช้ได้เฉพาะ server ทดสอบที่ตั้ง `EDITORTRACK_ALLOW_SHARED_TOKEN=1` — server จริงต้องใช้ token ต่อเครื่อง
 
 **macOS** — วางทั้งบล็อกใน `agent/`:
 ```sh
@@ -62,7 +63,7 @@ EOF
 ```
 จากนั้น Terminal นึงเปิด server:
 ```sh
-cd ../server && pip3 install fastapi uvicorn && EDITORTRACK_TOKEN=testtoken uvicorn dashboard_api:app --port 8000
+cd ../server && pip3 install -r requirements.txt && EDITORTRACK_HOME=/tmp/et-local EDITORTRACK_STORE=/tmp/et-local/data EDITORTRACK_READ_AUTH=none EDITORTRACK_ALLOW_SHARED_TOKEN=1 EDITORTRACK_TOKEN=testtoken python3 run.py   # เทส local เท่านั้น (127.0.0.1, ไม่ต้อง login)
 ```
 อีก Terminal ยิง 1 รอบ (ต้อง `. deploy/env.sh` ก่อนเสมอ):
 ```sh
@@ -178,7 +179,7 @@ tail -f ~/.editortrack/agent.log
 **ชั้น 5 — end-to-end** (รัน server ทดสอบบนเครื่องเดียวกันก่อน):
 ```sh
 # Terminal A — server
-cd ../server && pip3 install fastapi uvicorn && EDITORTRACK_TOKEN=testtoken uvicorn dashboard_api:app --port 8000
+cd ../server && pip3 install -r requirements.txt && EDITORTRACK_HOME=/tmp/et-local EDITORTRACK_STORE=/tmp/et-local/data EDITORTRACK_READ_AUTH=none EDITORTRACK_ALLOW_SHARED_TOKEN=1 EDITORTRACK_TOKEN=testtoken python3 run.py   # เทส local เท่านั้น (127.0.0.1, ไม่ต้อง login)
 # Terminal B — ยิง 1 รอบไป localhost แล้วเปิด dashboard
 cd agent && . deploy/env.sh && EDITORTRACK_SERVER=http://localhost:8000/ingest EDITORTRACK_TOKEN=testtoken python3 runner.py   # ได้ 200
 ```

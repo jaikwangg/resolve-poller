@@ -69,11 +69,11 @@ EDITORTRACK_SERVER=http://<server>:8000/ingest EDITORTRACK_TOKEN=xxx python runn
 
 ## Stage 2 — Ingest (server)
 
-**`dashboard_api.py` → `POST /ingest`**: verify Bearer token → append `data/YYYY-MM-DD.jsonl`
+**`dashboard_api.py` → `POST /ingest`**: body ≤ 1 MB + ต้องเป็น JSON → token ต้องเป็นของ `host` ใน record (hash ใน `agent_tokens.json`) → append `data/YYYY-MM-DD.jsonl`
 
 ```bash
 cd server && pip install -r requirements.txt     # โค้ด server อยู่ในโฟลเดอร์ server/
-EDITORTRACK_TOKEN=xxx uvicorn dashboard_api:app --host 0.0.0.0 --port 8000
+python manage_tokens.py issue <host> && python manage_tokens.py read-user <ชื่อ> && python run.py   # bind 127.0.0.1 · LAN: proxy TLS หรือ --lan (server/README.md §ความปลอดภัย)
 ```
 
 ---
@@ -148,12 +148,15 @@ EDITORTRACK_RESTORE_PAGE=1                  # กันเหนียว คื
 EDITORTRACK_IDLE=90                         # วิ, เกิน=idle
 # ปลายทาง
 EDITORTRACK_SERVER=http://<server>:8000/ingest
-EDITORTRACK_TOKEN=<token>
+EDITORTRACK_TOKEN=<token ของเครื่องนี้>    # ผูกกับ hostname — ไม่มี default
 ```
 
 **Server:**
 ```
-EDITORTRACK_TOKEN=<token>        # ต้องตรงกับ agent
+EDITORTRACK_TOKENS_FILE=/srv/editortrack/agent_tokens.json   # token ต่อเครื่อง (hash) — python manage_tokens.py issue <host>
+EDITORTRACK_READ_USERS_FILE=/srv/editortrack/read_users.json # user อ่าน dashboard — python manage_tokens.py read-user <ชื่อ>
+EDITORTRACK_READ_AUTH=basic      # ทุกหน้า + /api/* ต้อง login · none = ให้ proxy ทำ (bind 127.0.0.1 เท่านั้น)
+EDITORTRACK_BIND=127.0.0.1       # run.py · LAN ผ่าน reverse proxy TLS หรือ --lan
 EDITORTRACK_STORE=data           # dir เก็บ JSONL
 EDITORTRACK_INTERVAL_MIN=10      # 1 sample ≈ กี่นาที (ให้ตรง poll)
 # ERP (creds — อย่า commit)
@@ -200,7 +203,7 @@ schtasks /create /tn editortrack /tr "python C:\path\resolve-poller\agent\runner
 
 ## ลำดับ deploy จริง (checklist)
 1. รัน `probe.py` ต่อรุ่น Resolve → ยืนยัน DETECT_GRADE/keys
-2. server: ตั้ง env (TOKEN + ERP creds + ROOM_MAP) → `uvicorn dashboard_api:app`
+2. server: `manage_tokens.py issue <host>` ทุกเครื่อง + `read-user` + ERP creds + ROOM_MAP → `python run.py` (+ Caddy TLS — server/README.md §ความปลอดภัย)
 3. ทดสอบ ERP: curl login + schedule
 4. แต่ละ workstation: ตั้ง env (ROLE, DETECT_GRADE, SERVER, TOKEN, RESOLVE_*) → เทส `python runner.py` 1 ครั้ง
 5. ตั้ง scheduler (LaunchAgent/Task/cron) ทุก 10 นาที

@@ -14,7 +14,7 @@ export EDITORTRACK_DETECT_GRADE=0          # ห้อง edit/conform ไม่
 
 # ---- server (เหมือนกันทุกเครื่อง) ----
 export EDITORTRACK_SERVER=http://SERVER_IP:8000/ingest
-export EDITORTRACK_TOKEN=CHANGE_ME
+export EDITORTRACK_TOKEN=CHANGE_ME           # token ของเครื่องนี้: บน server รัน  python manage_tokens.py issue <hostname>
 export EDITORTRACK_HTTP_TIMEOUT=5
 
 # ---- Resolve scripting (macOS) ----

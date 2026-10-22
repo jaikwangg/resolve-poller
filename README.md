@@ -29,7 +29,8 @@ resolve-poller/
 # workstation (มี Resolve Studio)
 cd agent   &&  python probe.py  &&  python runner.py
 # server
-cd server  &&  pip install -r requirements.txt  &&  EDITORTRACK_TOKEN=xxx uvicorn dashboard_api:app --host 0.0.0.0 --port 8000
+cd server  &&  pip install -r requirements.txt  &&  python manage_tokens.py issue <host>  &&  python manage_tokens.py read-user <ชื่อ>  &&  python run.py
+# run.py bind 127.0.0.1 — เปิดให้ LAN ผ่าน reverse proxy TLS (ดู server/README.md §ความปลอดภัย) หรือ python run.py --lan
 ```
 
 ## สถานะ

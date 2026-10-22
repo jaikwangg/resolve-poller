@@ -2,22 +2,19 @@
 """replay ข้อมูลเทสจริง 7–14 ต.ค. 2026 (conform-01, Mac, ลบชื่อ user/IP/ชื่อ project จริงแล้ว) ผ่าน server
 ล็อกผลที่ตรวจด้วยมือแล้ว — แก้ report/explain/pms_sync/ingest แล้วตัวเลขเปลี่ยน = เทสนี้ล้ม
 
-รัน:  cd server && ~/.editortrack-venv/bin/python -m unittest tests.test_replay -v
+รัน:  cd server && ~/.editortrack-venv/bin/python -m unittest discover -s tests -t . -v   (offline, HOME ปลอม — ดู tests/_env.py)
 fixture: tests/fixtures/replay/*.jsonl (ชื่อไฟล์ = วันที่ server รับ เหมือน data/)
 """
-import json, os, pathlib, sys, tempfile, time, unittest
+import json, pathlib, tempfile, unittest
 
-HERE = pathlib.Path(__file__).parent
-FIX = HERE / "fixtures" / "replay"
-os.environ["TZ"] = "Asia/Bangkok"                 # report ตัดวัน/แสดงเวลาตามเวลาเครื่อง server (ไทย)
-time.tzset()
-os.environ["EDITORTRACK_STORE"] = str(FIX)
-os.environ["EDITORTRACK_TOKEN"] = "t"
-for k in [k for k in os.environ if k.startswith("ERP_")]:
-    del os.environ[k]                             # ไม่ยิง PMS จริงระหว่างเทส
-sys.path.insert(0, str(HERE.parent))
+try:
+    from . import _env               # HOME ปลอม + ไม่มี ERP_* + TZ ไทย — ต้อง import ก่อนโมดูล server
+except ImportError:
+    import _env                      # noqa: F401
+FIX = _env.FIX
 
 import dashboard_api as api      # noqa: E402
+import auth                      # noqa: E402
 import explain as ex             # noqa: E402
 import pms_sync                  # noqa: E402
 import report as rp              # noqa: E402
@@ -185,10 +182,12 @@ class Ingest(unittest.TestCase):
         api.STORE = self._store
 
     def test_rejects_record_without_ts_or_host(self):
-        h = {"Authorization": "Bearer t"}
+        tok = auth.issue_token("selftest", force=True)
+        h = {"Authorization": f"Bearer {tok}"}
         self.assertEqual(self.c.post("/ingest", json={"schema": 3, "host": "selftest", "stage": "color"}, headers=h).status_code, 400)
         self.assertEqual(self.c.post("/ingest", json={"ts": "2026-10-14T10:00:00+00:00"}, headers=h).status_code, 400)
         ok = json.loads((FIX / "2026-10-14.jsonl").read_text(encoding="utf-8").splitlines()[-1])
+        h = {"Authorization": f"Bearer {auth.issue_token(ok['host'], force=True)}"}
         self.assertEqual(self.c.post("/ingest", json=ok, headers=h).status_code, 200)
         self.assertEqual(self.c.post("/ingest", json=ok, headers={}).status_code, 401)
 
