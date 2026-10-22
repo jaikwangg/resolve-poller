@@ -48,7 +48,10 @@ def _ordered():
     return ([last] if last in SERVERS else []) + [u for u in SERVERS if u != last]
 
 
-RETRY_STATUS = {408, 425, 429}                  # 4xx ที่ลองใหม่ได้ · 4xx อื่น = server ไม่มีวันรับ (token ผิด, record เสีย) → ทิ้ง+log
+# 4xx ที่ลองใหม่ได้ (เข้า queue) · 4xx อื่น = server ไม่มีวันรับ (record เสีย 400, ใหญ่เกิน 413, 422) → ทิ้ง+log
+# 401/403 = token ไม่ตรง — ช่วง rollout (ออก token ใหม่ที่ server ก่อน/หลังแก้ env.sh ของเครื่อง) ต้องไม่ทำข้อมูลหาย
+# → เก็บใน queue รอ token ถูก (queue มีเพดานจำนวน/อายุ/ขนาด ด้านล่าง จึงไม่โตไม่จำกัดถ้า token ผิดถาวร)
+RETRY_STATUS = {401, 403, 408, 425, 429}
 QUEUE_MAX_LINES = int(os.environ.get("EDITORTRACK_QUEUE_MAX", "10080"))        # ~7 วันที่ 1 record/นาที
 QUEUE_MAX_AGE_H = float(os.environ.get("EDITORTRACK_QUEUE_MAX_AGE_H", "168"))  # record เก่ากว่านี้ทิ้ง (server/PMS ไม่ใช้แล้ว)
 QUEUE_MAX_BYTES = int(os.environ.get("EDITORTRACK_QUEUE_MAX_MB", "16")) * 1024 * 1024
@@ -145,25 +148,39 @@ def _enqueue(lines):
         _write_queue(_trim(_read_queue()))
 
 
+def _note_auth(status):
+    if status in (401, 403):
+        _log(f"server ตอบ {status} — token ไม่ตรง (เช็ค EDITORTRACK_TOKEN กับ manage_tokens.py) · เก็บไว้ใน queue")
+
+
 def post(rec):
+    """ส่ง backlog (queue) ก่อน แล้วค่อยส่ง record ใหม่ — server รับตามลำดับเวลา
+    เดิมส่งตัวใหม่ก่อน: pms_sync.settled() เห็น record ใหม่ของเครื่องแล้วปิดช่วงเวลาก่อนหน้า (ส่ง PMS)
+    ก่อนที่ record ค้างของช่วงนั้นจะมาถึง · backlog ยังค้าง (server ล่ม/token ผิด) → ตัวใหม่ต่อท้าย queue ไม่ส่งแซง"""
+    line = json.dumps(rec, ensure_ascii=False)
+    drained, status = _flush_queue()
+    if not drained:
+        _enqueue([line])
+        _note_auth(status)
+        return status
     kind, status = _send(rec)
     if kind == "retry":
-        _enqueue([json.dumps(rec, ensure_ascii=False)])
+        _enqueue([line])
+        _note_auth(status)
     elif kind == "final":
-        _log(f"server ตอบ {status} — ทิ้ง record ts={rec.get('ts')} (ไม่เข้า queue: เช็ค token/เวอร์ชัน agent)")
-    else:
-        _flush_queue()
+        _log(f"server ตอบ {status} — ทิ้ง record ts={rec.get('ts')} (ไม่เข้า queue: record ไม่ผ่านการตรวจของ server — เช็คเวอร์ชัน agent)")
     return status
 
 
 def _flush_queue():
-    """ส่ง queue ทีละบรรทัด · ลบออกจากไฟล์เฉพาะตัวที่ส่งสำเร็จหรือ server ปฏิเสธถาวร (4xx) — เขียนไฟล์ใหม่หลังจบรอบ
+    """ส่ง queue ทีละบรรทัดตามลำดับ → (ว่างแล้วหรือยัง, status ล่าสุดที่ทำให้หยุด)
+    ลบออกจากไฟล์เฉพาะตัวที่ส่งสำเร็จหรือ server ปฏิเสธถาวร (4xx ที่ไม่อยู่ใน RETRY_STATUS) — เขียนไฟล์ใหม่หลังจบรอบ
     crash กลางทาง = ไฟล์เดิมยังอยู่ครบ (ส่งซ้ำได้: server เก็บ 1 record ต่อเครื่องต่อนาที)"""
     lines = _trim(_read_queue())
     if not lines:
         _write_queue([])
-        return
-    rest = []
+        return True, None
+    rest, stop = [], None
     for i, ln in enumerate(lines):
         try:
             rec = json.loads(ln)
@@ -175,9 +192,10 @@ def _flush_queue():
             _log(f"queue: server ตอบ {status} — ทิ้ง record ts={rec.get('ts')}")
             continue
         if kind == "retry":                          # หลุดกลางทาง → เก็บที่เหลือไว้ รอบหน้าส่งต่อ
-            rest = lines[i:]
+            rest, stop = lines[i:], status
             break
     _write_queue(rest)
+    return not rest, stop
 
 
 def run_lock():

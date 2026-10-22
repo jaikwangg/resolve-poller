@@ -81,16 +81,43 @@ class Queue(unittest.TestCase):
         self.assertEqual(self.queued(), [0, 1, 2])
         runner.SERVERS = [self.url]
         self.assertEqual(runner.post(rec(3)), 200)
-        self.assertEqual([g["n"] for g in FakeServer.got], [3, 0, 1, 2])
+        self.assertEqual([g["n"] for g in FakeServer.got], [0, 1, 2, 3])   # backlog ก่อน ตัวใหม่ทีหลัง (ตามเวลา)
         self.assertFalse(runner.QUEUE.exists())
 
-    def test_4xx_is_final_not_queued(self):
-        FakeServer.codes = [401]
-        self.assertEqual(runner.post(rec(0)), 401)
-        self.assertEqual(self.queued(), [])                     # เดิม: token ผิด → queue โต ~1,440 บรรทัด/วัน
+    def test_permanent_4xx_is_final_not_queued(self):
+        for code in (400, 413, 422):
+            FakeServer.codes = [code]
+            self.assertEqual(runner.post(rec(0)), code)
+            self.assertEqual(self.queued(), [], code)
         FakeServer.codes = [429]                                # 429/408 = ลองใหม่
         runner.post(rec(1))
         self.assertEqual(self.queued(), [1])
+
+    def test_401_403_are_queued_not_lost(self):
+        """ช่วง rollout token: server ออก token ใหม่แล้วแต่ env.sh ยังเป็นตัวเก่า (หรือกลับกัน) → ต้องไม่ทิ้งข้อมูล"""
+        FakeServer.codes = [401]
+        self.assertEqual(runner.post(rec(0)), 401)
+        FakeServer.codes = [403]
+        self.assertEqual(runner.post(rec(1)), 403)
+        self.assertEqual(self.queued(), [0, 1])
+        FakeServer.codes = [401]                                # ยังผิด: backlog ติดที่ตัวแรก ตัวใหม่ต่อท้าย ไม่ส่งแซง
+        runner.post(rec(2))
+        self.assertEqual(self.queued(), [0, 1, 2])
+        FakeServer.got = []
+        self.assertEqual(runner.post(rec(3)), 200)              # token แก้แล้ว → ส่งครบตามลำดับ
+        self.assertEqual([g["n"] for g in FakeServer.got], [0, 1, 2, 3])
+        self.assertFalse(runner.QUEUE.exists())
+
+    def test_401_backlog_stays_capped(self):
+        old = runner.QUEUE_MAX_LINES, runner.QUEUE_MAX_BYTES
+        runner.QUEUE_MAX_LINES, runner.QUEUE_MAX_BYTES = 3, 10
+        try:
+            for i in range(6):
+                FakeServer.codes = [401]
+                runner.post(rec(i))
+            self.assertEqual(self.queued(), [3, 4, 5])
+        finally:
+            runner.QUEUE_MAX_LINES, runner.QUEUE_MAX_BYTES = old
 
     def test_5xx_is_retried(self):
         FakeServer.codes = [503]
@@ -99,16 +126,17 @@ class Queue(unittest.TestCase):
 
     def test_rejected_line_does_not_block_flush(self):
         runner._write_queue([json.dumps(rec(i)) for i in range(3)] + ["not json"])
-        FakeServer.codes = [200, 400]                          # ตัวปัจจุบันผ่าน · queue ตัวแรก 400 → ทิ้ง ไม่ค้าง
+        FakeServer.codes = [400]                               # queue ตัวแรก 400 → ทิ้ง ไม่ค้าง · ที่เหลือ + ตัวใหม่ผ่าน
         runner.post(rec(9))
-        self.assertEqual([g["n"] for g in FakeServer.got], [9, 0, 1, 2])
+        self.assertEqual([g["n"] for g in FakeServer.got], [0, 1, 2, 9])
         self.assertFalse(runner.QUEUE.exists())
 
     def test_failure_mid_flush_keeps_unsent_lines(self):
         runner._write_queue([json.dumps(rec(i)) for i in range(4)])
-        FakeServer.codes = [200, 200, 503]                     # current ok, q0 ok, q1 ล้ม
+        FakeServer.codes = [200, 503]                          # q0 ok, q1 ล้ม → ตัวใหม่ไม่ส่งแซง ต่อท้าย queue
         runner.post(rec(9))
-        self.assertEqual(self.queued(), [1, 2, 3])
+        self.assertEqual(self.queued(), [1, 2, 3, 9])
+        self.assertEqual([g["n"] for g in FakeServer.got], [0, 1])
 
     def test_crash_mid_flush_loses_nothing(self):
         runner._write_queue([json.dumps(rec(i)) for i in range(3)])

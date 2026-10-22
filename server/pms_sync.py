@@ -13,7 +13,8 @@ record ที่ ingest มาทุกนาที → รวมต่อ host 
 → ห้ามเปลี่ยน PMS_WINDOW_MIN หลังเริ่มส่งจริง (ขอบ window เปลี่ยน = key ใหม่ = PMS นับซ้ำช่วงที่ทับกัน)
 ดังนั้นกัน record มาช้า (offline queue) ด้วยการ **ถือ window ไว้จนนิ่ง**:
   ส่งเมื่อ (ก) ปิดไปแล้ว ≥ SETTLE_SEC และ server ได้รับ record ของ host นั้นที่ ts ≥ ปลาย window มาแล้ว ≥ SETTLE_SEC
-  (agent ส่ง queue ทั้งหมดในรอบเดียวกับที่ส่งสำเร็จ → record ช้าของ window นั้นมาครบแล้ว) หรือ (ข) ปิดไปแล้ว ≥ MAX_HOLD_SEC (เครื่องปิด/หาย)
+  (agent ส่ง queue ตามลำดับก่อน record ใหม่เสมอ — runner.post → record ใหม่มาถึง = record ช้าของ window นั้นมาครบแล้ว)
+  หรือ (ข) ปิดไปแล้ว ≥ MAX_HOLD_SEC (เครื่องปิด/หาย)
 ถ้ายังมี record มาช้ากว่านั้นจน active_seconds เพิ่ม → ส่ง window เดิมซ้ำด้วย key เดิม (ถ้า PMS รองรับ upsert วันหน้าจะมีผลเอง)
   วันนี้ PMS ตอบ duplicate → นับไว้ใน status["corrections"]["ignored_seconds"] = เวลาที่ PMS ขาดจริง (gap ที่รู้แล้ว)
 ENV: PMS_WINDOW_MIN=10 · PMS_SYNC_EVERY_SEC=300 · PMS_LOOKBACK_HOURS=24 · PMS_SETTLE_SEC=120 · PMS_MAX_HOLD_SEC=21600

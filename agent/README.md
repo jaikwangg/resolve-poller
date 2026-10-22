@@ -17,8 +17,9 @@ EDITORTRACK_TOKEN=<token ของเครื่องนี้>   # ผูก�
 EDITORTRACK_EXTRACT_SHOTS=0       # default ปิด: ไม่ส่ง shot code (ข้อมูลลูกค้า) · =1 เมื่อตกลงกับเจ้าของงานแล้ว
 EDITORTRACK_RESOLVE_PROCS=resolve,resolve.exe   # executable ที่นับว่าเป็น Resolve (Linux/Windows, ตรงตัว)
 EDITORTRACK_RESOLVE_BUNDLES=com.blackmagic-design.DaVinciResolve,com.blackmagic-design.DaVinciResolveLite   # macOS
-# offline queue (~/.editortrack/queue.jsonl): ส่งไม่ได้/5xx/408/429 → เก็บไว้ส่งรอบหน้า · 4xx อื่น (token ผิด, record เสีย) → ทิ้ง + log (ไม่ค้าง queue)
-EDITORTRACK_QUEUE_MAX=10080       # บรรทัดสูงสุด (~7 วัน) · EDITORTRACK_QUEUE_MAX_AGE_H=168 · EDITORTRACK_QUEUE_MAX_MB=16 — เกิน = ทิ้งตัวเก่าสุด
+# offline queue (~/.editortrack/queue.jsonl): ส่งไม่ได้/5xx/401/403/408/429 → เก็บไว้ส่งรอบหน้า (401/403 = token ไม่ตรงช่วง rollout — ไม่ทิ้งข้อมูล)
+#   4xx อื่น (record เสีย 400, 413, 422) → ทิ้ง + log · ทุกรอบส่ง queue ตามลำดับก่อน แล้วค่อยส่ง record ใหม่ (ค้าง = ตัวใหม่ต่อท้าย ไม่ส่งแซง)
+EDITORTRACK_QUEUE_MAX=10080       # บรรทัดสูงสุด (~7 วัน) · EDITORTRACK_QUEUE_MAX_AGE_H=168 · EDITORTRACK_QUEUE_MAX_MB=16 — เกิน = ทิ้งตัวเก่าสุด (token ผิดถาวรจึงไม่ทำดิสก์เต็ม)
                                   # เขียนใหม่แบบ atomic (tmp+rename) และลบเฉพาะตัวที่ส่งสำเร็จแล้ว
 # Resolve scripting (per OS — ดู ../DATAFLOW.md §Config)
 RESOLVE_SCRIPT_API / RESOLVE_SCRIPT_LIB / PYTHONPATH
