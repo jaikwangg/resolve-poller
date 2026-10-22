@@ -6,12 +6,19 @@ set -e
 DIR="$(cd "$(dirname "$0")" && pwd)"
 OUT="$DIR/env.sh"
 
-ask() {  # ask VAR "prompt" "default" — ข้ามถ้าตั้งผ่าน env มาแล้ว
+ask() {  # ask VAR "prompt" "default" [secret] — ข้ามถ้าตั้งผ่าน env มาแล้ว · secret = ไม่แสดงค่า (token)
   cur=$(eval printf '%s' "\${$1:-}")
-  if [ -n "$cur" ]; then echo "  $1 = $cur  (จาก env)"; return; fi
+  if [ -n "$cur" ]; then
+    if [ -n "${4:-}" ]; then echo "  $1 = ***(${#cur} ตัว)  (จาก env)"; else echo "  $1 = $cur  (จาก env)"; fi
+    return
+  fi
   printf "  %s [%s]: " "$2" "$3"
   ans=""
+  if [ -n "${4:-}" ]; then          # พิมพ์ token ไม่ขึ้นจอ (ไม่มี stty/tty = อ่านตามปกติ)
+    { stty -echo </dev/tty; } 2>/dev/null && _noecho=1 || _noecho=""
+  fi
   { read ans </dev/tty; } 2>/dev/null || { ans=""; echo "(ไม่มี tty → default)"; }
+  if [ -n "${_noecho:-}" ]; then { stty echo </dev/tty; } 2>/dev/null; echo; _noecho=""; fi
   eval "$1=\${ans:-$3}"
 }
 
@@ -21,7 +28,7 @@ ask STAGE "stage (color/conform/subtitle/master/data)" "color"
 ask DETECT_GRADE "detect grade (1=color, 0=อื่น)" "$DG"
 ask SERVER "server ingest URL" "http://192.168.140.126:8000/ingest"
 # token ต่อเครื่อง — ไม่มี default · ผู้ดูแล server ออกให้:  python manage_tokens.py issue <hostname ของเครื่องนี้>
-ask TOKEN "token ของเครื่องนี้ (จาก manage_tokens.py issue $(hostname))" ""
+ask TOKEN "token ของเครื่องนี้ (จาก manage_tokens.py issue $(hostname))" "" secret
 if [ -z "$TOKEN" ]; then
   echo "✗ ต้องมี TOKEN ของเครื่องนี้ — ขอจากผู้ดูแล server (manage_tokens.py issue $(hostname)) แล้วรันใหม่"; exit 1
 fi

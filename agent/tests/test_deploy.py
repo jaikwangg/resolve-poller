@@ -45,6 +45,14 @@ class MakeEnv(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(self.mode(), "0o600")
 
+    def test_token_from_env_is_masked_in_output(self):
+        r = self.run_it(token="et_secret_value_123")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("et_secret_value_123", r.stdout + r.stderr)
+        self.assertIn("TOKEN = ***(19 ตัว)", r.stdout)
+        self.assertIn("SERVER = http://127.0.0.1:9/ingest", r.stdout)       # ค่าอื่นยังแสดงตามเดิม
+        self.assertIn("EDITORTRACK_TOKEN=et_secret_value_123", self.out.read_text())
+
     def test_leaked_token_refused_and_file_untouched(self):
         r = self.run_it(token="kpp-et-test")
         self.assertNotEqual(r.returncode, 0)
