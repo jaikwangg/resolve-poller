@@ -39,7 +39,8 @@ case "$(uname)" in
     LIB="/opt/resolve/libs/Fusion/fusionscript.so" ;;
 esac
 
-umask 077                       # env.sh มี token → อ่านได้เฉพาะเจ้าของ
+umask 077                       # env.sh มี token → อ่านได้เฉพาะเจ้าของ (umask มีผลเฉพาะไฟล์ที่สร้างใหม่)
+touch "$OUT" && chmod 600 "$OUT"   # มีอยู่แล้ว (เช่น 644 จาก cp stations/*.sh) → ลดสิทธิ์ก่อนเขียน token ลงไป
 cat > "$OUT" <<EOF
 # สร้างโดย make-env.sh ($(date '+%Y-%m-%d %H:%M')) · OS: $(uname) · ⚠️ มี token อย่า commit
 export EDITORTRACK_STAGE=$STAGE
@@ -52,5 +53,6 @@ export RESOLVE_SCRIPT_LIB="$LIB"
 export PYTHONPATH="\$PYTHONPATH:\$RESOLVE_SCRIPT_API/Modules/"
 EOF
 
-echo "✓ เขียน $OUT"
+chmod 600 "$OUT"
+echo "✓ เขียน $OUT (600)"
 echo "  ต่อ:  . deploy/env.sh && python3 runner.py"
