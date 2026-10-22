@@ -64,6 +64,10 @@ python run.py --lan                            # bind 0.0.0.0 ตรง (HTTP �
 - **`POST /ingest`** — `Authorization: Bearer <token ของเครื่อง>` · server เก็บแค่ SHA-256 ต่อ host (`agent_tokens.json`)
   token ผูกกับ `host` ใน record: ส่งแทนเครื่องอื่นไม่ได้ · host ที่ไม่มี token = 401 · `kpp-et-test` (เคยอยู่ใน repo) ถูกปฏิเสธเสมอ
   ออก/ถอนมีผลทันทีไม่ต้อง restart · body เกิน `EDITORTRACK_MAX_BODY` = 413 · ไม่ใช่ JSON = 400
+  record ผิดรูป = 400 (`validate.py`): `host` ต้องเป็น hostname (server แปลงเป็นตัวเล็ก/ตัดช่องว่างก่อนเทียบ token) · `ts` ISO มี timezone ·
+  `stage` ∈ data/conform/color/subtitle/master · `job`/`source`/`progress`/`activity` เป็น object · `progress.pct` ตัวเลข 0–100 หรือ null
+  host ไม่มี token กับ token ผิด ตอบ 401 `unauthorized (bad_token)` เหมือนกัน (เหตุจริงอยู่ใน log server)
+  record ผิดรูปที่อยู่บนดิสก์อยู่แล้ว (รับไว้ก่อนมีการตรวจ) → หน้าอ่านข้ามแล้ว log `ข้าม record ผิดรูปใน <ไฟล์>` (ไม่ตอบ 500)
 - **ทุกหน้า + `/api/*`** — HTTP Basic (PBKDF2-SHA256 ใน `read_users.json`) · ยังไม่มี user = เปิดไม่ได้เลย · `/healthz` เปิด (ไม่มีข้อมูล)
   สคริปต์: `curl -u director https://<server>/api/jobs`
 - **TLS** — server ไม่ทำ TLS เอง: bind 127.0.0.1 แล้วให้ reverse proxy ทำ (Basic auth/token ส่งเป็นข้อความเปล่าถ้าไม่มี TLS) ตัวอย่าง Caddy (`/etc/caddy/Caddyfile`):

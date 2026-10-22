@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse, FileResponse
 
 import auth
 import store as _store
+import validate
 
 log = logging.getLogger("editortrack")
 app = FastAPI()
@@ -20,7 +21,7 @@ MAX_BODY = int(os.environ.get("EDITORTRACK_MAX_BODY", str(1024 * 1024)))   # byt
 # cadence ของ agent (นาที) — record 1 ตัวแทน min(ช่องว่างถึงตัวถัดไป, INTERVAL_MIN × 1.5) ไม่ใช่ค่าคงที่ (explain.assign_credit)
 INTERVAL_MIN = float(os.environ.get("EDITORTRACK_INTERVAL_MIN", "1"))
 HERE = pathlib.Path(__file__).parent
-STAGES = ["data", "conform", "color", "subtitle", "master"]
+STAGES = list(validate.STAGES)
 # NOTE: ระบบนี้ไม่จัด queue/dependency (subtitle รอ color ฯลฯ) — ERP จัดการเอง
 # หน้าที่ระบบ = วัด progress ต่อ stage แล้วส่งให้ ERP
 
@@ -122,19 +123,24 @@ async def ingest(req: Request, authorization: str = Header(default="")):
     except Exception:
         raise HTTPException(status_code=400, detail="body ต้องเป็น JSON")
     # record ที่ไม่มี host/ts ใช้นับอะไรไม่ได้ (เทส 8 ต.ค. มี {"host":"selftest"} หลุดเข้ามาปน) → ไม่เก็บ
-    host = rec.get("host") if isinstance(rec, dict) else None
-    if not isinstance(host, str) or not host:
-        raise HTTPException(status_code=400, detail="record ต้องมี host และ ts (ISO มี timezone)")
+    host = validate.norm_host(rec.get("host")) if isinstance(rec, dict) else None
+    if not isinstance(host, str) or not validate.HOST_RE.match(host):
+        raise HTTPException(status_code=400, detail="record ต้องมี host (hostname) และ ts (ISO มี timezone)")
+    rec["host"] = host                              # เก็บรูปเดียว (ตัวเล็ก ไม่มีช่องว่าง) — ตรงกับ token/room_map
     ok, why = auth.check_agent(host, authorization)
     if not ok:                                      # token ผูกกับ host: ส่งแทนเครื่องอื่นไม่ได้
         log.warning("ingest rejected: host=%r reason=%s", host, why)
-        raise HTTPException(status_code=401, detail=f"unauthorized ({why})")
+        # unknown_host กับ bad_token ตอบเหมือนกัน — ไม่บอกคนนอกว่า host ไหนมี token แล้ว (เหตุจริงอยู่ใน log)
+        raise HTTPException(status_code=401, detail=f"unauthorized ({auth.public_reason(why)})")
     if why == "shared":
         log.warning("ingest from %r ใช้ token รวม (EDITORTRACK_TOKEN) — ออก token ต่อเครื่องด้วย manage_tokens.py", host)
-    if _ex._dt(rec.get("ts")) is None:
-        raise HTTPException(status_code=400, detail="record ต้องมี host และ ts (ISO มี timezone)")
-    _store.minimise(rec)                            # ไม่เก็บ user / ชื่อแอป-หน้าต่าง แม้ agent เก่าจะส่งมา
     rec.pop("_job", None)                           # field ของ server — agent ใส่เองไม่ได้
+    rec.pop("_rx", None)
+    bad = validate.problem(rec, strict=True)        # ตรวจหลัง auth: คนไม่มี token ไม่ได้รู้รายละเอียด schema
+    if bad:
+        log.warning("ingest rejected: host=%r invalid record: %s", host, bad)
+        raise HTTPException(status_code=400, detail=f"record ไม่ถูกต้อง: {bad}")
+    _store.minimise(rec)                            # ไม่เก็บ user / ชื่อแอป-หน้าต่าง แม้ agent เก่าจะส่งมา
     eff = None
     if erp:                                         # จับคู่ booking ตอนรับ (ใช้ cache อย่างเดียว ไม่รอ ERP) แล้วเก็บไว้กับ record
         try:                                        # → แก้ booking ใน ERP ทีหลังไม่เปลี่ยนประวัติ
@@ -144,9 +150,9 @@ async def ingest(req: Request, authorization: str = Header(default="")):
                                "source": "erp", "matched_at": datetime.datetime.now(datetime.timezone.utc).isoformat()}
         except Exception as e:
             log.warning("booking match at ingest failed: %s", e)
-    if isinstance(rec, dict):                       # เวลา/IP ฝั่ง server — ใช้ดูว่ามาสดหรือมาจาก offline queue
-        rec["_rx"] = {"at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                      "ip": req.client.host if req.client else None}
+    # เวลา/IP ฝั่ง server — ใช้ดูว่ามาสดหรือมาจาก offline queue
+    rec["_rx"] = {"at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                  "ip": req.client.host if req.client else None}
     day = _ex.today().isoformat()                   # ชื่อไฟล์ = วันที่รับตามเวลาท้องถิ่น (EDITORTRACK_TZ)
     with open(STORE / f"{day}.jsonl", "a", encoding="utf-8") as f:
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
@@ -188,13 +194,41 @@ def _load_recent(days):
             continue
         if d < cutoff:
             continue
-        with open(fp, encoding="utf-8") as f:
+        skipped = collections.Counter()
+        with open(fp, encoding="utf-8", errors="replace") as f:
             for ln in f:
+                if not ln.strip():
+                    continue
                 try:
-                    recs.append(_store.minimise(json.loads(ln)))   # ไฟล์เก่าที่ยังมี user/ชื่อแอป → ไม่ส่งออกทาง API
-                except Exception:
-                    pass
+                    rec = json.loads(ln)
+                except ValueError:
+                    skipped["บรรทัดไม่ใช่ JSON"] += 1
+                    continue
+                # record ผิดรูปที่เก็บไว้ก่อนมีการตรวจตอน ingest → ข้าม (ไม่ให้ทุกหน้าตอบ 500)
+                bad = validate.problem(rec, strict=False)
+                if bad:
+                    skipped[bad] += 1
+                    continue
+                recs.append(_store.minimise(rec))   # ไฟล์เก่าที่ยังมี user/ชื่อแอป → ไม่ส่งออกทาง API
+        if skipped:
+            _log_skipped(fp, skipped)
     return _ex.assign_credit(_ex.dedupe(recs), INTERVAL_MIN)
+
+
+_skip_logged = {}                                   # path -> (mtime, counts) ที่ log ไปแล้ว — ไม่ log ซ้ำทุก request
+
+
+def _log_skipped(fp, skipped):
+    try:
+        mt = os.stat(fp).st_mtime_ns
+    except OSError:
+        mt = None
+    key = (mt, tuple(sorted(skipped.items())))
+    if _skip_logged.get(fp) == key:
+        return
+    _skip_logged[fp] = key
+    log.warning("ข้าม record ผิดรูปใน %s: %s", pathlib.Path(fp).name,
+                "; ".join(f"{why} ×{c}" for why, c in skipped.most_common()))
 
 
 def _day(ts):

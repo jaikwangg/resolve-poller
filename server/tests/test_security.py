@@ -41,7 +41,8 @@ class AgentTokens(_Client):
         # token ของ grade-03 ส่งแทน grade-04 ไม่ได้ (ปลอม host ไม่ได้)
         r = self.c.post("/ingest", json={**REC, "host": "grade-04"}, headers=h)
         self.assertEqual(r.status_code, 401)
-        self.assertIn("unknown_host", r.text)
+        self.assertIn("bad_token", r.text)            # unknown_host ตอบเหมือน bad_token (ไม่บอกว่า host ไหนมี token)
+        self.assertNotIn("unknown_host", r.text)
         auth.issue_token("grade-04", force=True)
         self.assertIn("bad_token", self.c.post("/ingest", json={**REC, "host": "grade-04"}, headers=h).text)
 

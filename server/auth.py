@@ -85,10 +85,23 @@ def save_json(path, data):
     _file_cache.pop(str(path), None)
 
 
+def norm_host(h):
+    """รูปเดียวกับที่ /ingest เก็บ (validate.norm_host) — ตัดช่องว่าง + ตัวพิมพ์เล็ก"""
+    return h.strip().lower() if isinstance(h, str) else h
+
+
 def host_tokens():
-    """host -> sha256 ของ token"""
+    """host -> sha256 ของ token (host เป็นตัวเล็ก — ไฟล์เก่าที่ออกด้วยตัวใหญ่ก็ยังใช้ได้)"""
     hosts = _load(tokens_file()).get("hosts") or {}
-    return {h: (v.get("sha256") if isinstance(v, dict) else v) for h, v in hosts.items() if v}
+    return {norm_host(h): (v.get("sha256") if isinstance(v, dict) else v) for h, v in hosts.items() if v}
+
+
+# เหตุผลที่ตอบกลับ agent — unknown_host กับ bad_token รวมเป็นอันเดียว (ไม่บอกว่า host ไหนมี token แล้ว)
+_PUBLIC_REASON = {"unknown_host": "bad_token"}
+
+
+def public_reason(why):
+    return _PUBLIC_REASON.get(why, why)
 
 
 def _bearer(authorization):
@@ -104,6 +117,7 @@ def check_agent(host, authorization):
     if tok in LEAKED_TOKENS:
         return False, "leaked_token"
     known = host_tokens()
+    host = norm_host(host)
     if host in known:
         return (True, "ok") if hmac.compare_digest(sha256(tok), str(known[host])) else (False, "bad_token")
     shared = os.environ.get("EDITORTRACK_TOKEN", "")
@@ -115,6 +129,7 @@ def check_agent(host, authorization):
 
 def issue_token(host, force=False):
     """ออก token ใหม่ให้ host → คืน token (แสดงครั้งเดียว — server เก็บแค่ hash)"""
+    host = norm_host(host)
     path = tokens_file()
     data = _load(path) or {}
     hosts = dict(data.get("hosts") or {})
@@ -127,6 +142,7 @@ def issue_token(host, force=False):
 
 
 def revoke_token(host):
+    host = norm_host(host)
     path = tokens_file()
     data = _load(path) or {}
     hosts = dict(data.get("hosts") or {})
