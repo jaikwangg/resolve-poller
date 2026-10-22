@@ -16,9 +16,11 @@ ask() {  # ask VAR "prompt" "default" [secret] — ข้ามถ้าตั�
   ans=""
   if [ -n "${4:-}" ]; then          # พิมพ์ token ไม่ขึ้นจอ (ไม่มี stty/tty = อ่านตามปกติ)
     { stty -echo </dev/tty; } 2>/dev/null && _noecho=1 || _noecho=""
+    # Ctrl-C / error at the prompt must not leave the terminal without echo
+    [ -n "$_noecho" ] && trap '{ stty echo </dev/tty; } 2>/dev/null' EXIT INT TERM HUP
   fi
   { read ans </dev/tty; } 2>/dev/null || { ans=""; echo "(ไม่มี tty → default)"; }
-  if [ -n "${_noecho:-}" ]; then { stty echo </dev/tty; } 2>/dev/null; echo; _noecho=""; fi
+  if [ -n "${_noecho:-}" ]; then { stty echo </dev/tty; } 2>/dev/null; echo; _noecho=""; trap - EXIT INT TERM HUP; fi
   eval "$1=\${ans:-$3}"
 }
 

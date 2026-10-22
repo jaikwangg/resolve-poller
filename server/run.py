@@ -4,7 +4,7 @@
   python run.py                 # 127.0.0.1:8000 (แนะนำ: Caddy/nginx รับ LAN + TLS แล้ว proxy มาที่นี่)
   python run.py --lan           # 0.0.0.0:8000 — เปิดตรงให้ LAN (HTTP ไม่เข้ารหัส: token/รหัสผ่านวิ่งเป็นข้อความเปล่า)
 ห้ามรัน `uvicorn dashboard_api:app` ตรงใน production (systemd unit ต้อง ExecStart=… python run.py — docs/ROLLOUT.md)
-  ถ้ามีใครรันตรง: app ยัง log เตือนตอน start, หน้าอ่านยังต้อง login, READ_AUTH=none เปิดเฉพาะ connection ทาง loopback
+  ถ้ามีใครรันตรง: app ยัง log เตือนตอน start, หน้าอ่านยังต้อง login, READ_AUTH=none เปิดเฉพาะ connection ทาง loopback ที่มี header X-Editortrack-Proxy-Secret ถูกต้อง
 ENV: EDITORTRACK_BIND=127.0.0.1 · EDITORTRACK_PORT=8000
      EDITORTRACK_TRUSTED_PROXIES=127.0.0.1   (IP ของ proxy ที่เชื่อ X-Forwarded-For — ใช้หา IP จริงของ agent)
 """

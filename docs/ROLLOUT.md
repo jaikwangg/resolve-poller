@@ -58,7 +58,7 @@ git -C ~/github/editortrack branch --show-current   # main
 ## 4. unit: `ExecStart` → `run.py`
 `main` ยังไม่มี `server/run.py` → **ห้ามเปลี่ยน unit แล้ว restart ก่อน merge** (service จะล้ม) · เลือกทางใดทางหนึ่ง:
 - **(แนะนำ) หลัง merge** (ต่อจากขั้น 5): โค้ดใหม่ที่ยังรันด้วย uvicorn ตรงปลอดภัยพอชั่วคราว — หน้าอ่านยังต้อง login,
-  `READ_AUTH=none` เปิดเฉพาะ connection ทาง loopback, และ log `!!! editortrack: start ด้วย uvicorn ตรง (ไม่ผ่าน run.py)` เตือนจนกว่าจะเปลี่ยน
+  `READ_AUTH=none` เปิดเฉพาะ connection ทาง loopback ที่ส่ง header `X-Editortrack-Proxy-Secret` ตรงกับ `EDITORTRACK_PROXY_SECRET`, และ log `!!! editortrack: start ด้วย uvicorn ตรง (ไม่ผ่าน run.py)` เตือนจนกว่าจะเปลี่ยน
 - ก่อน merge ทันที: แก้ไฟล์ + `daemon-reload` **โดยไม่ restart** แล้ว merge ภายในไม่กี่นาที (ถ้า service ตายเองก่อน merge จะ restart ด้วย run.py ที่ยังไม่มี → ล้มวน)
 
 แก้ `~/.config/systemd/user/editortrack-server.service`:
