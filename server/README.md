@@ -13,6 +13,7 @@ EDITORTRACK_HOME=/srv/editortrack  # ไฟล์ token/user (agent_tokens.json,
 EDITORTRACK_TOKENS_FILE=…          # (ไม่บังคับ) ทับ path ไฟล์ token ต่อเครื่อง
 EDITORTRACK_READ_USERS_FILE=…      # (ไม่บังคับ) ทับ path ไฟล์ user ที่อ่าน dashboard
 EDITORTRACK_READ_AUTH=basic        # basic (default) · none = ปิด login — ใช้ได้เฉพาะหลัง proxy ที่ทำ auth และ bind 127.0.0.1
+EDITORTRACK_PROXY_SECRET=…         # บังคับเมื่อ READ_AUTH=none (≥16 ตัว) — proxy ต้องส่ง header X-Editortrack-Proxy-Secret ค่าเดียวกัน ไม่งั้น 401
 EDITORTRACK_MAX_BODY=1048576       # byte ต่อ record ที่ /ingest — เกิน = 413
 EDITORTRACK_BIND=127.0.0.1  EDITORTRACK_PORT=8000   # run.py · LAN ตรง = --lan
 EDITORTRACK_ALLOW_SHARED_TOKEN=0   # 1 = ยอมรับ token รวมเดิม (EDITORTRACK_TOKEN) ชั่วคราวช่วงย้าย เฉพาะ host ที่ยังไม่มี token ของตัวเอง
@@ -81,7 +82,24 @@ python run.py --lan                            # bind 0.0.0.0 ตรง (HTTP �
   macOS: เพิ่มใน System keychain + `SSL_CERT_FILE` · Linux: `/usr/local/share/ca-certificates` + `update-ca-certificates`)
   proxy อยู่เครื่องอื่น: ตั้ง `EDITORTRACK_BIND=<IP ภายใน>` + `EDITORTRACK_TRUSTED_PROXIES=<IP proxy>` + firewall ให้เข้าได้เฉพาะ proxy
   เลือกได้ว่าจะให้ proxy ทำ Basic auth แทน (`basic_auth` ของ Caddy) แล้วตั้ง `EDITORTRACK_READ_AUTH=none` — ต้อง bind 127.0.0.1 (run.py ไม่ยอม start ถ้าไม่ใช่)
-  `READ_AUTH=none` บังคับใน app ด้วย: เปิดเฉพาะ connection ที่เข้ามาทาง loopback — รัน `uvicorn --host 0.0.0.0` ตรงก็ไม่เปิดโล่งให้ LAN
+  `READ_AUTH=none` บังคับใน app ด้วย 2 ข้อ (ขาดข้อใด = 401 · fail-closed):
+  1. connection เข้ามาทาง loopback — รัน `uvicorn --host 0.0.0.0` ตรงก็ไม่เปิดโล่งให้ LAN
+  2. header `X-Editortrack-Proxy-Secret` ตรงกับ `EDITORTRACK_PROXY_SECRET` (≥16 ตัว, เทียบแบบ constant time) — proxy ที่ทำ auth แล้วเท่านั้นที่ส่ง:
+     ```
+     editortrack.lan {
+         tls internal
+         basic_auth {
+             director <hash จาก `caddy hash-password`>
+         }
+         reverse_proxy 127.0.0.1:8000 {
+             header_up X-Editortrack-Proxy-Secret {env.EDITORTRACK_PROXY_SECRET}   # ตั้งค่า (ไม่ต่อท้าย) — client ปลอม header เองไม่ได้
+         }
+     }
+     ```
+     สร้าง secret: `python3 -c 'import secrets; print(secrets.token_urlsafe(32))'` → ใส่ทั้ง `server.env` และ env ของ Caddy
+  - ⚠️ **ห้ามใช้ `READ_AUTH=none` หลัง gateway ของ IT-KHO** (`~/github/IT-KHO/deploy/gateway/Caddyfile`: `import site editortrack 127.0.0.1:8000`)
+    gateway นั้นไม่ทำ auth และรันบน host network → **ทุก** request จาก LAN เข้ามาทาง loopback · ข้อ 1 อย่างเดียวจึงเท่ากับเปิดให้ทั้ง LAN
+    หลัง gateway นั้นใช้ `basic` (default) — login ใน app · gateway ไม่ส่ง secret header ดังนั้น `none` ที่นั่นจะตอบ 401 ทุกหน้า (ไม่เปิดโล่ง)
 - **รันด้วย `python run.py` เท่านั้น** (systemd `ExecStart=…/python run.py`) — app log `!!! editortrack: …` ตอน start ถ้าถูกรันด้วย uvicorn ตรง
   หรือยังไม่มี read user (หน้าอ่านตอบ 401 จนกว่าจะรัน `manage_tokens.py read-user`) · ขั้นตอนเปลี่ยน unit ดู `../docs/ROLLOUT.md`
 

@@ -9,7 +9,10 @@
      และเฉพาะ host ที่ยังไม่มี token ของตัวเอง (ช่วงย้ายเครื่องทีละห้อง) · `kpp-et-test` ถูกปฏิเสธเสมอ (เคยอยู่ใน repo)
 2) คนอ่าน → ทุกหน้า + /api/*: HTTP Basic auth (EDITORTRACK_READ_AUTH=basic, default)
    - user/รหัสผ่าน (PBKDF2) ในไฟล์ EDITORTRACK_READ_USERS_FILE (default /srv/editortrack/read_users.json)
-   - EDITORTRACK_READ_AUTH=none = ปิด (ใช้เมื่อ reverse proxy เช่น Caddy ทำ auth ให้แล้ว และ bind 127.0.0.1 เท่านั้น)
+   - EDITORTRACK_READ_AUTH=none = ปิด login ใน app (ใช้เมื่อ reverse proxy เช่น Caddy ทำ auth ให้แล้ว และ bind 127.0.0.1 เท่านั้น)
+     ต้องตั้ง EDITORTRACK_PROXY_SECRET และ proxy ต้องส่ง header X-Editortrack-Proxy-Secret ค่าเดียวกันทุก request
+     (ทุก request ผ่าน proxy มาทาง loopback — loopback อย่างเดียวจึงไม่พอ: proxy ที่ไม่ทำ auth เช่น gateway IT-KHO
+     จะเปิดให้ทั้ง LAN) · ไม่ตั้ง secret / header ไม่ตรง = 401
    - ยังไม่ได้สร้าง user = อ่านไม่ได้เลย (ปิดไว้ก่อน ไม่เปิดโล่ง)
 """
 import base64
@@ -43,6 +46,16 @@ def read_users_file():
 
 def read_auth_mode():
     return (os.environ.get("EDITORTRACK_READ_AUTH") or "basic").strip().lower()
+
+
+PROXY_SECRET_HEADER = "x-editortrack-proxy-secret"
+_PROXY_SECRET_MIN = 16
+
+
+def proxy_secret():
+    """EDITORTRACK_PROXY_SECRET — สั้นกว่า 16 ตัว = ถือว่าไม่ได้ตั้ง (fail-closed)"""
+    s = (os.environ.get("EDITORTRACK_PROXY_SECRET") or "").strip()
+    return s if len(s) >= _PROXY_SECRET_MIN else ""
 
 
 def sha256(s):
@@ -227,8 +240,11 @@ def read_auth_problem():
     """ข้อความเตือนตอน start ถ้าตั้ง read auth ไม่ครบ · None = ครบ"""
     mode = read_auth_mode()
     if mode == "none":
-        return ("EDITORTRACK_READ_AUTH=none — หน้าอ่านเปิดเฉพาะ connection ที่เข้ามาทาง loopback (reverse proxy เครื่องเดียวกัน) "
-                "· connection จาก LAN ตรงถูกปฏิเสธ 401")
+        if not proxy_secret():
+            return ("EDITORTRACK_READ_AUTH=none แต่ไม่ได้ตั้ง EDITORTRACK_PROXY_SECRET (อย่างน้อย 16 ตัว) — ทุกหน้า/API อ่านตอบ 401 "
+                    "· proxy ที่ทำ auth ต้องส่ง header X-Editortrack-Proxy-Secret · proxy ที่ไม่ทำ auth (gateway IT-KHO) ใช้ basic")
+        return ("EDITORTRACK_READ_AUTH=none — หน้าอ่านเปิดเฉพาะ request ที่เข้ามาทาง loopback และมี header X-Editortrack-Proxy-Secret ตรง "
+                "· ต้องเป็น proxy ที่ทำ auth เอง (gateway IT-KHO ไม่ทำ → ใช้ basic)")
     if mode != "basic":
         return f"EDITORTRACK_READ_AUTH={mode!r} ไม่รู้จัก — ใช้ basic (ต้อง login)"
     if not read_users():
@@ -237,11 +253,20 @@ def read_auth_problem():
     return None
 
 
-def check_read(authorization, local_addr=("127.0.0.1", 0)):
-    """→ True ถ้าอ่านได้ · mode none = ไม่ต้อง login แต่เฉพาะ connection ที่เข้ามาทาง loopback
-    (กันกรณีรัน uvicorn ตรง --host 0.0.0.0 ข้าม guard ของ run.py แล้วเปิดโล่งทั้ง LAN)"""
+def check_proxy_secret(got):
+    want = proxy_secret()
+    if not want or not isinstance(got, str) or not got:
+        return False
+    return hmac.compare_digest(got.strip().encode(), want.encode())
+
+
+def check_read(authorization, local_addr=None, proxy_header=None):
+    """→ True ถ้าอ่านได้ · mode none = ไม่ต้อง login แต่ต้องครบทั้งสอง (fail-closed — ไม่รู้ local_addr = ปฏิเสธ):
+    - connection เข้ามาทาง loopback (กันรัน uvicorn ตรง --host 0.0.0.0 ข้าม guard ของ run.py แล้วเปิดโล่งทั้ง LAN)
+    - header X-Editortrack-Proxy-Secret ตรงกับ EDITORTRACK_PROXY_SECRET (เทียบแบบ constant time) — กัน proxy ที่ไม่ทำ auth
+      (เช่น gateway IT-KHO: ทุก request มาทาง loopback) และโปรแกรมอื่นบนเครื่องเดียวกัน"""
     if read_auth_mode() == "none":
-        return local_is_loopback(local_addr)
+        return local_is_loopback(local_addr) and check_proxy_secret(proxy_header)
     a = authorization or ""
     if a[:6].lower() != "basic ":
         return False

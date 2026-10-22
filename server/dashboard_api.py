@@ -94,7 +94,8 @@ async def _read_auth(request: Request, call_next):
     path = request.url.path
     if path == "/ingest" or path in OPEN_PATHS:
         return await call_next(request)
-    if not auth.check_read(request.headers.get("authorization"), request.scope.get("server")):
+    if not auth.check_read(request.headers.get("authorization"), request.scope.get("server"),
+                           request.headers.get(auth.PROXY_SECRET_HEADER)):
         return JSONResponse({"detail": "ต้อง login (ดู server/README.md §auth)"}, status_code=401,
                             headers={"WWW-Authenticate": 'Basic realm="editortrack", charset="UTF-8"'})
     return await call_next(request)

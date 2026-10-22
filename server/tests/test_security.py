@@ -136,20 +136,50 @@ class ReadAuth(_Client):
         auth.remove_read_user("temp-user")
         self.assertEqual(self.c.get("/api/jobs", headers=h).status_code, 401)
 
+    SECRET = "proxy-secret-0123456789abcdef"
+    H = {"X-Editortrack-Proxy-Secret": SECRET}
+
     def test_mode_none_opens_reads_but_not_ingest(self):
         from fastapi.testclient import TestClient
         os.environ["EDITORTRACK_READ_AUTH"] = "none"
+        os.environ["EDITORTRACK_PROXY_SECRET"] = self.SECRET
         lo = TestClient(api.app, base_url="http://127.0.0.1:8000")     # connection เข้าทาง loopback (proxy เครื่องเดียวกัน)
-        self.assertEqual(lo.get("/api/jobs").status_code, 200)
-        self.assertEqual(lo.post("/ingest", json=REC).status_code, 401)
+        self.assertEqual(lo.get("/api/jobs", headers=self.H).status_code, 200)
+        self.assertEqual(lo.post("/ingest", json=REC, headers=self.H).status_code, 401)
 
     def test_mode_none_refused_on_lan_interface(self):
-        """uvicorn ตรง --host 0.0.0.0 ข้าม guard ของ run.py → connection จาก LAN ต้องยังถูกปฏิเสธ"""
+        """uvicorn ตรง --host 0.0.0.0 ข้าม guard ของ run.py → connection จาก LAN ต้องยังถูกปฏิเสธ (แม้มี secret)"""
         from fastapi.testclient import TestClient
         os.environ["EDITORTRACK_READ_AUTH"] = "none"
+        os.environ["EDITORTRACK_PROXY_SECRET"] = self.SECRET
         for base in ("http://192.168.140.126:8000", "http://10.0.0.5", "http://editortrack.lan"):
-            self.assertEqual(TestClient(api.app, base_url=base).get("/api/jobs").status_code, 401, base)
-        self.assertEqual(TestClient(api.app, base_url="http://[::1]:8000").get("/api/jobs").status_code, 200)
+            self.assertEqual(TestClient(api.app, base_url=base).get("/api/jobs", headers=self.H).status_code, 401, base)
+        self.assertEqual(TestClient(api.app, base_url="http://[::1]:8000").get("/api/jobs", headers=self.H).status_code, 200)
+
+    def test_mode_none_loopback_without_proxy_secret_is_refused(self):
+        """S3: gateway IT-KHO (Caddy, ไม่ทำ auth) → ทุก request มาทาง loopback · loopback อย่างเดียวต้องไม่พอ"""
+        from fastapi.testclient import TestClient
+        os.environ["EDITORTRACK_READ_AUTH"] = "none"
+        lo = TestClient(api.app, base_url="http://127.0.0.1:8000")
+        os.environ.pop("EDITORTRACK_PROXY_SECRET", None)
+        self.assertEqual(lo.get("/api/jobs").status_code, 401)                      # ไม่ตั้ง secret = ปิด
+        self.assertEqual(lo.get("/api/jobs", headers=self.H).status_code, 401)
+        self.assertIn("EDITORTRACK_PROXY_SECRET", auth.read_auth_problem())
+        os.environ["EDITORTRACK_PROXY_SECRET"] = "short"                            # สั้นเกิน = ไม่ได้ตั้ง
+        self.assertEqual(lo.get("/api/jobs", headers={"X-Editortrack-Proxy-Secret": "short"}).status_code, 401)
+        os.environ["EDITORTRACK_PROXY_SECRET"] = self.SECRET
+        self.assertEqual(lo.get("/api/jobs").status_code, 401)                      # proxy ไม่ส่ง header
+        self.assertEqual(lo.get("/api/jobs", headers={"X-Editortrack-Proxy-Secret": self.SECRET + "x"}).status_code, 401)
+        self.assertEqual(lo.get("/api/jobs", headers={"X-Editortrack-Proxy-Secret": ""}).status_code, 401)
+        self.assertEqual(lo.get("/", headers=self.H).status_code, 200)
+
+    def test_check_read_fails_closed_without_local_addr(self):
+        os.environ["EDITORTRACK_READ_AUTH"] = "none"
+        os.environ["EDITORTRACK_PROXY_SECRET"] = self.SECRET
+        self.assertFalse(auth.check_read(None))                                     # default เดิม = 127.0.0.1 (เปิด)
+        self.assertFalse(auth.check_read(None, None, self.SECRET))
+        self.assertTrue(auth.check_read(None, ("127.0.0.1", 8000), self.SECRET))
+        self.assertFalse(auth.check_read(None, ("127.0.0.1", 8000), None))
 
     def test_local_is_loopback(self):
         for a, want in [(("127.0.0.1", 8000), True), (("::1", 8000), True), (("/run/et.sock", None), True),
