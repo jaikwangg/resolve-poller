@@ -1,5 +1,8 @@
 # Track A — Resolve / Deterministic Scaffold
 
+> ⚠️ **เอกสาร design ช่วงแรก (ประวัติ)** — โค้ดตัวอย่างในไฟล์นี้คือ schema 1 / poll 10 นาที / token เดียว / ส่ง `user` และชื่อแอป ซึ่ง**ไม่ใช่ของปัจจุบันแล้ว**
+> ปัจจุบัน: record schema 3 (`STAGES.md`), poll 1 นาที, token ต่อเครื่อง + login (`server/README.md`), ไม่ส่ง user/ชื่อแอป (data sheet ใน `DATAFLOW.md`)
+
 ระบบเก็บ **ตัวเลขล้วน** (ไม่ใช้ LLM) สำหรับติดตามงานตัดต่อ DaVinci Resolve บน macOS
 เก็บได้ 2 metric: **#1 % ความคืบหน้า (proxy)** และ **#2 เวลา active-in-Resolve**
 

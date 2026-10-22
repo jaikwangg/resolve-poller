@@ -1,6 +1,6 @@
 # resolve-poller (editortrack)
 
-ระบบติดตาม **ความคืบหน้า + เวลาทำงานจริง** ของทีมตัดต่อ **DaVinci Resolve** ระดับองค์กร แบบ DIY + local LLM
+ระบบติดตาม **ความคืบหน้า + เวลาทำงานจริง** ของทีมตัดต่อ **DaVinci Resolve** ระดับองค์กร แบบ DIY (local LLM = Track B ยังไม่เริ่ม — ตอนนี้ไม่มีโค้ด LLM)
 เก็บ 2 metric: **#1** % ความคืบหน้า (conform + color, proxy) · **#2** เวลา active-in-Resolve
 
 > **เริ่มอ่านที่ [`HANDOFF.md`](HANDOFF.md)** — มี context ครบ: ภารกิจ, กฎเหล็ก, สถาปัตยกรรม, สถานะ (verified/ยัง), schema, next steps

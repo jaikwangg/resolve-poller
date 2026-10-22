@@ -53,7 +53,7 @@
 
 **Data flow:**
 ```
-per-user LaunchAgent (poll ~10 นาที)
+per-user LaunchAgent / systemd timer (poll ~1 นาที)
   → runner รวม A1(Resolve API) + A2(idle/frontmost) + A5(scope→%)
   → POST /ingest  → JSONL รายวัน
   → GET /api/dashboard (aggregate)  → dashboard.html (SVG charts)
@@ -77,7 +77,7 @@ per-user LaunchAgent (poll ~10 นาที)
 | `resolve_poller.py` | A1 — snapshot Resolve (+ ดึง @scope/@job/@role markers) | ✅ แตกจาก TRACK_A + syntax ok · ยังไม่รันบน Resolve จริง |
 | `activity_sampler.py` | A2 — idle+frontmost (defensive import → รันบน Linux ได้) | ✅ แตกแล้ว · ยังไม่รันบน macOS จริง |
 | `scope.py` | A5 — load scope + compute % (weights .45/.40/.15) | ✅ เทสผ่าน (ผ่าน runner) |
-| `runner.py` | A3 — poll→joblink→scope→record schema 2→POST | ✅ **build_record เทสผ่าน (mock)** |
+| `runner.py` | A3 — poll→joblink→scope→record schema 3→POST (offline queue, lock) | ✅ **build_record เทสผ่าน (mock)** |
 | `JOB_LINK.md` | design กลไก job-link: registry schema, record change, join, flags, เพดาน | reference |
 
 > 📁 **โครงสร้าง 2 folder (แยกตาม deploy):** `agent/` = รันบน workstation (`resolve_poller`, `activity_sampler`, `scope`, `joblink`, `runner`, `probe` + requirements/README) · `server/` = รันบนเครื่องกลาง (`dashboard_api`, `erp`, `dashboard.html` + requirements/README) · docs อยู่ root · คำสั่ง python รันจากในโฟลเดอร์นั้น (`cd agent` / `cd server`)
@@ -92,7 +92,7 @@ per-user LaunchAgent (poll ~10 นาที)
 - auth `/ingest`: ไม่มี token → 401, มี token → 200
 - `joblink.resolve_job()` — resolution order (marker>registry>naming>fallback + host role) ถูกทุกเคส
 - `GET /api/jobs` — join 2 record คนละ project (conform+color, job_id เดียว) → conform_pct/color_pct/overall_pct ถูก (80% + 35% → overall 58.8%)
-- `runner.build_record()` — wire ครบ (poller→joblink→scope→record **schema 2**): job ผูกถูก (registry + marker override), target ดึงจาก job registry, active/idle ถูก (mock snapshot/sample บน Linux)
+- `runner.build_record()` — wire ครบ (poller→joblink→scope→record **schema 2** ในตอนนั้น — ปัจจุบัน schema 3): job ผูกถูก (registry + marker override), target ดึงจาก job registry, active/idle ถูก (mock snapshot/sample บน Linux)
 - **ERP-backed join** (`erp.py` + `_eff_job`) — mock booking 2 ห้องคนละ role (Grading 3 + Conform Bay, job เดียว) → `/api/jobs` join เป็น job เดียว source=erp, role มาจาก task, agent ไม่ต้องรู้ job (unlinked ก็ได้) → **zero-touch พิสูจน์แล้ว**
 - **probe บนเครื่องจริง (2026-09-29, Windows, Resolve Studio 21.1.0.17, โปรเจคจริง 309 clips):** ✅ connect/Studio · ✅ `GetNodeGraph().GetNumNodes()` ใช้ได้ (nodes 1–6, graded=nodes>1) → **`DETECT_GRADE=True`** · ✅ audio coverage · ✅ StartFrame ไม่ใช่ 0 (reel TC) แต่ duration = End−Start ถูก · ⚠️ render keys ยังไม่ยืนยัน (คิวว่าง)
 - 🐞 **GOTCHA สำคัญ (แก้แล้ว): `GetRenderJobList()`/`GetRenderJobStatus()` ทำให้ Resolve เด้งไปหน้า Deliver → รบกวน worker** → ปิด **`POLL_RENDER=False`** default ใน `resolve_poller.py` (deliver phase เป็น unmeasured, renormalize) · `IsRenderingInProgress` ปลอดภัย ไม่เปลี่ยนหน้า · ดึง delivery % แบบไม่รบกวนภายหลังผ่าน **fs-watch ของ render output** แทน
@@ -111,7 +111,8 @@ per-user LaunchAgent (poll ~10 นาที)
 
 ## 5. Schemas (ใช้ร่วมทุกไฟล์ — ห้ามเปลี่ยนพร่ำเพรื่อ)
 
-### 5.1 JSONL record ที่ POST เข้า `/ingest` (schema 1)
+### 5.1 JSONL record ที่ POST เข้า `/ingest`
+> ⚠️ ด้านล่างคือ **schema 1 (ประวัติ)** — record ปัจจุบัน = **schema 3** (ไม่มี `user`, ไม่มีชื่อแอป/หน้าต่าง, `source` แทน `resolve`) ดู `STAGES.md` + data sheet ใน `DATAFLOW.md`
 ```json
 {
   "schema": 1, "ts": "ISO-UTC", "host": "bay-03", "user": "somchai",
@@ -142,9 +143,9 @@ per-user LaunchAgent (poll ~10 นาที)
                 "phases": {"edit":80,"color":null,"audio":null,"deliver":0},
                 "unmeasured": ["color","audio"], "flags": []}],
   "progress_series": {"labels": ["9/18","..."], "series": {"PROMO_2026Q4": [0,0,0,0,50.2,54.2,58.2]}},
-  "phase_time": {"__team__": {"color":180,"edit":180}, "somchai": {"...": 0}},
+  "phase_time": {"__team__": {"color":180,"edit":180}, "grade-03": {"...": 0}},   // แยกตามเครื่อง (host) ไม่ใช่คน
   "active_idle": {"labels": ["9/18","..."],
-                  "workers": {"__team__": {"active": [...], "idle": [...]}, "somchai": {"...": []}}}
+                  "workers": {"__team__": {"active": [...], "idle": [...]}, "grade-03": {"...": []}}}
 }
 ```
 
@@ -168,7 +169,7 @@ python3 probe.py               # → เซฟ ~/.editortrack/probe_report.json 
 EDITORTRACK_SERVER=http://localhost:8000/ingest EDITORTRACK_TOKEN=xxx python3 runner.py
 ```
 env สำคัญ: `RESOLVE_SCRIPT_API`, `RESOLVE_SCRIPT_LIB`, `PYTHONPATH` (ดู Prerequisites ใน `TRACK_A.md`),
-`EDITORTRACK_STORE` (dir เก็บ JSONL, default `data/`), `EDITORTRACK_INTERVAL_MIN` (ให้ตรง `StartInterval`, default 10)
+`EDITORTRACK_STORE` (dir เก็บ JSONL, default `/srv/editortrack/data`), `EDITORTRACK_INTERVAL_MIN` (cadence agent, default 1 — record นับตามช่องว่างจริง ≤ 1.5×), `EDITORTRACK_TZ` (default Asia/Bangkok) · ครบใน `server/README.md`
 
 ---
 

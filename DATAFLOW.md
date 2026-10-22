@@ -9,7 +9,7 @@ end-to-end ตั้งแต่ Resolve/ERP → agent → server → dashboard 
 ```
                     ┌───────────────────────────────────────────┐
    ERP (KPP)        │  workstation ×7 (1 edit/conform + 6 color) │
- booking/schedule   │  agent: LaunchAgent/Task รันทุก ~10 นาที    │
+ booking/schedule   │  agent: LaunchAgent/timer รันทุก ~1 นาที     │
         │           │                                            │
         │           │   resolve_poller.py ──┐  (read-only,       │
         │           │   activity_sampler.py ┘   ไม่เปลี่ยนหน้า)   │
@@ -33,7 +33,7 @@ end-to-end ตั้งแต่ Resolve/ERP → agent → server → dashboard 
 
 ## Stage 1 — Agent poll (ต่อ workstation)
 
-**ทำอะไร:** ทุก ~10 นาที อ่านสถานะ Resolve + กิจกรรมเครื่อง → ส่ง record ขึ้น server
+**ทำอะไร:** ทุก ~1 นาที (60 วิ) อ่านสถานะ Resolve + กิจกรรมเครื่อง → ส่ง record ขึ้น server
 
 | ไฟล์ | function | อ่าน/ทำอะไร |
 |---|---|---|
@@ -208,12 +208,12 @@ RESOLVE_SCRIPT_LIB=/opt/resolve/libs/Fusion/fusionscript.so
 
 **Windows (Task Scheduler):**
 ```cmd
-schtasks /create /tn editortrack /tr "python C:\path\resolve-poller\agent\runner.py" /sc minute /mo 10 /ru <user>
+schtasks /create /tn editortrack /tr "python C:\path\resolve-poller\agent\runner.py" /sc minute /mo 1 /ru <user>
 ```
 
 **Linux (systemd user timer หรือ cron):**
 ```
-*/10 * * * * cd ~/resolve-poller/agent && /usr/bin/python3 runner.py    # crontab -e (ใน X11 session)
+* * * * * cd ~/resolve-poller/agent && /usr/bin/python3 runner.py    # crontab -e (ใน X11 session) · แนะนำ systemd timer จาก deploy/install.sh แทน
 ```
 > Linux ต้อง `libxss1` (idle) + (option) `xdotool` (frontmost) · X11 เท่านั้น
 
@@ -224,5 +224,5 @@ schtasks /create /tn editortrack /tr "python C:\path\resolve-poller\agent\runner
 2. server: `manage_tokens.py issue <host>` ทุกเครื่อง + `read-user` + ERP creds + ROOM_MAP → `python run.py` (+ Caddy TLS — server/README.md §ความปลอดภัย)
 3. ทดสอบ ERP: curl login + schedule
 4. แต่ละ workstation: ตั้ง env (ROLE, DETECT_GRADE, SERVER, TOKEN, RESOLVE_*) → เทส `python runner.py` 1 ครั้ง
-5. ตั้ง scheduler (LaunchAgent/Task/cron) ทุก 10 นาที
+5. ตั้ง scheduler (LaunchAgent/Task/cron) ทุก 1 นาที — `sh deploy/install.sh` (ต้องตรงกับ `EDITORTRACK_INTERVAL_MIN` ของ server)
 6. เปิด dashboard `http://<server>:8000/`

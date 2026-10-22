@@ -5,7 +5,7 @@ build_projects(recs, interval_min, eff_job) -> {projects:[{counts, rooms, shots,
 """
 
 import explain as _ex
-from report import JUMP_CLIPS
+from report import JUMP_CLIPS, is_jump
 
 HISTORY_MAX = 30        # จำนวนครั้งที่ตัวเลขเปลี่ยน ที่ส่งไปแสดง (ล่าสุดก่อน)
 
@@ -69,7 +69,7 @@ def build_projects(recs, interval_min, eff_job):
                                  "timeline": c["timeline"], "video_clips": c["video_clips"],
                                  "graded_clips": c["graded_clips"], "shots": c["shots"],
                                  "delta_graded": dg,
-                                 "jump": dg is not None and dg > JUMP_CLIPS,
+                                 "jump": is_jump(dg),
                                  "drop": dg is not None and dg < 0,
                                  "timeline_changed": prev is not None and prev[0] != c["timeline"]})
             p["_prev"][host] = key

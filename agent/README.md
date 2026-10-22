@@ -1,6 +1,6 @@
 # agent — รันบน workstation (7 เครื่อง: 1 edit + 6 color)
 
-อ่าน DaVinci Resolve (read-only, ไม่เปลี่ยนหน้า) + idle/frontmost → POST record ขึ้น server ทุก ~10 นาที
+อ่าน DaVinci Resolve (read-only, ไม่เปลี่ยนหน้า) + idle / Resolve-หน้าสุด (bool) → POST record ขึ้น server ทุก ~1 นาที
 
 ## ต้องมี
 - DaVinci Resolve **Studio** + `Preferences → System → General → External scripting = Local`
@@ -17,6 +17,9 @@ EDITORTRACK_TOKEN=<token ของเครื่องนี้>   # ผูก�
 EDITORTRACK_EXTRACT_SHOTS=0       # default ปิด: ไม่ส่ง shot code (ข้อมูลลูกค้า) · =1 เมื่อตกลงกับเจ้าของงานแล้ว
 EDITORTRACK_RESOLVE_PROCS=resolve,resolve.exe   # executable ที่นับว่าเป็น Resolve (Linux/Windows, ตรงตัว)
 EDITORTRACK_RESOLVE_BUNDLES=com.blackmagic-design.DaVinciResolve,com.blackmagic-design.DaVinciResolveLite   # macOS
+# offline queue (~/.editortrack/queue.jsonl): ส่งไม่ได้/5xx/408/429 → เก็บไว้ส่งรอบหน้า · 4xx อื่น (token ผิด, record เสีย) → ทิ้ง + log (ไม่ค้าง queue)
+EDITORTRACK_QUEUE_MAX=10080       # บรรทัดสูงสุด (~7 วัน) · EDITORTRACK_QUEUE_MAX_AGE_H=168 · EDITORTRACK_QUEUE_MAX_MB=16 — เกิน = ทิ้งตัวเก่าสุด
+                                  # เขียนใหม่แบบ atomic (tmp+rename) และลบเฉพาะตัวที่ส่งสำเร็จแล้ว
 # Resolve scripting (per OS — ดู ../DATAFLOW.md §Config)
 RESOLVE_SCRIPT_API / RESOLVE_SCRIPT_LIB / PYTHONPATH
 ```
@@ -26,7 +29,7 @@ RESOLVE_SCRIPT_API / RESOLVE_SCRIPT_LIB / PYTHONPATH
 python probe.py       # ตรวจ API ต่อรุ่น Resolve (ครั้งเดียวตอนตั้งค่า)
 python resolve_poller.py         # ดู snapshot จริง
 python activity_sampler.py --watch   # ดู idle + resolve_frontmost สด (ส่งแค่ boolean ไม่มีชื่อแอป/หน้าต่าง)
-python runner.py      # 1 รอบ (เทส) → แล้วตั้ง scheduler ทุก 10 นาที
+python runner.py      # 1 รอบ (เทส) → แล้วตั้ง scheduler ทุก 1 นาที (deploy/install.sh)
 ```
 scheduler: macOS=LaunchAgent · Windows=Task Scheduler · Linux=cron (ดู ../DATAFLOW.md §Deploy)
 

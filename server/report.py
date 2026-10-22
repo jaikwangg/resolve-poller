@@ -7,7 +7,12 @@ import collections
 import explain as _ex
 
 GAP_FACTOR = 3          # ห่างกันเกิน interval × นี้ = ข้อมูลขาดช่วง
-JUMP_CLIPS = 3          # graded เพิ่มเกินนี้ใน 1 รอบ = กระโดด (อาจ apply ทีละหลาย clip หรือเกณฑ์ node>1 นับเกิน)
+JUMP_CLIPS = 3          # graded เพิ่ม "เกิน" นี้ (> 3) ใน 1 รอบ = กระโดด — ใช้ทั้ง /report และ /projects (is_jump)
+
+
+def is_jump(delta):
+    """จำนวน clip ที่เกรดเพิ่มในรอบเดียวมากผิดปกติ (apply grade ทีละหลาย clip หรือเกณฑ์นับเกินจริง)"""
+    return delta is not None and delta > JUMP_CLIPS
 
 
 def _local(ts):
@@ -82,11 +87,11 @@ def _host_report(recs, interval_min, eff_job):
                                  if "graded_clips" in det else None)}
                 if old and "graded_clips" in det and "graded_clips" in (old[1] or {}):
                     jump = (det.get("graded_clips") or 0) - (old[1].get("graded_clips") or 0)
-                    if jump >= JUMP_CLIPS:
+                    if is_jump(jump):
                         ev["jump"] = True
                         warnings.append(f"{_hm(t)} {ev['job']}: clip ที่เกรดเพิ่ม {jump} clip ในรอบเดียว "
                                         f"({old[1].get('graded_clips')}→{det.get('graded_clips')}) — อาจ apply grade ทีละหลาย clip "
-                                        f"หรือเกณฑ์ node>1 นับเกินจริง ควรเช็คกับคนทำ")
+                                        f"หรือเกณฑ์นับ (lut/nodes) นับเกินจริง ควรเช็คกับคนทำ")
                     elif jump < 0:
                         warnings.append(f"{_hm(t)} {ev['job']}: clip ที่เกรดลดลง ({old[1].get('graded_clips')}→{det.get('graded_clips')}) — ลบ node/ reset grade หรือเปลี่ยน timeline")
                 progress.append(ev)

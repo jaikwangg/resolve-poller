@@ -2,7 +2,7 @@
 """A3 — poll (collector ตาม stage) → resolve job → POST (หลาย URL สำรองได้ + offline queue). record schema 3.
 stage จาก EDITORTRACK_STAGE (หรือ EDITORTRACK_ROLE เดิม): data/conform/color/subtitle/master
 """
-import json, os, socket, datetime, urllib.request, pathlib
+import json, os, socket, datetime, urllib.request, urllib.error, pathlib
 from activity_sampler import sample
 from collect import collect, canon
 from joblink import resolve_job
@@ -48,10 +48,22 @@ def _ordered():
     return ([last] if last in SERVERS else []) + [u for u in SERVERS if u != last]
 
 
+RETRY_STATUS = {408, 425, 429}                  # 4xx ที่ลองใหม่ได้ · 4xx อื่น = server ไม่มีวันรับ (token ผิด, record เสีย) → ทิ้ง+log
+QUEUE_MAX_LINES = int(os.environ.get("EDITORTRACK_QUEUE_MAX", "10080"))        # ~7 วันที่ 1 record/นาที
+QUEUE_MAX_AGE_H = float(os.environ.get("EDITORTRACK_QUEUE_MAX_AGE_H", "168"))  # record เก่ากว่านี้ทิ้ง (server/PMS ไม่ใช้แล้ว)
+QUEUE_MAX_BYTES = int(os.environ.get("EDITORTRACK_QUEUE_MAX_MB", "16")) * 1024 * 1024
+
+
+def _log(msg):
+    """→ stdout (run-agent.sh ส่งเข้า ~/.editortrack/agent.log)"""
+    print(f"[{datetime.datetime.now().isoformat(timespec='seconds')}] {msg}", flush=True)
+
+
 def _send(rec):
-    """ลองทีละ URL จนกว่าจะสำเร็จ → คืน HTTP status · ไม่สำเร็จสักตัว → None"""
+    """ลองทีละ URL → ("ok", status) · ("final", status) = 4xx ที่ลองใหม่ไม่มีประโยชน์ · ("retry", status|None)"""
     data = json.dumps(rec, ensure_ascii=False).encode()
     order = _ordered()
+    last = None
     for url in order:
         req = urllib.request.Request(
             url, data=data,
@@ -59,6 +71,12 @@ def _send(rec):
         try:
             with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as r:
                 status = r.status
+        except urllib.error.HTTPError as e:
+            e.close()
+            if 400 <= e.code < 500 and e.code not in RETRY_STATUS:
+                return "final", e.code                  # ทุก URL = server เดียวกัน → ตอบเหมือนกัน ไม่ต้องลองตัวอื่น
+            last = e.code
+            continue
         except Exception:
             continue
         if url != order[0] or not LAST_OK.exists():
@@ -67,39 +85,99 @@ def _send(rec):
                 LAST_OK.write_text(url, encoding="utf-8")
             except Exception:
                 pass
-        return status
-    return None
+        return "ok", status
+    return "retry", last
+
+
+def _read_queue():
+    try:
+        return [ln for ln in QUEUE.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    except FileNotFoundError:
+        return []
+
+
+def _write_queue(lines):
+    """เขียน queue ใหม่แบบ atomic (tmp + rename) · ว่าง = ลบไฟล์"""
+    if not lines:
+        try:
+            QUEUE.unlink()
+        except FileNotFoundError:
+            pass
+        return
+    QUEUE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = QUEUE.with_name(QUEUE.name + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, QUEUE)
+
+
+def _too_old(ln, now):
+    try:
+        t = datetime.datetime.fromisoformat(json.loads(ln)["ts"])
+        return (now - t).total_seconds() > QUEUE_MAX_AGE_H * 3600
+    except Exception:
+        return False
+
+
+def _trim(lines):
+    """ตัดตามอายุ + เพดานจำนวนบรรทัด (ทิ้งตัวเก่าสุดก่อน)"""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    keep = [ln for ln in lines if not _too_old(ln, now)]
+    if len(keep) > QUEUE_MAX_LINES:
+        keep = keep[-QUEUE_MAX_LINES:]
+    if len(keep) < len(lines):
+        _log(f"queue: ทิ้ง {len(lines) - len(keep)} record (เก่ากว่า {QUEUE_MAX_AGE_H:g} ชม. หรือเกิน {QUEUE_MAX_LINES} บรรทัด)")
+    return keep
 
 
 def _enqueue(lines):
     QUEUE.parent.mkdir(parents=True, exist_ok=True)
-    with open(QUEUE, "a", encoding="utf-8") as f:
+    with open(QUEUE, "a", encoding="utf-8") as f:     # append 1 บรรทัด (ปกติ) · เกินเพดานค่อยเขียนใหม่ทั้งไฟล์แบบ atomic
         for ln in lines:
             f.write(ln + "\n")
+    try:
+        size = QUEUE.stat().st_size
+    except OSError:
+        size = 0
+    if size > QUEUE_MAX_BYTES or (size > 256 * 1024 and len(_read_queue()) > QUEUE_MAX_LINES):
+        _write_queue(_trim(_read_queue()))
 
 
 def post(rec):
-    status = _send(rec)
-    if status is None:
+    kind, status = _send(rec)
+    if kind == "retry":
         _enqueue([json.dumps(rec, ensure_ascii=False)])
+    elif kind == "final":
+        _log(f"server ตอบ {status} — ทิ้ง record ts={rec.get('ts')} (ไม่เข้า queue: เช็ค token/เวอร์ชัน agent)")
     else:
         _flush_queue()
     return status
 
 
 def _flush_queue():
-    if not QUEUE.exists():
+    """ส่ง queue ทีละบรรทัด · ลบออกจากไฟล์เฉพาะตัวที่ส่งสำเร็จหรือ server ปฏิเสธถาวร (4xx) — เขียนไฟล์ใหม่หลังจบรอบ
+    crash กลางทาง = ไฟล์เดิมยังอยู่ครบ (ส่งซ้ำได้: server เก็บ 1 record ต่อเครื่องต่อนาที)"""
+    lines = _trim(_read_queue())
+    if not lines:
+        _write_queue([])
         return
-    lines = [ln for ln in QUEUE.read_text(encoding="utf-8").splitlines() if ln.strip()]
-    QUEUE.unlink()
+    rest = []
     for i, ln in enumerate(lines):
         try:
             rec = json.loads(ln)
         except Exception:
-            continue                                # บรรทัดเสีย — ทิ้ง
-        if _send(rec) is None:                      # หลุดกลางทาง → เก็บที่เหลือไว้ รอบหน้าส่งต่อ
-            _enqueue(lines[i:])
-            return
+            _log("queue: บรรทัดเสีย — ทิ้ง")
+            continue
+        kind, status = _send(rec)
+        if kind == "final":
+            _log(f"queue: server ตอบ {status} — ทิ้ง record ts={rec.get('ts')}")
+            continue
+        if kind == "retry":                          # หลุดกลางทาง → เก็บที่เหลือไว้ รอบหน้าส่งต่อ
+            rest = lines[i:]
+            break
+    _write_queue(rest)
 
 
 def run_lock():

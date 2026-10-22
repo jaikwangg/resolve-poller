@@ -72,6 +72,7 @@ class _ErpCase(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.srv.shutdown()
+        cls.srv.server_close()
 
     def setUp(self):
         self._saved = {k: getattr(erp, k) for k in ("ERP_BASE", "ERP_TOKEN_STATIC", "TIMEOUT", "FAIL_TTL",

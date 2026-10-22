@@ -70,7 +70,7 @@
 </div>
 <script>
 const $ = s => document.querySelector(s);
-const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const n = v => v == null ? "–" : Number(v).toLocaleString("th-TH");
 const pctOf = (a, b) => (a == null || !b) ? null : Math.round(a * 1000 / b) / 10;
 const dur = s => { if (s == null) return "–"; s = Math.round(s); const m = Math.floor(s/60);

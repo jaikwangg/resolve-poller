@@ -168,6 +168,16 @@ async def ingest(req: Request, authorization: str = Header(default="")):
 
 
 # ---------------- load / helpers ----------------
+MAX_DAYS = int(os.environ.get("EDITORTRACK_MAX_DAYS", "366"))   # เพดาน ?days= (เดิมไม่จำกัด: days=1000000 → 500)
+
+
+def _days(days):
+    """ตรวจ ?days= → 400 ถ้านอกช่วง 1..MAX_DAYS"""
+    if days < 1 or days > MAX_DAYS:
+        raise HTTPException(status_code=400, detail=f"days ต้องอยู่ระหว่าง 1–{MAX_DAYS}")
+    return days
+
+
 def _load_recent(days):
     cutoff = _ex.today() - datetime.timedelta(days=days)      # +1 วันเผื่อไฟล์ที่ตั้งชื่อตาม TZ เดิม/ข้ามเที่ยงคืน
     recs = []
@@ -257,7 +267,7 @@ def build_jobs(days=7):
 
 @app.get("/api/jobs")
 def api_jobs(days: int = 7):
-    return JSONResponse(build_jobs(days))
+    return JSONResponse(build_jobs(_days(days)))
 
 
 # ---------------- /api/shots : reconcile ราย shot (conform vs color) ----------------
@@ -283,7 +293,7 @@ def build_shots(days=7):
 
 @app.get("/api/shots")
 def api_shots(days: int = 7):
-    return JSONResponse(build_shots(days))
+    return JSONResponse(build_shots(_days(days)))
 
 
 # ---------------- /api/dashboard : tiles + progress-over-time + phase-time + active/idle ----------------
@@ -355,7 +365,7 @@ def build_dashboard(days=7):
 
 @app.get("/api/dashboard")
 def api_dashboard(days: int = 7):
-    return JSONResponse(build_dashboard(days))
+    return JSONResponse(build_dashboard(_days(days)))
 
 
 # ---------------- /api/inbox : record ที่รับมา + คำอธิบาย ----------------
@@ -402,7 +412,7 @@ def build_inbox(limit=50, host=None, days=2):
 
 @app.get("/api/inbox")
 def api_inbox(limit: int = 50, host: str = "", days: int = 2):
-    return JSONResponse(build_inbox(limit, host or None, days))
+    return JSONResponse(build_inbox(limit, host or None, _days(days)))
 
 
 @app.get("/inbox")
@@ -440,6 +450,8 @@ def api_report(day: str = "", host: str = ""):
         d = datetime.date.fromisoformat(day)
     except ValueError:
         raise HTTPException(status_code=400, detail="day ต้องเป็น YYYY-MM-DD")
+    if (_ex.today() - d).days > MAX_DAYS:
+        raise HTTPException(status_code=400, detail=f"day ย้อนหลังได้ไม่เกิน {MAX_DAYS} วัน")
     days = (_ex.today() - d).days + 2         # +1 วันเผื่อ record ข้ามเที่ยงคืน (ไฟล์ตั้งชื่อตามวันที่ server รับ)
     return JSONResponse(_rep.build_report(_load_recent(max(days, 2)), day, INTERVAL_MIN, _eff_job, host or None))
 
@@ -452,7 +464,7 @@ def report():
 # ---------------- /api/projects : ตัวเลขนับรายโปรเจค (คลิป / เกรด / shot) ----------------
 @app.get("/api/projects")
 def api_projects(days: int = 30):
-    return JSONResponse(_proj.build_projects(_load_recent(max(1, min(days, 3650))), INTERVAL_MIN, _eff_job))
+    return JSONResponse(_proj.build_projects(_load_recent(max(1, min(days, MAX_DAYS))), INTERVAL_MIN, _eff_job))
 
 
 @app.get("/projects")

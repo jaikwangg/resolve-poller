@@ -96,6 +96,7 @@ server ไม่เก็บ `user` และชื่อแอป/หน้า�
 7. รอบต่อไป: token เครื่องหลุด/เครื่องเลิกใช้ → `python manage_tokens.py revoke <host>` (หรือ `issue <host> --force` ออกใหม่) · ดู log server `ingest rejected: host=… reason=…`
 
 ## endpoints
+`?days=` รับ 1–`EDITORTRACK_MAX_DAYS` (366) — นอกช่วง = 400 (`/api/projects` ตัดให้เหลือ 366 เงียบ ๆ เหมือนเดิม) · `/api/report?day=` ย้อนได้ไม่เกิน 366 วัน
 `POST /ingest` · `GET /api/report` + `/report` (รายวัน) · `GET /api/projects?days=` + `/projects` (ตัวเลขนับรายโปรเจค: คลิป เกรด shot) · `GET /api/pms` (สถานะส่ง PMS) · `GET /api/dashboard` · `GET /api/jobs` (2-track) · `GET /api/shots` (reconcile) · `GET /` (dashboard.html)
 
 ## เทส

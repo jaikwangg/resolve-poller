@@ -49,7 +49,7 @@ job-centric (อ่าน/แก้ง่าย) — `joblink` จะ reverse �
 { "role": "colorist" }
 ```
 
-## 3. เพิ่มใน record (schema 2)
+## 3. เพิ่มใน record (schema 2 — design เดิม; record ปัจจุบัน = schema 3 ดู `STAGES.md`)
 
 `runner.py` เรียก `joblink.resolve_job()` แล้วแนบ `job` block:
 ```python

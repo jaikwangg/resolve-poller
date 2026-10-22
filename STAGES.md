@@ -6,7 +6,7 @@
 |---|---|---|---|---|
 | **data** | tool DIT (ไม่ใช่ Resolve) | `fs_collector` | นับไฟล์ที่ ingest ในโฟลเดอร์ | files / target_count |
 | **conform** | Resolve | `resolve_poller`+`scope` | duration + shots (marker) | avg(duration/target, shots/expected) |
-| **color** | Resolve | `resolve_poller`+`scope` | graded clips (node>1) | graded / total |
+| **color** | Resolve | `resolve_poller`+`scope` | graded clips — `EDITORTRACK_GRADE_METHOD=lut` (default: export LUT แล้วต่างจาก identity) · `nodes` = node>1 แบบเดิม/fallback เมื่อ export ไม่ได้ | graded / total |
 | **subtitle** | tool ซับ (ไม่ใช่ Resolve) | `subtitle_collector` | นับ cue ในไฟล์ .srt/.vtt | cues / target_cues |
 | **master** | tool master (ไม่ใช่ Resolve) | `fs_collector` | นับไฟล์ master ที่ผลิต | files / target_count |
 
