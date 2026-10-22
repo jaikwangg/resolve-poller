@@ -194,8 +194,8 @@ function renderHosts(d){
     <button class="host" data-h="${esc(h.host)}" aria-pressed="${HOST===h.host}">
       <div class="hn"><span class="${h.online?"live":"off"}"></span>${esc(h.host)}
         <span class="chip">${esc(h.stage||"?")}</span></div>
-      <div class="hm">${h.online?"ส่งล่าสุด":"เงียบมาแล้ว"} ${ago(h.age_sec)}${h.online?"ที่แล้ว":""} · IP ${esc(h.ip||"?")}<br>
-        วันนี้ ${h.today} record${h.late?` · ย้อนหลัง ${h.late}`:""}</div>
+      <div class="hm">${h.online?"ส่งล่าสุด":"เงียบมาแล้ว"} ${esc(ago(h.age_sec))}${h.online?"ที่แล้ว":""} · IP ${esc(h.ip||"?")}<br>
+        วันนี้ ${esc(h.today)} record${h.late?` · ย้อนหลัง ${esc(h.late)}`:""}</div>
     </button>`).join("") : `<div class="empty">ยังไม่มีเครื่องไหนส่งข้อมูลเข้ามาใน 2 วันล่าสุด</div>`;
   document.querySelectorAll(".host").forEach(b => b.onclick = () => { HOST = HOST===b.dataset.h ? "" : b.dataset.h; load(); });
 }
@@ -203,10 +203,10 @@ function renderList(d){
   $("#listTitle").textContent = HOST ? `record ล่าสุดของ ${HOST}` : "record ล่าสุด (ทุกเครื่อง)";
   $("#list").innerHTML = d.records.length ? d.records.map(r => { const e=r.explain, k=key(r); return `
     <details class="rec" data-k="${esc(k)}" ${OPEN.has(k)?"open":""}>
-      <summary><span class="t">${tm(r.record.ts)}</span><span class="s">${esc(e.lines.slice(2).find(l=>/ACTIVE|IDLE/.test(l))||e.summary)}</span>
+      <summary><span class="t">${esc(tm(r.record.ts))}</span><span class="s">${esc(e.lines.slice(2).find(l=>/ACTIVE|IDLE/.test(l))||e.summary)}</span>
         <span class="chip">${esc(r.record.host)}</span>
-        ${r.record.progress&&r.record.progress.pct!=null?`<span class="chip erp">${esc(r.record.progress.stage)} ${r.record.progress.pct}%</span>`:""}
-        ${e.warnings.length?`<span class="chip warn">⚠ ${e.warnings.length}</span>`:""}</summary>
+        ${r.record.progress&&r.record.progress.pct!=null?`<span class="chip erp">${esc(r.record.progress.stage)} ${esc(r.record.progress.pct)}%</span>`:""}
+        ${e.warnings.length?`<span class="chip warn">⚠ ${esc(e.warnings.length)}</span>`:""}</summary>
       <div class="body">
         <ul>${e.lines.map(l=>`<li>${esc(l)}</li>`).join("")}</ul>
         ${e.warnings.length?`<h3>ข้อสังเกต</h3><ul class="w">${e.warnings.map(l=>`<li>${esc(l)}</li>`).join("")}</ul>`:""}

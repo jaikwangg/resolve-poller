@@ -83,9 +83,9 @@ function card(p){
   const c = p.counts;
   const gp = c ? pctOf(c.graded_clips, c.video_clips) : null;
   const tiles = c ? `<div class="tiles">
-      <div class="tile"><div class="l">คลิปใน timeline</div><div class="n">${n(c.video_clips)}</div><div class="s">${esc(c.timeline)} · ยาว ${dur(c.duration_sec)}</div></div>
+      <div class="tile"><div class="l">คลิปใน timeline</div><div class="n">${n(c.video_clips)}</div><div class="s">${esc(c.timeline)} · ยาว ${esc(dur(c.duration_sec))}</div></div>
       <div class="tile"><div class="l">เกรดแล้ว</div><div class="n">${n(c.graded_clips)}</div>
-        <div class="meter" role="img" aria-label="เกรดแล้ว ${gp ?? 0}%"><i style="width:${gp ?? 0}%"></i></div><div class="s">${gp == null ? "–" : gp + "%"}</div></div>
+        <div class="meter" role="img" aria-label="เกรดแล้ว ${esc(gp ?? 0)}%"><i style="width:${esc(gp ?? 0)}%"></i></div><div class="s">${gp == null ? "–" : esc(gp) + "%"}</div></div>
       <div class="tile"><div class="l">ยังไม่เกรด</div><div class="n">${c.graded_clips == null ? "–" : n(c.video_clips - c.graded_clips)}</div></div>
       <div class="tile"><div class="l">shot (จาก marker)</div><div class="n">${n(p.shots.total || c.shots)}</div>
         <div class="s">${p.shots.total ? `conform ${n(p.shots.conformed)} · เกรด ${n(p.shots.graded)}` : "ยังไม่มี marker ชื่อ shot"}</div></div>
@@ -99,13 +99,13 @@ function card(p){
       <tr><th>เวลา</th><th>ห้อง</th><th>timeline</th><th class="num">คลิป</th><th class="num">เกรดแล้ว</th><th class="num">เปลี่ยน</th><th></th></tr>
       ${p.history.map(h => `<tr><td class="t">${esc(h.at)}</td><td>${esc(h.host)}</td><td>${esc(h.timeline)}</td>
         <td class="num">${n(h.video_clips)}</td><td class="num">${n(h.graded_clips)}</td>
-        <td class="num">${h.delta_graded == null ? "เริ่ม" : (h.delta_graded > 0 ? "+" : "") + h.delta_graded}</td>
+        <td class="num">${h.delta_graded == null ? "เริ่ม" : esc((h.delta_graded > 0 ? "+" : "") + h.delta_graded)}</td>
         <td>${h.jump ? `<span class="flag up">เพิ่มเร็วผิดปกติ</span>` : h.drop ? `<span class="flag down">ลดลง</span>` : ""}${h.timeline_changed ? ` <span class="flag tl">เปลี่ยน timeline</span>` : ""}</td></tr>`).join("")}
     </table></div>` : "";
   return `<section class="card">
     <h2>${esc(p.title)}</h2>
     <div class="meta">${p.resolve_projects.length ? "โปรเจค Resolve: " + p.resolve_projects.map(esc).join(", ") + " · " : ""}ห้อง ${p.hosts.map(esc).join(", ") || "–"}
-      · ${esc(p.first_at)} – ${esc(p.last_at)} · ทำงาน ${mins(p.active_min)} · ข้อมูล ${n(p.records)} ครั้ง${p.source === "erp" ? " · ผูกกับ booking ใน PMS" : ""}</div>
+      · ${esc(p.first_at)} – ${esc(p.last_at)} · ทำงาน ${esc(mins(p.active_min))} · ข้อมูล ${n(p.records)} ครั้ง${p.source === "erp" ? " · ผูกกับ booking ใน PMS" : ""}</div>
     ${tiles}
     ${p.notes.length ? `<div class="warnbox"><ul class="w">${p.notes.map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
     ${rooms}${hist}
@@ -120,7 +120,7 @@ function summary(ps){
   return `<div class="tiles">
     <div class="tile"><div class="l">โปรเจค</div><div class="n">${n(ps.length)}</div><div class="s">มีตัวเลขนับ ${n(counted.length)}</div></div>
     <div class="tile"><div class="l">คลิปรวม</div><div class="n">${n(clips)}</div></div>
-    <div class="tile"><div class="l">เกรดแล้วรวม</div><div class="n">${n(graded)}</div><div class="s">${gradable ? pctOf(graded, gradable) + "%" : "–"}</div></div>
+    <div class="tile"><div class="l">เกรดแล้วรวม</div><div class="n">${n(graded)}</div><div class="s">${gradable ? esc(pctOf(graded, gradable)) + "%" : "–"}</div></div>
     <div class="tile"><div class="l">ห้องที่ส่งข้อมูล</div><div class="n">${n(new Set(ps.flatMap(p => p.hosts)).size)}</div></div>
   </div>`;
 }

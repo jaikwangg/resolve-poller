@@ -50,6 +50,46 @@ class Escape(unittest.TestCase):
         self.assertIn('data-rows="${esc(rows)}"', src)
 
 
+    def test_previously_raw_interpolations_now_escaped(self):
+        """stored XSS: stage/pct จาก agent ไปลง innerHTML ดิบ (dashboard ~441, 448, 450) + ตัวอื่นที่ตรวจทุกหน้า"""
+        raw = {"dashboard.html": ["${label}", "${val}", "${ov}", '">${n}</div>', "${ps.series[nm][i]}%",
+                                  "<span class='v'>${val}%", "<span class='v'>${mins(v)}", "<span class='v'>${a}ชม",
+                                  'style="${style}"'],
+               "inbox.html": ["${r.record.progress.pct}%", "${tm(r.record.ts)}", "${ago(h.age_sec)}", "${h.today}"],
+               "report.html": ["${s.records}", "${s.gap_min}", "${p.at}", "${pct(p.from)}", "${g.n}", "${g.minutes}"],
+               "projects.html": ['+ h.delta_graded}', "${gp ?? 0}", "${dur(c.duration_sec)}", "${mins(p.active_min)}"]}
+        for page, pats in raw.items():
+            src = (SERVER / page).read_text(encoding="utf-8")
+            for pat in pats:
+                self.assertNotIn(pat, src, (page, pat))
+
+    @unittest.skipUnless(shutil.which("node"), "ไม่มี node")
+    def test_dashboard_track_bar_runtime(self):
+        """รัน trackBar() จริงด้วย stage/pct/worker/page ที่เป็น HTML — ต้องไม่มี tag หลุดออกมา"""
+        import json
+        src = (SERVER / "dashboard.html").read_text(encoding="utf-8")
+        lines = src.splitlines()
+        start = next(i for i, ln in enumerate(lines) if ln.startswith("function trackBar("))
+        end = next(i for i in range(start, len(lines)) if lines[i] == "}")
+        consts = [ln for ln in lines if ln.startswith(("const STAGE_LABEL", "const STAGE_COLOR"))]
+        code = "\n".join([esc_src("dashboard.html"), *consts, *lines[start:end + 1]]) + f"""
+const ev = {json.dumps(EVIL)};
+process.stdout.write(JSON.stringify([
+  trackBar(ev, null),
+  trackBar(ev, {{pct: ev, worker: ev, page: ev, active: false}}),
+  trackBar("color", {{pct: 40, worker: "grade-03", page: "color", active: true}}),
+]));"""
+        out = subprocess.run(["node", "-e", code], capture_output=True, text=True, timeout=20)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        empty, evil, ok = json.loads(out.stdout)
+        for html in (empty, evil):
+            self.assertNotIn("<img", html)
+            self.assertIn(WANT, html)
+        self.assertIn("width:2%;", evil)                      # pct ไม่ใช่ตัวเลข → ขั้นต่ำ 2% (ไม่ลง style ดิบ)
+        self.assertIn("40%", ok)
+        self.assertIn('class="live"', ok)
+
+
 class DaysLimit(unittest.TestCase):
     def setUp(self):
         from fastapi.testclient import TestClient
