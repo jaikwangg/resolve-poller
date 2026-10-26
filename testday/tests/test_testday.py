@@ -322,9 +322,9 @@ class Generator(Tmp):
         self.assertEqual(txt.count("* FROM CLIP NAME:"), 300)
 
     def test_deterministic(self):
-        a = open(os.path.join(self._gen(), "timelines", "T3000_v1.edl")).read()
+        a = open(os.path.join(self._gen(), "timelines", "T3000_v1.xml")).read()
         shutil.rmtree(os.path.join(self.tmp, "dummy"))
-        b = open(os.path.join(self._gen(), "timelines", "T3000_v1.edl")).read()
+        b = open(os.path.join(self._gen(), "timelines", "T3000_v1.xml")).read()
         self.assertEqual(a, b)
 
     def test_revision_steps_written(self):
@@ -362,16 +362,29 @@ class Generator(Tmp):
         m = {"w": 1920, "h": 1080, "frames": 48, "pattern": "testsrc2", "hue": 47, "label": "ET DUMMY SRC_001",
              "rel": "media/src/SRC_001.mov"}
         cmd = mdp.ffmpeg_cmd("ffmpeg", m, plan, args, "/o", True)
-        self.assertIn("testsrc2=size=1920x1080:rate=24:duration=2.000000", cmd)
+        self.assertIn("testsrc2=size=1920x1080:rate=24", cmd)
+        self.assertEqual(cmd[cmd.index("-t") + 1], "2.000000")         # duration on the output: works for every source
         vf = cmd[cmd.index("-vf") + 1]
         self.assertIn("hue=h=47", vf)
         self.assertIn("fontfile=/f/My\\:Font.ttf", vf)
         self.assertEqual(cmd[cmd.index("-profile:v") + 1], "0")
-        self.assertEqual(cmd[-1], "/o/media/src/SRC_001.mov")
+        self.assertEqual(cmd[-1], "/o/media/src/SRC_001.mov.part")     # renamed only after ffmpeg succeeds
+        self.assertNotIn("duration=", " ".join(cmd))
         m["w"], m["h"] = 7680, 4320
         cmd = mdp.ffmpeg_cmd("ffmpeg", m, plan, args, "/o", False)
         self.assertEqual(cmd[cmd.index("-profile:v") + 1], "2")
         self.assertNotIn("drawtext", " ".join(cmd))
+
+    def test_patterns_need_no_duration_option(self):
+        # sources known to take size+rate; duration is never put in the lavfi string (mandelbrot has no duration)
+        known = {"testsrc", "testsrc2", "smptebars", "smptehdbars", "rgbtestsrc", "yuvtestsrc", "pal75bars",
+                 "pal100bars"}
+        self.assertTrue(set(mdp.PATTERNS) <= known, set(mdp.PATTERNS) - known)
+
+    def test_no_edl_beyond_999_events(self):
+        out = self._gen()
+        self.assertFalse(os.path.exists(os.path.join(out, "timelines", "T1500_v1.edl")))
+        self.assertTrue(os.path.exists(os.path.join(out, "timelines", "T0300_v1.edl")))
 
     def test_pathurl_quotes_spaces(self):
         self.assertEqual(mdp.pathurl("/Volumes/My Disk/a.mov"), "file://localhost/Volumes/My%20Disk/a.mov")

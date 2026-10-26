@@ -42,7 +42,8 @@ FPS = {  # name -> (timebase, ntsc, ffmpeg rate, real fps)
     "29.97": (30, True, "30000/1001", 30000 / 1001.0),
     "30": (30, False, "30", 30.0),
 }
-PATTERNS = ["testsrc2", "smptehdbars", "testsrc", "smptebars", "rgbtestsrc", "yuvtestsrc", "mandelbrot"]
+# lavfi sources that accept size + rate; the duration is set on the output (-t) so every source works the same
+PATTERNS = ["testsrc2", "smptehdbars", "testsrc", "smptebars", "rgbtestsrc", "yuvtestsrc", "pal75bars"]
 # approx. Mbit/s at 1920x1080, 24 fps (Apple ProRes white paper scaled to 24p; DNxHR LB; x264 crf 18 on test patterns)
 MBPS_1080P24 = {("prores", 0): 36, ("prores", 1): 82, ("prores", 2): 117, ("prores", 3): 176,
                 ("dnxhr", 0): 36, ("h264", 0): 12}
@@ -146,7 +147,7 @@ def build_plan(args):
 def ffmpeg_cmd(ffmpeg, m, plan, args, out_dir, drawtext):
     size = "%dx%d" % (m["w"], m["h"])
     dur = "%.6f" % (m["frames"] / plan["real_fps"])
-    src = "%s=size=%s:rate=%s:duration=%s" % (m["pattern"], size, plan["ffrate"], dur)
+    src = "%s=size=%s:rate=%s" % (m["pattern"], size, plan["ffrate"])
     vf = ["hue=h=%d" % m["hue"]] if m["hue"] else []
     if drawtext:
         font = ("fontfile=%s:" % args.font.replace(":", "\\:")) if args.font else ""
@@ -167,7 +168,7 @@ def ffmpeg_cmd(ffmpeg, m, plan, args, out_dir, drawtext):
     else:
         cmd += ["-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p"]
     cmd += ["-an", "-metadata", "comment=editortrack test-day DUMMY media (synthetic)",
-            os.path.join(out_dir, m["rel"])]
+            "-t", dur, "-f", "mov", os.path.join(out_dir, m["rel"]) + ".part"]
     return cmd
 
 
@@ -176,6 +177,17 @@ def estimate_bytes(m, plan, args):
     key = (args.codec, profile if args.codec == "prores" else 0)
     mbps = MBPS_1080P24[key] * (m["w"] * m["h"]) / (1920 * 1080.0) * (plan["real_fps"] / 24.0)
     return mbps * 1e6 / 8 * m["frames"] / plan["real_fps"]
+
+
+def label_test(ffmpeg, args):
+    """Encode one labelled frame to null: catches a drawtext without a usable font before the long run."""
+    font = ("fontfile=%s:" % args.font.replace(":", "\\:")) if args.font else ""
+    cmd = [ffmpeg, "-hide_banner", "-nostdin", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24",
+           "-vf", "drawtext=%stext='ET':x=10:y=10:fontsize=24" % font, "-frames:v", "1", "-f", "null", "-"]
+    try:
+        return subprocess.run(cmd, capture_output=True, timeout=60).returncode == 0
+    except Exception:
+        return False
 
 
 def has_drawtext(ffmpeg):
@@ -248,7 +260,7 @@ def edl(t, plan):
     for i, c in enumerate(t["clips"], 1):
         reel = os.path.splitext(c["media"]["name"])[0]
         lines.append("%03d  %-8s V     C        %s %s %s %s" % (
-            i % 1000, reel, tc(c["in"], tb), tc(c["in"] + c["len"], tb), tc(rec, tb), tc(rec + c["len"], tb)))
+            i, reel, tc(c["in"], tb), tc(c["in"] + c["len"], tb), tc(rec, tb), tc(rec + c["len"], tb)))
         lines.append("* FROM CLIP NAME: %s" % c["media"]["name"])
         rec += c["len"]
     return "\n".join(lines) + "\n"
@@ -265,7 +277,7 @@ def revision_steps(plan):
         ("R1-grade", "Color page: grade clips 1-120 (any visible change, e.g. one serial node + offset), in 3 "
                      "sessions of 40 with a 10 min pause. Expect: progress rises, provisional, never done/complete."),
         ("R2-add (WC02)", "Media pool: import the folder media/vfx_late (10 clips) and append them to the end of "
-                          "T0300_v1 (Edit > Append to End of Timeline). Clips 300 -> 310. Expect: the % drops with "
+                          "T0300_v1 (Edit > Append at End of Timeline, Shift+F12). Clips 300 -> 310. Expect: the % drops with "
                           "reason scope_change (not shown as lost work)."),
         ("R3-replace (WC07)", "Grade the 12 VFX clips (positions %s), then relink them to the folder media/vfx_v2 "
                               "(same file names, new content; grades kept). Expect: no jump to complete, no "
@@ -334,6 +346,9 @@ def main(argv=None):
 
     ffmpeg = shutil.which(args.ffmpeg) or (args.ffmpeg if os.path.isfile(args.ffmpeg) else None)
     drawtext = (not args.no_labels) and bool(ffmpeg) and has_drawtext(ffmpeg)
+    if drawtext and not args.dry_run and not args.no_media and not label_test(ffmpeg, args):
+        print("WARNING: drawtext cannot render text here (font/fontconfig); labels off. Pass --font FILE to keep them.")
+        drawtext = False
     est = sum(estimate_bytes(m, plan, args) for m in plan["media"])
     print("plan: %d media files, %d timelines, fps %s, est. %.1f GB (%s profile %d)"
           % (len(plan["media"]), len(plan["timelines"]), args.fps, est / 1e9, args.codec, args.profile))
@@ -366,14 +381,16 @@ def main(argv=None):
                 continue
             print("[%d/%d] %s" % (i, len(plan["media"]), m["rel"]), flush=True)
             r = subprocess.run(ffmpeg_cmd(ffmpeg, m, plan, args, out, drawtext))
-            if r.returncode != 0:
-                if os.path.exists(dst):
-                    os.remove(dst)
+            if r.returncode == 0:
+                os.replace(dst + ".part", dst)          # a Ctrl-C never leaves a half file under the real name
+            else:
+                if os.path.exists(dst + ".part"):
+                    os.remove(dst + ".part")
                 common.die("ffmpeg failed on %s (exit %d)" % (m["rel"], r.returncode))
     for t in plan["timelines"]:
         with open(os.path.join(out, "timelines", t["name"] + ".xml"), "w", encoding="utf-8") as f:
             f.write(xmeml(t, plan, media_root))
-        if not t["v2"]:
+        if not t["v2"] and len(t["clips"]) <= 999:   # CMX3600 has 3-digit event numbers
             with open(os.path.join(out, "timelines", t["name"] + ".edl"), "w", encoding="utf-8") as f:
                 f.write(edl(t, plan))
         manifest["timelines"].append({"name": t["name"], "clips": len(t["clips"]) + len(t["v2"]),
