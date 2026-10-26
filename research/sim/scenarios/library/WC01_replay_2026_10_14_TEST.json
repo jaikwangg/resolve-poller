@@ -1,0 +1,895 @@
+{
+ "id": "WC01_replay_2026_10_14_TEST",
+ "title": "Exact replay: 2026-10-14 job TEST on conform-01 (owner-confirmed false 100%)",
+ "category": "scope_growth",
+ "severity": [
+  "false_completion",
+  "false_regression"
+ ],
+ "stage": "color",
+ "job": "TEST",
+ "story": "Real test session on the conform-01 Mac (agent stage=color, node>1 grade detection at the time). The tester graded 1 of 6 clips, then all 6 within one minute, one dropped back, then 2 more clips appeared on the 2-track timeline (duration unchanged at 161.56 s: added on V2 or bladed - the owner confirms files were added later, which really happens). PMS would have received 16.7 -> 100 -> 83.3 -> 75.",
+ "signals": "video_clips 6,6,6,6,8 ; graded 1 -> 6 -> 5 -> 6 ; duration 161.56 constant ; markers 0 ; no booking (job TEST by fallback; a booking is assumed here so the PMS path is exercised)",
+ "truth_note": "Truth assumes the final 8 clips are the scope and the graded count is right (the 1 -> 6 jump in one poll may itself be over-counting by the old node>1 rule; unknown). Truth is never done.",
+ "status": "active",
+ "source": "server/tests/fixtures/replay/2026-10-14.jsonl (sanitised copy of server/data/2026-10-14.jsonl)",
+ "observations": [
+  {
+   "t": 0.0,
+   "ts": "2026-10-14T10:00:52.991395+00:00",
+   "host": "conform-01",
+   "stage": "color",
+   "ok": true,
+   "project": "TEST",
+   "timeline": "Timeline 1",
+   "timeline_count": 1,
+   "video_clips": 6,
+   "graded_clips": 1,
+   "duration_sec": 161.56,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-TEST",
+    "project_no": "TEST",
+    "project_name": "TEST",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 60
+   },
+   "true_job": "TEST",
+   "truth": {
+    "pct": 12.5,
+    "done": false,
+    "scope": 8
+   },
+   "recorded_pct": 16.7
+  },
+  {
+   "t": 1.01,
+   "ts": "2026-10-14T10:01:53.392117+00:00",
+   "host": "conform-01",
+   "stage": "color",
+   "ok": true,
+   "project": "TEST",
+   "timeline": "Timeline 1",
+   "timeline_count": 1,
+   "video_clips": 6,
+   "graded_clips": 1,
+   "duration_sec": 161.56,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-TEST",
+    "project_no": "TEST",
+    "project_name": "TEST",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 60
+   },
+   "true_job": "TEST",
+   "truth": {
+    "pct": 12.5,
+    "done": false,
+    "scope": 8
+   },
+   "recorded_pct": 16.7
+  },
+  {
+   "t": 2.01,
+   "ts": "2026-10-14T10:02:53.817505+00:00",
+   "host": "conform-01",
+   "stage": "color",
+   "ok": true,
+   "project": "TEST",
+   "timeline": "Timeline 1",
+   "timeline_count": 1,
+   "video_clips": 6,
+   "graded_clips": 1,
+   "duration_sec": 161.56,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-TEST",
+    "project_no": "TEST",
+    "project_name": "TEST",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 60
+   },
+   "true_job": "TEST",
+   "truth": {
+    "pct": 12.5,
+    "done": false,
+    "scope": 8
+   },
+   "recorded_pct": 16.7
+  },
+  {
+   "t": 3.02,
+   "ts": "2026-10-14T10:03:54.219590+00:00",
+   "host": "conform-01",
+   "stage": "color",
+   "ok": true,
+   "project": "TEST",
+   "timeline": "Timeline 1",
+   "timeline_count": 1,
+   "video_clips": 6,
+   "graded_clips": 1,
+   "duration_sec": 161.56,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-TEST",
+    "project_no": "TEST",
+    "project_name": "TEST",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 60
+   },
+   "true_job": "TEST",
+   "truth": {
+    "pct": 12.5,
+    "done": false,
+    "scope": 8
+   },
+   "recorded_pct": 16.7
+  },
+  {
+   "t": 4.03,
+   "ts": "2026-10-14T10:04:54.602729+00:00",
+   "host": "conform-01",
+   "stage": "color",
+   "ok": true,
+   "project": "TEST",
+   "timeline": "Timeline 1",
+   "timeline_count": 1,
+   "video_clips": 6,
+   "graded_clips": 1,
+   "duration_sec": 161.56,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-TEST",
+    "project_no": "TEST",
+    "project_name": "TEST",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 60
+   },
+   "true_job": "TEST",
+   "truth": {
+    "pct": 12.5,
+    "done": false,
+    "scope": 8
+   },
+   "recorded_pct": 16.7
+  },
+  {
+   "t": 5.03,
+   "ts": "2026-10-14T10:05:54.844365+00:00",
+   "host": "conform-01",
+   "stage": "color",
+   "ok": true,
+   "project": "TEST",
+   "timeline": "Timeline 1",
+   "timeline_count": 1,
+   "video_clips": 6,
+   "graded_clips": 1,
+   "duration_sec": 161.56,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-TEST",
+    "project_no": "TEST",
+    "project_name": "TEST",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 60
+   },
+   "true_job": "TEST",
+   "truth": {
+    "pct": 12.5,
+    "done": false,
+    "scope": 8
+   },
+   "recorded_pct": 16.7
+  },
+  {
+   "t": 6.03,
+   "ts": "2026-10-14T10:06:55.088213+00:00",
+   "host": "conform-01",
+   "stage": "color",
+   "ok": true,
+   "project": "TEST",
+   "timeline": "Timeline 1",
+   "timeline_count": 1,
+   "video_clips": 6,
+   "graded_clips": 1,
+   "duration_sec": 161.56,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-TEST",
+    "project_no": "TEST",
+    "project_name": "TEST",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 60
+   },
+   "true_job": "TEST",
+   "truth": {
+    "pct": 12.5,
+    "done": false,
+    "scope": 8
+   },
+   "recorded_pct": 16.7
+  },
+  {
+   "t": 7.04,
+   "ts": "2026-10-14T10:07:55.452800+00:00",
+   "host": "conform-01",
+   "stage": "color",
+   "ok": true,
+   "project": "TEST",
+   "timeline": "Timeline 1",
+   "timeline_count": 1,
+   "video_clips": 6,
+   "graded_clips": 1,
+   "duration_sec": 161.56,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-TEST",
+    "project_no": "TEST",
+    "project_name": "TEST",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 60
+   },
+   "true_job": "TEST",
+   "truth": {
+    "pct": 12.5,
+    "done": false,
+    "scope": 8
+   },
+   "recorded_pct": 16.7
+  },
+  {
+   "t": 8.05,
+   "ts": "2026-10-14T10:08:55.708622+00:00",
+   "host": "conform-01",
+   "stage": "color",
+   "ok": true,
+   "project": "TEST",
+   "timeline": "Timeline 1",
+   "timeline_count": 1,
+   "video_clips": 6,
+   "graded_clips": 1,
+   "duration_sec": 161.56,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-TEST",
+    "project_no": "TEST",
+    "project_name": "TEST",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 60
+   },
+   "true_job": "TEST",
+   "truth": {
+    "pct": 12.5,
+    "done": false,
+    "scope": 8
+   },
+   "recorded_pct": 16.7
+  },
+  {
+   "t": 9.05,
+   "ts": "2026-10-14T10:09:55.950500+00:00",
+   "host": "conform-01",
+   "stage": "color",
+   "ok": true,
+   "project": "TEST",
+   "timeline": "Timeline 1",
+   "timeline_count": 1,
+   "video_clips": 6,
+   "graded_clips": 1,
+   "duration_sec": 161.56,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-TEST",
+    "project_no": "TEST",
+    "project_name": "TEST",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 60
+   },
+   "true_job": "TEST",
+   "truth": {
+    "pct": 12.5,
+    "done": false,
+    "scope": 8
+   },
+   "recorded_pct": 16.7
+  },
+  {
+   "t": 10.05,
+   "ts": "2026-10-14T10:10:56.187097+00:00",
+   "host": "conform-01",
+   "stage": "color",
+   "ok": true,
+   "project": "TEST",
+   "timeline": "Timeline 1",
+   "timeline_count": 1,
+   "video_clips": 6,
+   "graded_clips": 1,
+   "duration_sec": 161.56,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-TEST",
+    "project_no": "TEST",
+    "project_name": "TEST",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 60
+   },
+   "true_job": "TEST",
+   "truth": {
+    "pct": 12.5,
+    "done": false,
+    "scope": 8
+   },
+   "recorded_pct": 16.7
+  },
+  {
+   "t": 11.06,
+   "ts": "2026-10-14T10:11:56.426275+00:00",
+   "host": "conform-01",
+   "stage": "color",
+   "ok": true,
+   "project": "TEST",
+   "timeline": "Timeline 1",
+   "timeline_count": 1,
+   "video_clips": 6,
+   "graded_clips": 1,
+   "duration_sec": 161.56,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-TEST",
+    "project_no": "TEST",
+    "project_name": "TEST",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 60
+   },
+   "true_job": "TEST",
+   "truth": {
+    "pct": 12.5,
+    "done": false,
+    "scope": 8
+   },
+   "recorded_pct": 16.7
+  },
+  {
+   "t": 12.06,
+   "ts": "2026-10-14T10:12:56.659891+00:00",
+   "host": "conform-01",
+   "stage": "color",
+   "ok": true,
+   "project": "TEST",
+   "timeline": "Timeline 1",
+   "timeline_count": 1,
+   "video_clips": 6,
+   "graded_clips": 1,
+   "duration_sec": 161.56,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-TEST",
+    "project_no": "TEST",
+    "project_name": "TEST",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 60
+   },
+   "true_job": "TEST",
+   "truth": {
+    "pct": 12.5,
+    "done": false,
+    "scope": 8
+   },
+   "recorded_pct": 16.7
+  },
+  {
+   "t": 13.07,
+   "ts": "2026-10-14T10:13:56.922071+00:00",
+   "host": "conform-01",
+   "stage": "color",
+   "ok": true,
+   "project": "TEST",
+   "timeline": "Timeline 1",
+   "timeline_count": 1,
+   "video_clips": 6,
+   "graded_clips": 6,
+   "duration_sec": 161.56,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-TEST",
+    "project_no": "TEST",
+    "project_name": "TEST",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 60
+   },
+   "true_job": "TEST",
+   "truth": {
+    "pct": 75.0,
+    "done": false,
+    "scope": 8
+   },
+   "recorded_pct": 100.0
+  },
+  {
+   "t": 14.07,
+   "ts": "2026-10-14T10:14:57.174914+00:00",
+   "host": "conform-01",
+   "stage": "color",
+   "ok": true,
+   "project": "TEST",
+   "timeline": "Timeline 1",
+   "timeline_count": 1,
+   "video_clips": 6,
+   "graded_clips": 6,
+   "duration_sec": 161.56,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-TEST",
+    "project_no": "TEST",
+    "project_name": "TEST",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 60
+   },
+   "true_job": "TEST",
+   "truth": {
+    "pct": 75.0,
+    "done": false,
+    "scope": 8
+   },
+   "recorded_pct": 100.0
+  },
+  {
+   "t": 15.08,
+   "ts": "2026-10-14T10:15:57.536728+00:00",
+   "host": "conform-01",
+   "stage": "color",
+   "ok": true,
+   "project": "TEST",
+   "timeline": "Timeline 1",
+   "timeline_count": 1,
+   "video_clips": 6,
+   "graded_clips": 6,
+   "duration_sec": 161.56,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-TEST",
+    "project_no": "TEST",
+    "project_name": "TEST",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 60
+   },
+   "true_job": "TEST",
+   "truth": {
+    "pct": 75.0,
+    "done": false,
+    "scope": 8
+   },
+   "recorded_pct": 100.0
+  },
+  {
+   "t": 16.08,
+   "ts": "2026-10-14T10:16:57.920738+00:00",
+   "host": "conform-01",
+   "stage": "color",
+   "ok": true,
+   "project": "TEST",
+   "timeline": "Timeline 1",
+   "timeline_count": 1,
+   "video_clips": 6,
+   "graded_clips": 5,
+   "duration_sec": 161.56,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-TEST",
+    "project_no": "TEST",
+    "project_name": "TEST",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 60
+   },
+   "true_job": "TEST",
+   "truth": {
+    "pct": 62.5,
+    "done": false,
+    "scope": 8
+   },
+   "recorded_pct": 83.3
+  },
+  {
+   "t": 17.09,
+   "ts": "2026-10-14T10:17:58.343025+00:00",
+   "host": "conform-01",
+   "stage": "color",
+   "ok": true,
+   "project": "TEST",
+   "timeline": "Timeline 1",
+   "timeline_count": 1,
+   "video_clips": 8,
+   "graded_clips": 6,
+   "duration_sec": 161.56,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-TEST",
+    "project_no": "TEST",
+    "project_name": "TEST",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 60
+   },
+   "true_job": "TEST",
+   "truth": {
+    "pct": 75.0,
+    "done": false,
+    "scope": 8
+   },
+   "recorded_pct": 75.0
+  },
+  {
+   "t": 18.09,
+   "ts": "2026-10-14T10:18:58.596064+00:00",
+   "host": "conform-01",
+   "stage": "color",
+   "ok": true,
+   "project": "TEST",
+   "timeline": "Timeline 1",
+   "timeline_count": 1,
+   "video_clips": 8,
+   "graded_clips": 6,
+   "duration_sec": 161.56,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-TEST",
+    "project_no": "TEST",
+    "project_name": "TEST",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 60
+   },
+   "true_job": "TEST",
+   "truth": {
+    "pct": 75.0,
+    "done": false,
+    "scope": 8
+   },
+   "recorded_pct": 75.0
+  },
+  {
+   "t": 19.1,
+   "ts": "2026-10-14T10:19:58.842002+00:00",
+   "host": "conform-01",
+   "stage": "color",
+   "ok": true,
+   "project": "TEST",
+   "timeline": "Timeline 1",
+   "timeline_count": 1,
+   "video_clips": 8,
+   "graded_clips": 6,
+   "duration_sec": 161.56,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-TEST",
+    "project_no": "TEST",
+    "project_name": "TEST",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 60
+   },
+   "true_job": "TEST",
+   "truth": {
+    "pct": 75.0,
+    "done": false,
+    "scope": 8
+   },
+   "recorded_pct": 75.0
+  },
+  {
+   "t": 20.1,
+   "ts": "2026-10-14T10:20:59.086919+00:00",
+   "host": "conform-01",
+   "stage": "color",
+   "ok": true,
+   "project": "TEST",
+   "timeline": "Timeline 1",
+   "timeline_count": 1,
+   "video_clips": 8,
+   "graded_clips": 6,
+   "duration_sec": 161.56,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-TEST",
+    "project_no": "TEST",
+    "project_name": "TEST",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 60
+   },
+   "true_job": "TEST",
+   "truth": {
+    "pct": 75.0,
+    "done": false,
+    "scope": 8
+   },
+   "recorded_pct": 75.0
+  },
+  {
+   "t": 21.11,
+   "ts": "2026-10-14T10:21:59.333320+00:00",
+   "host": "conform-01",
+   "stage": "color",
+   "ok": true,
+   "project": "TEST",
+   "timeline": "Timeline 1",
+   "timeline_count": 1,
+   "video_clips": 8,
+   "graded_clips": 6,
+   "duration_sec": 161.56,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-TEST",
+    "project_no": "TEST",
+    "project_name": "TEST",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 60
+   },
+   "true_job": "TEST",
+   "truth": {
+    "pct": 75.0,
+    "done": false,
+    "scope": 8
+   },
+   "recorded_pct": 75.0
+  },
+  {
+   "t": 22.11,
+   "ts": "2026-10-14T10:22:59.573742+00:00",
+   "host": "conform-01",
+   "stage": "color",
+   "ok": true,
+   "project": "TEST",
+   "timeline": "Timeline 1",
+   "timeline_count": 1,
+   "video_clips": 8,
+   "graded_clips": 6,
+   "duration_sec": 161.56,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-TEST",
+    "project_no": "TEST",
+    "project_name": "TEST",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 60
+   },
+   "true_job": "TEST",
+   "truth": {
+    "pct": 75.0,
+    "done": false,
+    "scope": 8
+   },
+   "recorded_pct": 75.0
+  },
+  {
+   "t": 23.11,
+   "ts": "2026-10-14T10:23:59.817256+00:00",
+   "host": "conform-01",
+   "stage": "color",
+   "ok": true,
+   "project": "TEST",
+   "timeline": "Timeline 1",
+   "timeline_count": 1,
+   "video_clips": 8,
+   "graded_clips": 6,
+   "duration_sec": 161.56,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-TEST",
+    "project_no": "TEST",
+    "project_name": "TEST",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 60
+   },
+   "true_job": "TEST",
+   "truth": {
+    "pct": 75.0,
+    "done": false,
+    "scope": 8
+   },
+   "recorded_pct": 75.0
+  },
+  {
+   "t": 24.12,
+   "ts": "2026-10-14T10:25:00.057672+00:00",
+   "host": "conform-01",
+   "stage": "color",
+   "ok": true,
+   "project": "TEST",
+   "timeline": "Timeline 1",
+   "timeline_count": 1,
+   "video_clips": 8,
+   "graded_clips": 6,
+   "duration_sec": 161.56,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-TEST",
+    "project_no": "TEST",
+    "project_name": "TEST",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 60
+   },
+   "true_job": "TEST",
+   "truth": {
+    "pct": 75.0,
+    "done": false,
+    "scope": 8
+   },
+   "recorded_pct": 75.0
+  },
+  {
+   "t": 25.12,
+   "ts": "2026-10-14T10:26:00.355199+00:00",
+   "host": "conform-01",
+   "stage": "color",
+   "ok": true,
+   "project": "TEST",
+   "timeline": "Timeline 1",
+   "timeline_count": 1,
+   "video_clips": 8,
+   "graded_clips": 6,
+   "duration_sec": 161.56,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-TEST",
+    "project_no": "TEST",
+    "project_name": "TEST",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 60
+   },
+   "true_job": "TEST",
+   "truth": {
+    "pct": 75.0,
+    "done": false,
+    "scope": 8
+   },
+   "recorded_pct": 75.0
+  },
+  {
+   "t": 26.13,
+   "ts": "2026-10-14T10:27:00.644627+00:00",
+   "host": "conform-01",
+   "stage": "color",
+   "ok": true,
+   "project": "TEST",
+   "timeline": "Timeline 1",
+   "timeline_count": 1,
+   "video_clips": 8,
+   "graded_clips": 6,
+   "duration_sec": 161.56,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-TEST",
+    "project_no": "TEST",
+    "project_name": "TEST",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 60
+   },
+   "true_job": "TEST",
+   "truth": {
+    "pct": 75.0,
+    "done": false,
+    "scope": 8
+   },
+   "recorded_pct": 75.0
+  },
+  {
+   "t": 27.13,
+   "ts": "2026-10-14T10:28:00.956844+00:00",
+   "host": "conform-01",
+   "stage": "color",
+   "ok": true,
+   "project": "TEST",
+   "timeline": "Timeline 1",
+   "timeline_count": 1,
+   "video_clips": 8,
+   "graded_clips": 6,
+   "duration_sec": 161.56,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-TEST",
+    "project_no": "TEST",
+    "project_name": "TEST",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 60
+   },
+   "true_job": "TEST",
+   "truth": {
+    "pct": 75.0,
+    "done": false,
+    "scope": 8
+   },
+   "recorded_pct": 75.0
+  }
+ ],
+ "expect": {
+  "S0": {
+   "false_completion": true,
+   "min_fr_explained": 0
+  },
+  "C3": {
+   "false_completion": false
+  }
+ }
+}

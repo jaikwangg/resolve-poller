@@ -1,0 +1,146 @@
+{
+ "id": "WC02_vfx_late_no_placeholder",
+ "title": "VFX shots arrive after the colorist finished, no placeholder in the timeline",
+ "category": "scope_growth",
+ "severity": [
+  "false_completion"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "Conform hands Reel 1 to grading with 10 camera shots. Two VFX shots are still at the vendor and the conformer left a gap instead of a slug. The colorist grades all 10 present shots in the morning. The VFX arrive the next day, the conformer drops them into the grade project, and the colorist grades them.",
+ "signals": "video_clips 10, graded 0 -> 5 -> 10 (held all afternoon) -> next day video_clips 12, graded 10 -> 12",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R1_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 120,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 180,
+   "ops": []
+  },
+  {
+   "t": 240,
+   "ops": []
+  },
+  {
+   "t": 1440,
+   "ops": [
+    [
+     "add",
+     {
+      "shots": [
+       "R1_110",
+       "R1_120"
+      ],
+      "kind": "vfx"
+     }
+    ]
+   ]
+  },
+  {
+   "t": 1500,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_110",
+       "R1_120"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 1560,
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "color": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100",
+    "R1_110",
+    "R1_120"
+   ]
+  }
+ },
+ "expect": {
+  "S0": {
+   "false_completion": true
+  },
+  "C3": {
+   "false_completion": false
+  }
+ }
+}

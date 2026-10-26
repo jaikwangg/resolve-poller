@@ -1,0 +1,152 @@
+{
+ "id": "WC03_vfx_placeholder_slug",
+ "title": "Missing VFX held by a slug/placeholder clip, later replaced by the real shot",
+ "category": "scope_growth",
+ "severity": [
+  "false_regression"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "The conformer puts a 'VFX MISSING' slug (generator) where each of 2 VFX shots goes. The colorist grades the 10 camera shots. When VFX arrive the conformer replaces the slugs with the real media and they get graded.",
+ "signals": "video_clips 12 throughout (slugs counted), graded 0 -> 10 -> 12",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R1_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_110",
+       "R1_120"
+      ],
+      "kind": "placeholder"
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 120,
+   "ops": []
+  },
+  {
+   "t": 1440,
+   "ops": [
+    [
+     "replace",
+     {
+      "shot": "R1_110",
+      "kind": "vfx",
+      "keep_grade": false,
+      "truth": {
+       "color": false
+      }
+     }
+    ],
+    [
+     "replace",
+     {
+      "shot": "R1_120",
+      "kind": "vfx",
+      "keep_grade": false,
+      "truth": {
+       "color": false
+      }
+     }
+    ]
+   ]
+  },
+  {
+   "t": 1500,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_110",
+       "R1_120"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 1560,
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "color": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100",
+    "R1_110",
+    "R1_120"
+   ]
+  }
+ },
+ "expect": {
+  "S0": {
+   "false_completion": false
+  },
+  "C3": {
+   "false_completion": false
+  }
+ }
+}

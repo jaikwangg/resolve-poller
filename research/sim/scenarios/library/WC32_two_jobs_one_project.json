@@ -1,0 +1,167 @@
+{
+ "id": "WC32_two_jobs_one_project",
+ "title": "Two jobs (30 s and 15 s cut) live in one Resolve project; room booked for one",
+ "category": "attribution",
+ "severity": [
+  "wrong_job"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "BrandX_Campaign holds TVC30_online (KPP-2026-0101) and TVC15_online (KPP-2026-0102). The room is booked on 0101 only, but the colorist also grades the 15 s cut in that booking.",
+ "signals": "same project; timeline switches TVC30 -> TVC15 ; one booking (0101)",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_Campaign",
+      "timeline": "TVC30_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ],
+    [
+     "new_timeline",
+     {
+      "name": "TVC15_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "C15_010",
+       "C15_020",
+       "C15_030",
+       "C15_040"
+      ],
+      "timeline": "TVC15_online"
+     }
+    ],
+    [
+     "timeline_job",
+     {
+      "timeline": "TVC15_online",
+      "job": "KPP-2026-0102"
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 120,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_Campaign",
+      "timeline": "TVC15_online"
+     }
+    ],
+    [
+     "grade",
+     {
+      "shots": [
+       "C15_010",
+       "C15_020",
+       "C15_030",
+       "C15_040"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 180,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_Campaign",
+      "timeline": "TVC30_online"
+     }
+    ],
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 240,
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "color": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100"
+   ]
+  },
+  "KPP-2026-0102": {
+   "color": [
+    "C15_010",
+    "C15_020",
+    "C15_030",
+    "C15_040"
+   ]
+  }
+ },
+ "expect": {
+  "S0": {
+   "min_wrong_job": 1
+  }
+ }
+}

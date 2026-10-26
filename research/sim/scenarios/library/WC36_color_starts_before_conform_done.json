@@ -1,0 +1,316 @@
+{
+ "id": "WC36_color_starts_before_conform_done",
+ "title": "Stage overlap: color grades Reel 1 while conform still builds Reel 2",
+ "category": "stage_overlap",
+ "severity": [
+  "false_completion"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "conform-01 conforms R1 then R2; grade-01 receives R1 first and grades it while R2 is still being conformed.",
+ "signals": "color: 10/10 (R1 only) while conform is at R2 ; later R2 arrives in color",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "host": "conform-01",
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_conform",
+      "timeline": "Film_offline"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100",
+       "R2_010",
+       "R2_020",
+       "R2_030",
+       "R2_040",
+       "R2_050",
+       "R2_060",
+       "R2_070",
+       "R2_080"
+      ]
+     }
+    ],
+    [
+     "new_timeline",
+     {
+      "name": "Film_conform",
+      "open": true
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ],
+    [
+     "conform",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 10,
+   "host": "grade-01",
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "Film_grade"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "host": "grade-01",
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 90,
+   "host": "conform-01",
+   "ops": [
+    [
+     "add",
+     {
+      "shots": [
+       "R2_010",
+       "R2_020",
+       "R2_030",
+       "R2_040"
+      ]
+     }
+    ],
+    [
+     "conform",
+     {
+      "shots": [
+       "R2_010",
+       "R2_020",
+       "R2_030",
+       "R2_040"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 120,
+   "host": "grade-01",
+   "ops": []
+  },
+  {
+   "t": 180,
+   "host": "conform-01",
+   "ops": [
+    [
+     "add",
+     {
+      "shots": [
+       "R2_050",
+       "R2_060",
+       "R2_070",
+       "R2_080"
+      ]
+     }
+    ],
+    [
+     "conform",
+     {
+      "shots": [
+       "R2_050",
+       "R2_060",
+       "R2_070",
+       "R2_080"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 240,
+   "host": "grade-01",
+   "ops": [
+    [
+     "add",
+     {
+      "shots": [
+       "R2_010",
+       "R2_020",
+       "R2_030",
+       "R2_040",
+       "R2_050",
+       "R2_060",
+       "R2_070",
+       "R2_080"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 300,
+   "host": "grade-01",
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R2_010",
+       "R2_020",
+       "R2_030",
+       "R2_040",
+       "R2_050",
+       "R2_060",
+       "R2_070",
+       "R2_080"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 330,
+   "poll": "all",
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "color": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100",
+    "R2_010",
+    "R2_020",
+    "R2_030",
+    "R2_040",
+    "R2_050",
+    "R2_060",
+    "R2_070",
+    "R2_080"
+   ],
+   "conform": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100",
+    "R2_010",
+    "R2_020",
+    "R2_030",
+    "R2_040",
+    "R2_050",
+    "R2_060",
+    "R2_070",
+    "R2_080"
+   ]
+  }
+ },
+ "expect": {
+  "S0": {
+   "false_completion": true
+  },
+  "C3": {
+   "false_completion": false
+  }
+ },
+ "hosts": {
+  "conform-01": {
+   "stage": "conform"
+  },
+  "grade-01": {
+   "stage": "color"
+  }
+ }
+}

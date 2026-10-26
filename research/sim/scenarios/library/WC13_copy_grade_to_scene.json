@@ -1,0 +1,133 @@
+{
+ "id": "WC13_copy_grade_to_scene",
+ "title": "Legitimate mass grade: one grade copied to 9 matching shots of an interview",
+ "category": "look_all",
+ "severity": [
+  "false_under_report"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "An interview scene: the colorist grades shot 1 and applies the same grade to the 9 other angles of the same setup in one action. That is real, finished grading (the C3 mass-grade guard is wrong here).",
+ "signals": "graded 0 -> 1 -> 10 in one poll",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R1_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "SC_010",
+       "SC_020",
+       "SC_030",
+       "SC_040",
+       "SC_050",
+       "SC_060",
+       "SC_070",
+       "SC_080",
+       "SC_090",
+       "SC_100"
+      ]
+     }
+    ],
+    [
+     "confirm_scope",
+     {
+      "stage": "color",
+      "source": "offline_edl",
+      "shots": [
+       "SC_010",
+       "SC_020",
+       "SC_030",
+       "SC_040",
+       "SC_050",
+       "SC_060",
+       "SC_070",
+       "SC_080",
+       "SC_090",
+       "SC_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 30,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "SC_010"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 31,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "SC_020",
+       "SC_030",
+       "SC_040",
+       "SC_050",
+       "SC_060",
+       "SC_070",
+       "SC_080",
+       "SC_090",
+       "SC_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 80,
+   "ops": []
+  },
+  {
+   "t": 120,
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "color": [
+    "SC_010",
+    "SC_020",
+    "SC_030",
+    "SC_040",
+    "SC_050",
+    "SC_060",
+    "SC_070",
+    "SC_080",
+    "SC_090",
+    "SC_100"
+   ]
+  }
+ },
+ "expect": {
+  "S0": {
+   "false_completion": false
+  },
+  "C3": {
+   "false_completion": false
+  }
+ },
+ "known_limits": {
+  "C3": "mass-grade guard under-reports a legitimate copy-grade until shots are touched again"
+ }
+}

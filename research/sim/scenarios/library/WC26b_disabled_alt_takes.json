@@ -1,0 +1,106 @@
+{
+ "id": "WC26b_disabled_alt_takes",
+ "title": "Alternate takes kept disabled on V2 inflate the clip count",
+ "category": "clip_kinds",
+ "severity": [
+  "never_completes"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "The colorist keeps 4 alternate takes on V2 (clips disabled) in case the client asks. They are counted in video_clips but will never be graded.",
+ "signals": "video_clips 14 ; graded 0 -> 10",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R1_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "ALT1",
+       "ALT2",
+       "ALT3",
+       "ALT4"
+      ],
+      "kind": "disabled",
+      "track": 2
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 120,
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "color": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100"
+   ]
+  }
+ },
+ "expect": {
+  "S0": {
+   "missed_completion": true
+  }
+ },
+ "resolve_unverified": "TimelineItem.GetClipEnabled() availability on the facility's Resolve version"
+}

@@ -1,0 +1,137 @@
+{
+ "id": "WC07_vfx_new_version_grade_kept",
+ "title": "New VFX version replaces v1 with Replace Clip; grade carries over",
+ "category": "replacement",
+ "severity": [
+  "false_completion"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "R1_050 is a VFX shot. v1 was graded. The vendor delivers v2 (new comp, different plate exposure). The colorist uses Replace Clip so the timeline item and its grade stay; the shot must be checked/regraded.",
+ "signals": "video_clips 10, graded 10 -> 10 (unchanged); only the media version of one item changes (items.version, ext)",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R1_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 90,
+   "ops": []
+  },
+  {
+   "t": 120,
+   "ops": [
+    [
+     "replace",
+     {
+      "shot": "R1_050",
+      "version": 2,
+      "keep_grade": true
+     }
+    ]
+   ]
+  },
+  {
+   "t": 150,
+   "ops": []
+  },
+  {
+   "t": 180,
+   "ops": []
+  },
+  {
+   "t": 210,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_050"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 240,
+   "ops": []
+  },
+  {
+   "t": 270,
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "color": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100"
+   ]
+  }
+ },
+ "expect": {
+  "S0": {
+   "false_completion": true
+  },
+  "C3": {
+   "false_completion": false
+  }
+ }
+}

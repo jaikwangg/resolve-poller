@@ -1,0 +1,181 @@
+{
+ "id": "WC11_revision_days_after_delivery",
+ "title": "Day-later revision after delivery on a new booking",
+ "category": "rework",
+ "severity": [
+  "false_completion"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "The job was delivered on Monday. On Thursday the client asks for changes on 2 shots; PMS opens a new booking (B-2) and the task goes back to REVISION. The colorist opens the same project; counts read 10/10 at once.",
+ "signals": "Mon: 10/10. Thu: same project, same counts; new booking id; PMS task REVISION; 2 sigs change during the session",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R1_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ],
+    [
+     "confirm_scope",
+     {
+      "stage": "color",
+      "source": "offline_edl",
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 90,
+   "ops": []
+  },
+  {
+   "t": 120,
+   "ops": []
+  },
+  {
+   "t": 4320,
+   "ops": [
+    [
+     "booking",
+     {
+      "booking_id": "B-2",
+      "project_no": "KPP-2026-0101",
+      "project_name": "BrandX TVC",
+      "activity": "Grading",
+      "start_t": 4320,
+      "end_t": 4560
+     }
+    ],
+    [
+     "notes",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020"
+      ]
+     }
+    ],
+    [
+     "pms_task",
+     {
+      "status": "REVISION"
+     }
+    ]
+   ]
+  },
+  {
+   "t": 4350,
+   "ops": []
+  },
+  {
+   "t": 4380,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020"
+      ]
+     }
+    ],
+    [
+     "pms_task",
+     {
+      "status": "DONE"
+     }
+    ]
+   ]
+  },
+  {
+   "t": 4410,
+   "ops": []
+  },
+  {
+   "t": 4440,
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "color": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100"
+   ]
+  }
+ },
+ "expect": {
+  "S0": {
+   "false_completion": true
+  },
+  "C3": {
+   "false_completion": false
+  }
+ }
+}

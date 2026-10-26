@@ -1,0 +1,114 @@
+{
+ "id": "WC27_reused_source_and_blade",
+ "title": "Same source clip used for two shots; colorist blades a shot for a grade change",
+ "category": "identity",
+ "severity": [
+  "false_under_report"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "A001C003 is cut into the edit twice (shot 020 and shot 080, different source ranges). Later the colorist blades shot 050 to change the grade mid-shot. Counts: 10 -> 11 clips with no scope change.",
+ "signals": "video_clips 10 -> 11 ; graded 10 -> 11",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R1_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ],
+      "sid": {
+       "R1_020": "A001C003",
+       "R1_080": "A001C003"
+      }
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 90,
+   "ops": [
+    [
+     "blade",
+     {
+      "shot": "R1_050"
+     }
+    ]
+   ]
+  },
+  {
+   "t": 120,
+   "ops": []
+  },
+  {
+   "t": 180,
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "color": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100"
+   ]
+  }
+ },
+ "expect": {
+  "S0": {
+   "false_completion": false
+  },
+  "C3": {
+   "false_completion": false
+  }
+ }
+}

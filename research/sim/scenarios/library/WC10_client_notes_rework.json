@@ -1,0 +1,185 @@
+{
+ "id": "WC10_client_notes_rework",
+ "title": "Client review notes after 'done': rework on 4 shots, grade signal never drops",
+ "category": "rework",
+ "severity": [
+  "false_completion"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "Grading is finished; the client attends a review and gives notes on 4 shots. The colorist adjusts those shots over the next hour. In PMS the task goes back to REVISION. Nothing in the clip counts changes.",
+ "signals": "graded 10/10 throughout; grade signatures of 4 items change (items.sig, ext); PMS task status REVISION",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R1_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ],
+    [
+     "confirm_scope",
+     {
+      "stage": "color",
+      "source": "offline_edl",
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 90,
+   "ops": []
+  },
+  {
+   "t": 120,
+   "ops": []
+  },
+  {
+   "t": 180,
+   "ops": [
+    [
+     "notes",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040"
+      ]
+     }
+    ],
+    [
+     "pms_task",
+     {
+      "status": "REVISION"
+     }
+    ]
+   ]
+  },
+  {
+   "t": 210,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 240,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_030",
+       "R1_040"
+      ]
+     }
+    ],
+    [
+     "pms_task",
+     {
+      "status": "DONE"
+     }
+    ]
+   ]
+  },
+  {
+   "t": 270,
+   "ops": []
+  },
+  {
+   "t": 300,
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "color": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100"
+   ]
+  }
+ },
+ "expect": {
+  "S0": {
+   "false_completion": true
+  },
+  "C3": {
+   "false_completion": false
+  }
+ },
+ "known_limits": {
+  "S0": "rework is invisible to clip counts"
+ }
+}

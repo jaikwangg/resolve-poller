@@ -1,0 +1,195 @@
+{
+ "id": "WC20_offline_changes_after_conform",
+ "title": "Conform before picture lock: offline v2 arrives, target stays on v1",
+ "category": "conform",
+ "severity": [
+  "false_completion"
+ ],
+ "stage": "conform",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "The conformer starts from offline v1 (40 s). Editorial sends offline v2 (+2 shots, 48 s) which is imported as a second offline timeline. The poller takes the first timeline matching the offline regex (v1).",
+ "signals": "offline_target_sec 40 (v1 found first) while the conform follows v2; duration 0 -> 40 -> 48",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_conform",
+      "timeline": "R1_offline_v1"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ],
+    [
+     "new_timeline",
+     {
+      "name": "R1_conform",
+      "open": true
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "ops": [
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050"
+      ]
+     }
+    ],
+    [
+     "conform",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 120,
+   "ops": [
+    [
+     "add",
+     {
+      "shots": [
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ],
+    [
+     "conform",
+     {
+      "shots": [
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ],
+    [
+     "new_timeline",
+     {
+      "name": "R1_offline_v2"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100",
+       "R1_110",
+       "R1_120"
+      ],
+      "timeline": "R1_offline_v2"
+     }
+    ]
+   ]
+  },
+  {
+   "t": 180,
+   "ops": []
+  },
+  {
+   "t": 240,
+   "ops": [
+    [
+     "add",
+     {
+      "shots": [
+       "R1_110",
+       "R1_120"
+      ]
+     }
+    ],
+    [
+     "conform",
+     {
+      "shots": [
+       "R1_110",
+       "R1_120"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 300,
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "conform": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100",
+    "R1_110",
+    "R1_120"
+   ]
+  }
+ },
+ "expect": {
+  "S0": {
+   "false_completion": true
+  }
+ },
+ "hosts": {
+  "conform-01": {
+   "stage": "conform"
+  }
+ }
+}

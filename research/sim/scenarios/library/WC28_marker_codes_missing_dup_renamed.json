@@ -1,0 +1,128 @@
+{
+ "id": "WC28_marker_codes_missing_dup_renamed",
+ "title": "Shot-code markers: some missing, one duplicated, one renamed mid-job",
+ "category": "identity",
+ "severity": [
+  "flapping"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "The conformer put shot-code markers on most shots, but two have none, two shots got the same code by copy-paste, and one code is renamed from SH050 to R1_SH050 during the job. (Zero-touch: markers cannot be required.)",
+ "signals": "markers 8 codes for 10 shots ; one code renamed at t=120",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R1_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080"
+      ],
+      "ident": "marker",
+      "sid": {
+       "R1_030": "R1_020"
+      }
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_090",
+       "R1_100"
+      ],
+      "ident": "none"
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 120,
+   "ops": [
+    [
+     "rename_sid",
+     {
+      "shot": "R1_050",
+      "sid": "REEL1_050"
+     }
+    ]
+   ]
+  },
+  {
+   "t": 180,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 240,
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "color": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100"
+   ]
+  }
+ },
+ "expect": {
+  "C3": {
+   "false_completion": false
+  }
+ }
+}

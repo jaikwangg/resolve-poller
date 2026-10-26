@@ -1,0 +1,120 @@
+{
+ "id": "WC15b_duplicated_timeline_no_names",
+ "title": "Duplicated timeline when clip names are not readable (unique ids only)",
+ "category": "versions",
+ "severity": [
+  "false_under_report"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "As WC15, but the poller can only identify items by Resolve unique id (no clip name / shot code). A duplicate creates new ids, so a per-item ledger sees 20 items for a 10-shot reel.",
+ "signals": "as WC15; items carry no sid",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R1_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ],
+      "ident": "none"
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 90,
+   "ops": [
+    [
+     "copy_timeline",
+     {
+      "from": "R1_online",
+      "to": "R1_v2"
+     }
+    ]
+   ]
+  },
+  {
+   "t": 150,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 240,
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "color": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100"
+   ]
+  }
+ },
+ "expect": {
+  "C3": {
+   "false_completion": false
+  }
+ },
+ "known_limits": {
+  "S3": "unique ids change on duplicate: scope doubles"
+ }
+}
