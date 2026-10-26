@@ -38,6 +38,9 @@ def _resolve_gate():
         return "lease_no_resolve"
     if safety.backoff_active():
         return "backoff"
+    pu = safety.platform_unverified()            # Python/OS upgraded since install → verify first
+    if pu:
+        return pu
     return None
 
 

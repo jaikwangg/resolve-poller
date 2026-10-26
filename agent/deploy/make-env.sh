@@ -44,6 +44,9 @@ export EDITORTRACK_SERVER=$SERVER
 export EDITORTRACK_TOKEN=$TOKEN
 export EDITORTRACK_HTTP_TIMEOUT=5
 export EDITORTRACK_RESOLVE_VERIFIED=$VERIFIED
+# platform pin: Python/OS ที่ตรวจตอนติดตั้ง — อัปเกรดแล้วไม่ตรง → agent ไม่แตะ Resolve จนกว่าจะตรวจใหม่
+export EDITORTRACK_PYTHON_VERIFIED=$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')
+export EDITORTRACK_OS_VERIFIED="$(cd "$DIR/.." && python3 -c 'import safety; print(safety.platform_ids()["os"])')"
 export RESOLVE_SCRIPT_API="$API"
 export RESOLVE_SCRIPT_LIB="$LIB"
 export PYTHONPATH="\$PYTHONPATH:\$RESOLVE_SCRIPT_API/Modules/"

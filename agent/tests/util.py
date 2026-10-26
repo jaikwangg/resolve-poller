@@ -14,6 +14,7 @@ BASE_ENV = {
     "EDITORTRACK_SERVER": "http://127.0.0.1:9/ingest",
     "EDITORTRACK_HTTP_TIMEOUT": "1",
     "EDITORTRACK_LEASE_TIMEOUT_SEC": "1",
+    "EDITORTRACK_PYTHON_VERIFIED": "%d.%d" % sys.version_info[:2],
 }
 MODULES = ["resolve_guard", "safety", "grade_detect", "resolve_poller", "scope", "collect", "runner"]
 

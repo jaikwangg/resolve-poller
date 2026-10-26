@@ -22,6 +22,9 @@ export EDITORTRACK_HTTP_TIMEOUT=5
 export EDITORTRACK_RESOLVE_VERIFIED=
 # ExportLUT (grade by LUT) stays off until probe_grade.py --dummy-project passed on this OS/version
 export EDITORTRACK_ALLOW_EXPORT_LUT=0
+# Python (major.minor) / OS verified on this machine — make-env.sh fills these; mismatch = no Resolve calls
+export EDITORTRACK_PYTHON_VERIFIED=
+export EDITORTRACK_OS_VERIFIED=
 
 # ---- Resolve scripting (macOS) ----
 export RESOLVE_SCRIPT_API="/Library/Application Support/Blackmagic Design/DaVinci Resolve/Developer/Scripting"

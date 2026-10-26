@@ -173,6 +173,27 @@ def _write(name, obj):
         return False
 
 
+# ---------- platform pin (pre-upgrade check) ----------
+def platform_ids():
+    import platform
+    rel = platform.release()
+    osid = "%s %s" % (platform.system(), rel.split(".")[0] if platform.system() == "Darwin" else ".".join(rel.split(".")[:2]))
+    return {"python": "%d.%d" % sys.version_info[:2], "os": osid}
+
+
+def platform_unverified():
+    """reason if Python or OS differ from what was verified on this machine (EDITORTRACK_PYTHON_VERIFIED /
+    EDITORTRACK_OS_VERIFIED, written by make-env.sh at install). Unset = unverified -> no Resolve calls."""
+    ids = platform_ids()
+    py = (os.environ.get("EDITORTRACK_PYTHON_VERIFIED") or "").strip()
+    if py != ids["python"]:
+        return "python_unverified:%s" % ids["python"]
+    o = (os.environ.get("EDITORTRACK_OS_VERIFIED") or "").strip()
+    if o and o != ids["os"]:                     # OS pin optional (owner decision: kernel updates are frequent)
+        return "os_unverified:%s" % ids["os"]
+    return None
+
+
 # ---------- circuit breaker ----------
 def tripped():
     t = _read("TRIPPED")

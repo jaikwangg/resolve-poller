@@ -191,6 +191,16 @@ class Breaker(unittest.TestCase):
             self.assertGreaterEqual(b["next_at"] - time.time(), 50)
             self.assertEqual(len(srv.posts()), 10)      # heartbeats keep flowing
 
+    def test_python_or_os_upgrade_stops_resolve_calls(self):
+        for env, reason in (({"EDITORTRACK_PYTHON_VERIFIED": "3.1"}, "python_unverified"),
+                            ({"EDITORTRACK_PYTHON_VERIFIED": None}, "python_unverified"),
+                            ({"EDITORTRACK_OS_VERIFIED": "Plan9 1"}, "os_unverified")):
+            with FakeServer() as srv, agent_env(EDITORTRACK_SERVER=srv.url + "/ingest", **env) as (m, sd):
+                w = World()
+                self.assertEqual(turn(m, w), 200)
+                self.assertEqual(w.calls, [])
+                self.assertTrue(srv.posts()[0]["source"]["reason"].startswith(reason))
+
     def test_backoff_is_exponential_and_capped(self):
         with agent_env() as (m, sd):
             s = m["safety"]
