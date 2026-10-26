@@ -50,8 +50,8 @@ def main():
         snap = None
     wall = (time.perf_counter() - t0) * 1000
     _, peak = tracemalloc.get_traced_memory()
-    import resource
-    rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+    import safety
+    rss = safety.peak_rss_mb()          # handles macOS bytes vs Linux KiB
     g = (snap or {}).get("guard") or {}
     tl = (snap or {}).get("timeline") or {}
     print(json.dumps({"status": status, "wall_ms": round(wall, 1), "py_heap_peak_mb": round(peak / 2**20, 2),
