@@ -37,7 +37,7 @@ end-to-end ตั้งแต่ Resolve/ERP → agent → server → dashboard 
 
 | ไฟล์ | function | อ่าน/ทำอะไร |
 |---|---|---|
-| `resolve_poller.py` | `snapshot()` | Resolve API (read-only): `page`, timeline (duration/clips/**graded**/scan_ms/markers), **shots** (จาก marker), `scope_hint`/`job_hint` · POLL_RENDER off (ไม่เด้ง Deliver) · จำ+คืนหน้า |
+| `resolve_poller.py` | `snapshot()` | Resolve API (read-only): `page`, timeline (duration/clips/**graded**/scan_ms/markers), **shots** (จาก marker), `scope_hint`/`job_hint` · ผ่าน resolve_guard (allowlist) · ไม่มี render poll / ไม่คืนหน้า (WORKSTATION_SAFETY.md) |
 | `activity_sampler.py` | `sample()` | idle-time + frontmost app (mac/win/linux) → `active_in_resolve` |
 | `scope.py` | `compute_progress()` | คิด % ต่อเฟส: edit = avg(duration/target, shots/expected) · color = graded/total |
 | `joblink.py` | `resolve_job()` | ผูก project → job_id/role (marker > registry > naming > fallback + host role) |
@@ -143,8 +143,8 @@ RESOLVE_SCRIPT_API / RESOLVE_SCRIPT_LIB / PYTHONPATH
 EDITORTRACK_ROLE=conform|colorist          # 1 เครื่อง = 1 role
 EDITORTRACK_DETECT_GRADE=1                  # color room=1 · edit room=0
 EDITORTRACK_EXTRACT_SHOTS=1                 # ดึง shots จาก marker
-EDITORTRACK_POLL_RENDER=0                   # ห้ามเปิด (เด้งหน้า Deliver)
-EDITORTRACK_RESTORE_PAGE=1                  # กันเหนียว คืนหน้า
+# EDITORTRACK_POLL_RENDER — ลบออกแล้ว (GetRenderJobList เด้งหน้า Deliver; เปิดด้วย env ไม่ได้อีก)
+# EDITORTRACK_RESTORE_PAGE — ลบออกแล้ว (OpenPage = แตะ UI เอง) ดู docs/research/WORKSTATION_SAFETY.md
 EDITORTRACK_IDLE=90                         # วิ, เกิน=idle
 # ปลายทาง
 EDITORTRACK_SERVER=http://<server>:8000/ingest

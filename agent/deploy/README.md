@@ -101,7 +101,7 @@ python3 -c "import Quartz, AppKit; print('pyobjc ok')"
 python3 -c "import json,activity_sampler as a; print(json.dumps(a.sample(), default=str))"
 
 # 2) ต่อ Resolve ได้ไหม (เปิด Resolve + โปรเจค + timeline หน้า Color)
-. deploy/env.sh && python3 probe.py          # ดู §7: connect ✅ / Studio ✅ / COLOR
+. deploy/env.sh && python3 probe.py --dummy-project   # project ทดสอบเท่านั้น · ดู §7: connect ✅ / Studio ✅ / COLOR
 
 # 3) snapshot + เช็คไม่เด้งหน้า ("page" ควรคงเป็น color)
 . deploy/env.sh && python3 resolve_poller.py
@@ -149,7 +149,7 @@ python3 -c "import ctypes; ctypes.CDLL('libXss.so.1'); print('libXss ok')"
 python3 -c "import json,activity_sampler as a; print(json.dumps(a.sample(), default=str))"
 
 # 2) ต่อ Resolve (เปิด Resolve + โปรเจค + timeline หน้า Color)
-. deploy/env.sh && python3 probe.py            # ดู §7: connect ✅ / Studio ✅ / COLOR
+. deploy/env.sh && python3 probe.py --dummy-project     # project ทดสอบเท่านั้น · ดู §7: connect ✅ / Studio ✅ / COLOR
 
 # 3) snapshot + เช็คไม่เด้งหน้า
 . deploy/env.sh && python3 resolve_poller.py
