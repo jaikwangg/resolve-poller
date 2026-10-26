@@ -43,13 +43,23 @@ EDITORTRACK_SCOPE_SOURCE=none        # D1: none = ไม่มีขอบเข
 EDITORTRACK_PROGRESS_DONE=advisory   # D2: advisory = ส่ง done ได้ (PMS ใช้อ้างอิงเท่านั้น) · never
 EDITORTRACK_MASS_GUARD=on            # D4: เกรดหลายคลิปในรอบเดียว (LUT ทั้ง timeline) → ไม่ done จนกว่าจะล็อกใหม่
 EDITORTRACK_JOB_GUARD=withhold       # D5: project ใน Resolve ไม่ตรง booking → ไม่ส่ง · off
-EDITORTRACK_PROGRESS_CAP=99          # D6: เพดานค่า provisional (สูงสุด 99.99)
-EDITORTRACK_STABLE_MIN=30            # D6: นาทีที่ 100% บนขอบเขตยืนยันต้องนิ่งก่อน done
-EDITORTRACK_STABLE_GAP_MIN=10        # poll ห่างเกินนี้ = เริ่มนับใหม่
+EDITORTRACK_PROGRESS_CAP=99          # D6: เพดานค่า provisional (0–99.99)
+EDITORTRACK_STABLE_MIN=30            # D6: นาทีที่ 100% บนขอบเขตยืนยันต้องนิ่งก่อน done (env ตั้งได้แค่ ≥ 30)
+EDITORTRACK_STABLE_GAP_MIN=10        # poll ห่างเกินนี้ = เริ่มนับใหม่ (env ตั้งได้แค่ 0 < x ≤ 10)
 EDITORTRACK_OFFLINE_MATCH=...        # D8: ตัวเดียวกับของ agent (default เหมือนกัน)
+EDITORTRACK_LOCK_COUNTS=0            # lock จากจำนวนคลิปอย่างเดียว (poller วันนี้) ให้ done ได้ไหม · 1 = ได้ (ต้องรับข้อจำกัดด้านล่าง)
 ```
-ข้อจำกัดของ `lock` ตอนนี้ (นับจากจำนวนคลิป ยังไม่มีข้อมูลราย clip): Replace Clip ที่เก็บ grade เดิมไว้มองไม่เห็น → อาจ done ทั้งที่
-VFX เวอร์ชันใหม่ยังไม่ได้เกรด (`research/tests/test_shipped.py::test_known_limit_…`) — เปิด `lock` เมื่อเจ้าของรับข้อนี้แล้วเท่านั้น
+ค่าที่พิมพ์ผิด / nan / หลวมกว่าค่า default → ใช้ค่า default (env ทำให้เข้มขึ้นได้อย่างเดียว)
+
+ข้อจำกัดของ `lock` ที่นับจากจำนวนคลิป (ไม่มีข้อมูลราย clip) — เหตุผลที่ต้องเปิด `EDITORTRACK_LOCK_COUNTS=1` แยกอีกชั้น:
+- Replace Clip ที่เก็บ grade เดิมไว้มองไม่เห็น → อาจ done ทั้งที่ VFX เวอร์ชันใหม่ยังไม่ได้เกรด
+- lock เป็นจำนวนต่อ project_no|stage ไม่ผูก timeline: reel/timeline อื่นของงานเดียวกันที่มีจำนวนคลิปเท่ากันก็ done ได้
+- look ที่ apply ทีละไม่กี่คลิปหลายรอบ ดูเหมือนเกรดจริง (guard จับได้เฉพาะก้อนใหญ่ ≥ max(4, ครึ่งหนึ่ง) ต่อรอบ หรือเห็นครั้งแรกก็เกรดแล้ว)
+ถ้า record มี `source.items` (ขั้น 3, poller ยังไม่ส่ง) ledger ราย shot แก้สามข้อแรกได้ และ `lock` ไม่ต้องใช้ `LOCK_COUNTS`
+
+ยังไม่ทำ: กฎ reopen (task กลับไป REVISION → เปิดค่าใหม่) — ต้องอ่าน `GET /api/integrations/editortrack/tasks` (§4 ของสัญญา,
+ต้องให้เจ้าของอนุมัติการขยายสิทธิ์ key ก่อน) · ตอนนี้ engine รับ `pms_task` ได้แต่ server ยังไม่ดึง → หลัง done ถ้า task ถูกตีกลับ
+แถว PMS ยังแสดง done จนกว่าตัวเลขจะเปลี่ยน (PMS ใช้ค่านี้อ้างอิงเท่านั้น) · ค่าเริ่มต้น D1 = none ไม่มีวันส่ง done อยู่แล้ว
 ไม่ตั้ง = ไม่ส่งอะไรให้ PMS · ดูสถานะการส่งที่ `GET /api/pms` · ไม่ส่ง user/ชื่อคน
 ทุกช่วงต้องผูก booking (กติกา PMS 15 ต.ค.) — ห้องมีหลาย booking พร้อมกัน → เลือกตัวที่ `project_no` หรือชื่อ project ตรงกับ project ที่เปิดใน Resolve · หาไม่ได้/ไม่ชัด = ไม่ส่ง นับไว้ที่ `unbound` ใน `/api/pms`
 → ตั้งชื่อ project ใน Resolve ให้มี `project_no` (เช่น `KPP-2026-0005_…`) จะผูกได้แม่นสุด

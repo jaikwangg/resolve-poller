@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import math
 import os
 import re
 
@@ -69,12 +70,21 @@ MAX_COUNT = 2 ** 31 - 1
 # ---------------------------------------------------------------- config
 class Config:
     def __init__(self, scope_source=(), send_done=True, cap=99.0, stable_min=30.0, stable_gap_min=10.0,
-                 job_guard=True, mass_guard=True, offline_match=DEFAULT_OFFLINE_MATCH):
+                 job_guard=True, mass_guard=True, offline_match=DEFAULT_OFFLINE_MATCH, lock_counts=False):
+        def finite(x, default):
+            try:
+                x = float(x)
+            except (TypeError, ValueError):
+                return default
+            return x if math.isfinite(x) else default
         self.scope_source = tuple(s for s in scope_source if s and s != "none")
         self.send_done = bool(send_done)
-        self.cap = max(0.0, min(MAX_PCT_PROVISIONAL, float(cap)))
-        self.stable_min = max(0.0, float(stable_min))
-        self.stable_gap_min = max(0.0, float(stable_gap_min))
+        self.cap = max(0.0, min(MAX_PCT_PROVISIONAL, finite(cap, 99.0)))
+        self.stable_min = max(0.0, finite(stable_min, 30.0))
+        self.stable_gap_min = max(0.0, finite(stable_gap_min, 10.0))
+        # D1 = lock on today's counts (no per-item data) cannot see Replace Clip, another reel with the same
+        # clip count, or a look applied in steps: done from counts needs this second, explicit opt-in
+        self.lock_counts = bool(lock_counts)
         self.job_guard = bool(job_guard)
         self.mass_guard = bool(mass_guard)
         self.offline_match = offline_match or DEFAULT_OFFLINE_MATCH
@@ -83,16 +93,21 @@ class Config:
     def from_env(cls, env=None):
         env = os.environ if env is None else env
 
-        def num(name, default):
+        def num(name, default, stricter):
+            """env can only make a setting stricter than the study default; a typo, nan/inf or a looser
+            value falls back to the default (lowering the window or raising the gap needs a code change)"""
             try:
-                return float(env.get(name, default))
+                x = float(env.get(name, default))
             except (TypeError, ValueError):
-                return float(default)          # a typo never widens what is sent: defaults are the strict ones
+                return float(default)
+            return x if math.isfinite(x) and stricter(x) else float(default)
         src = [s.strip().lower() for s in str(env.get("EDITORTRACK_SCOPE_SOURCE", "none")).split(",")]
         return cls(scope_source=[s for s in src if s in ("lock",)],
                    send_done=str(env.get("EDITORTRACK_PROGRESS_DONE", "advisory")).strip().lower() == "advisory",
-                   cap=num("EDITORTRACK_PROGRESS_CAP", 99), stable_min=num("EDITORTRACK_STABLE_MIN", 30),
-                   stable_gap_min=num("EDITORTRACK_STABLE_GAP_MIN", 10),
+                   cap=num("EDITORTRACK_PROGRESS_CAP", 99, lambda x: 0 <= x <= MAX_PCT_PROVISIONAL),
+                   stable_min=num("EDITORTRACK_STABLE_MIN", 30, lambda x: x >= 30),
+                   stable_gap_min=num("EDITORTRACK_STABLE_GAP_MIN", 10, lambda x: 0 < x <= 10),
+                   lock_counts=str(env.get("EDITORTRACK_LOCK_COUNTS", "0")).strip() == "1",
                    job_guard=str(env.get("EDITORTRACK_JOB_GUARD", "withhold")).strip().lower() != "off",
                    mass_guard=str(env.get("EDITORTRACK_MASS_GUARD", "on")).strip().lower() != "off",
                    offline_match=env.get("EDITORTRACK_OFFLINE_MATCH") or DEFAULT_OFFLINE_MATCH)
@@ -100,7 +115,7 @@ class Config:
     def describe(self):
         return {"scope_source": list(self.scope_source) or ["none"], "send_done": self.send_done, "cap": self.cap,
                 "stable_min": self.stable_min, "stable_gap_min": self.stable_gap_min, "job_guard": self.job_guard,
-                "mass_guard": self.mass_guard, "offline_match": self.offline_match}
+                "mass_guard": self.mass_guard, "offline_match": self.offline_match, "lock_counts": self.lock_counts}
 
 
 # ---------------------------------------------------------------- helpers
@@ -124,14 +139,35 @@ def _int(x):
     return x if isinstance(x, int) and not isinstance(x, bool) and 0 <= x <= MAX_COUNT else None
 
 
+NAME_MIN = 6                          # a name match needs at least this many letters/digits (no "test" in everything)
+
+
+def _bounded(needle, hay):
+    """needle's alphanumeric runs appear in hay in order, separators optional, and not inside a longer
+    number or word: KPP-1 is not in KPP-10_x, KPP-2026-0005 is in KPP20260005BrandX."""
+    runs = re.findall(r"[0-9a-z]+", str(needle or "").lower())
+    if not runs:
+        return False
+    pat = r"[^0-9a-z]*".join(re.escape(r) for r in runs)
+    first, last = runs[0][0], runs[-1][-1]
+    before = r"(?<![0-9])" if first.isdigit() else r"(?<![a-z])"
+    after = r"(?![0-9])" if last.isdigit() else r"(?![a-z])"
+    return re.search(before + pat + after, str(hay or "").lower()) is not None
+
+
 def job_matches(project, project_no, project_name):
-    """Resolve project name vs the booking (D5): contains the project_no, or the names contain each other.
-    An empty Resolve project name cannot be checked and passes (it carries no counts anyway)."""
+    """Resolve project name vs the booking (D5): contains the project_no (bounded), or contains the booking
+    name / is contained in it (bounded, at least NAME_MIN letters/digits). An empty Resolve project name
+    cannot be checked and passes (it carries no counts anyway)."""
     p = _norm(project)
     if not p:
         return True
-    pno, pname = _norm(project_no), _norm(project_name)
-    return bool((pno and pno in p) or (pname and (pname in p or p in pname)))
+    if project_no and _bounded(project_no, project):
+        return True
+    pname = _norm(project_name)
+    if len(pname) >= NAME_MIN and _bounded(project_name, project):
+        return True
+    return bool(len(p) >= NAME_MIN and project_name and _bounded(project, project_name))
 
 
 def out(key, pct=None, done=False, total=None, done_count=None, confirmed=False, provisional=True,
@@ -254,7 +290,7 @@ class Ledger:
                 if not vs:
                     S["shots"].pop(gid, None)
                     reasons.add("scope_shrink")
-        newly = []
+        newly, fresh = [], []
         for ident, its in groups.items():
             done = all(_unit_done(i, stage) for i in its)
             ver = max(int(i.get("version") or 0) for i in its)
@@ -269,6 +305,8 @@ class Ledger:
                                "changed_t": None if len(views) else t, "seen_ver": ver}
                 if done and prev is not None:
                     newly.append(ident)
+                elif done and len(views) == 1:
+                    fresh.append(ident)          # never seen anywhere and already graded at first sight
                 if done:
                     self._work(ident, "|".join(sig) if stage == "color" else ver)
                 continue
@@ -300,6 +338,13 @@ class Ledger:
         if (self.mass_guard and stage == "color" and dt <= MASS_WINDOW_MIN
                 and len(newly) >= max(MASS_MIN, MASS_FRAC * len(S["shots"]))):
             for ident in newly:
+                S["shots"][ident][view]["mass"] = True
+            reasons.add("mass_grade")
+        if (self.mass_guard and stage == "color" and fresh
+                and len(fresh) >= max(MASS_MIN, MASS_FRAC * len(S["shots"]))):
+            # a timeline first seen with most shots already "graded" (template node tree, look on everything,
+            # agent installed mid-job): not counted until each shot is touched again
+            for ident in fresh:
                 S["shots"][ident][view]["mass"] = True
             reasons.add("mass_grade")
         if before and set(S["shots"]) - before:
@@ -342,7 +387,7 @@ class Engine:
 
     def __init__(self, cfg=None, state=None):
         self.cfg = cfg or Config()
-        st = state or {}
+        st = state if valid_state(state) else {}
         self.keys = st.get("keys", {})         # key -> per-key state
         self.host_t = st.get("host_t", {})     # host -> newest record time (epoch s) seen
         self.last = st.get("last", {})         # key -> last output (sent or not)
@@ -366,7 +411,7 @@ class Engine:
         stage = obs.get("stage")
         bound = bool(b.get("project_no"))
         key = f"{b.get('project_no') or ('unbound:' + str(obs.get('project')))}|{stage}"
-        st = self.keys.setdefault(key, {})
+        st = self.keys.setdefault(key, {}) if bound else {}      # unbound keys are never sent: keep no state
         host = str(obs.get("host"))
         tsec = _epoch(obs.get("ts"))
         if tsec is not None and host in self.host_t and tsec < self.host_t[host]:
@@ -386,7 +431,8 @@ class Engine:
             return self._hold(key, "no_data", st)
         o["send"] = bound
         o = seal(o, self.cfg.cap)
-        self.last[key] = o
+        if bound:
+            self.last[key] = o
         return o
 
     def _base(self, obs, stage):
@@ -447,10 +493,12 @@ class Engine:
                 elif pv.get("g") is not None and g > pv["g"]:
                     st["work"] = st.get("work", 0) + (g - pv["g"])
             work = st.get("work") if stage == "color" else None
-            # mass-grade guard (D4) from counts: many clips graded at once on one timeline
-            if (self.cfg.mass_guard and stage == "color" and pv is not None and g is not None
-                    and pv.get("g") is not None and t - pv.get("t", -1e9) <= MASS_WINDOW_MIN):
-                if g - pv["g"] >= max(MASS_MIN, MASS_FRAC * (v or 0)):
+            # mass-grade guard (D4) from counts: many clips turning graded between two successful polls of
+            # one timeline (no time limit: scans abort while the user works), or a timeline first seen with
+            # most clips already graded
+            if self.cfg.mass_guard and stage == "color" and g is not None:
+                base_g = pv.get("g") if pv is not None else 0
+                if base_g is not None and g - base_g >= max(MASS_MIN, MASS_FRAC * (v or 0)):
                     st["mass_at"] = t
                     reasons.add("mass_grade")
             views[view] = {"g": g, "v": v, "t": t}
@@ -480,6 +528,8 @@ class Engine:
                     confirmed = True
                     if book is None and st.get("mass_at") is not None and (lock_t is None or lock_t <= st["mass_at"]):
                         reasons.add("mass_grade")            # counts: not cleared until the scope is locked again
+                    if book is None and not self.cfg.lock_counts:
+                        reasons.add("awaiting_identity")     # counts alone may not end in done (Config.lock_counts)
                     if cmp_v is not None and cmp_v < total_lock:
                         reasons.add("scope_mismatch")         # units missing vs the lock
                     total = total_lock
@@ -515,7 +565,7 @@ class Engine:
 
         # done (D2, D6): confirmed, complete, no blocker, stable for the window, PMS task not reopened
         task = (obs.get("external") or {}).get("pms_task")
-        blockers = reasons & {"scope_mismatch", "mass_grade", "scope_grew_after_lock"}
+        blockers = reasons & {"scope_mismatch", "mass_grade", "scope_grew_after_lock", "awaiting_identity"}
         complete = bool(confirmed and dc is not None and total and dc >= total and not blockers)
         sig = [total, dc] if book is not None else [total, dc, v, view]
         prev_t = st.get("seen_t")
@@ -541,6 +591,15 @@ class Engine:
         st["was_done"] = done or bool(st.get("was_done") and task not in DONE_OPEN)
         return out(key, pct, done=done, total=total, done_count=dc, confirmed=confirmed,
                    provisional=provisional, reasons=reasons, work=work)
+
+
+def valid_state(st):
+    """shape check of a persisted state (a hand-edited or truncated file must not break every ingest)"""
+    return (isinstance(st, dict) and st.get("v") == 1
+            and all(isinstance(st.get(k, {}), dict) for k in ("keys", "host_t", "last", "hints"))
+            and all(isinstance(v, dict) for v in st.get("keys", {}).values())
+            and all(isinstance(v, (int, float)) for v in st.get("host_t", {}).values())
+            and all(isinstance(v, dict) for v in st.get("last", {}).values()))
 
 
 # ---------------------------------------------------------------- server glue (records -> obs -> payload)
@@ -594,7 +653,7 @@ def pms_check(p):
     pct = p.get("progress_pct")
     if not isinstance(pct, (int, float)) or isinstance(pct, bool) or not (0 <= pct <= 100) or round(pct, 2) != pct:
         return "progress_pct must be 0-100 with at most two decimals"
-    if p.get("stage") not in STAGES or not p.get("project_no"):
+    if p.get("stage") not in STAGES or not isinstance(p.get("project_no"), str) or not p["project_no"]:
         return "project_no/stage"
     for name in ("done_count", "total", "work_done"):
         v = p.get(name)

@@ -59,7 +59,9 @@ def test_lock_mode_with_a_confirmed_scope_never_falsely_completes(path, sc):
 # (confirm_scope op: WC02b, WC10, WC11, WC12) are never done; a hold restarts the stability window (WC37).
 SVI_VS_C3 = {"WC02b_vfx_late_confirmed_list", "WC10_client_notes_rework", "WC11_revision_days_after_delivery",
              "WC12_look_lut_on_all_clips"}
-SVIL_VS_C3_CONFIRMED = {"WC37_detector_warmup_reopen"}
+# WC31 has counts only (no items): a counts lock needs the EDITORTRACK_LOCK_COUNTS opt-in, and 7 clips graded
+# across a 36-minute outage read as a mass grade (reviewer finding: the guard has no time window).
+SVIL_VS_C3_CONFIRMED = {"WC37_detector_warmup_reopen", "WC31_offline_queue_backlog"}
 
 
 class _NoGap(S.SVILShipped):
@@ -178,10 +180,51 @@ def test_config_from_env_defaults_are_the_study_defaults_and_typos_stay_strict()
     c = PV.Config.from_env({})
     assert c.describe() == {"scope_source": ["none"], "send_done": True, "cap": 99.0, "stable_min": 30.0,
                             "stable_gap_min": 10.0, "job_guard": True, "mass_guard": True,
-                            "offline_match": PV.DEFAULT_OFFLINE_MATCH}
+                            "offline_match": PV.DEFAULT_OFFLINE_MATCH, "lock_counts": False}
     c = PV.Config.from_env({"EDITORTRACK_PROGRESS_CAP": "100", "EDITORTRACK_SCOPE_SOURCE": "pms,lokc",
-                            "EDITORTRACK_STABLE_MIN": "abc", "EDITORTRACK_PROGRESS_DONE": "nevr"})
-    assert c.cap == 99.99 and c.scope_source == () and c.stable_min == 30.0 and c.send_done is False
+                            "EDITORTRACK_STABLE_MIN": "abc", "EDITORTRACK_PROGRESS_DONE": "nevr",
+                            "EDITORTRACK_LOCK_COUNTS": "yes"})
+    assert c.cap == 99.0 and c.scope_source == () and c.stable_min == 30.0 and c.send_done is False
+    assert c.lock_counts is False
+    for bad in ("-30", "nan", "inf", "5", "-inf"):
+        assert PV.Config.from_env({"EDITORTRACK_STABLE_MIN": bad}).stable_min == 30.0, bad
+    for bad in ("inf", "nan", "60", "0", "-1"):
+        assert PV.Config.from_env({"EDITORTRACK_STABLE_GAP_MIN": bad}).stable_gap_min == 10.0, bad
+    assert PV.Config.from_env({"EDITORTRACK_STABLE_MIN": "45", "EDITORTRACK_STABLE_GAP_MIN": "5",
+                               "EDITORTRACK_PROGRESS_CAP": "95"}).describe()["stable_min"] == 45.0
+
+
+@pytest.mark.parametrize("project,pno,name,ok", [
+    ("KPP-10_x", "KPP-1", None, False), ("test", "KPP-9", "TEST commercial 2026", False),
+    ("KPP20260005BrandX", "KPP-2026-0005", None, True), ("KPP-2026-0005_BrandX TVC", "KPP-2026-0005", "BrandX", True),
+    ("BrandX TVC grade", "KPP-1", "BrandX TVC", True), ("Other Client TVC", "KPP-2026-0101", "BrandX", False),
+    ("KPP-2026-00051 other", "KPP-2026-0005", None, False)])
+def test_job_guard_matches_project_numbers_on_boundaries(project, pno, name, ok):
+    assert PV.job_matches(project, pno, name) is ok
+
+
+def test_counts_lock_never_done_without_the_second_opt_in():
+    class Plain(S.SVLShipped):
+        name = "SVL_plain"
+        config = {"scope_source": ("lock",)}
+    lock = {"total": 6}
+    obs = [_ob(t, 6, min(6, t // 2), lock) for t in range(0, 12)] + [_ob(t, 6, 6, lock) for t in range(12, 90)]
+    outs = S.run(Plain, obs)
+    assert not any(o["done"] for o in outs) and "awaiting_identity" in outs[-1]["reasons"]
+    assert outs[-1]["pct"] == 99.0 and outs[-1]["provisional"]
+
+
+@pytest.mark.parametrize("first", [0, 1, 4])
+def test_counts_mass_guard_has_no_time_window_and_checks_first_sight(first):
+    lock = {"total": 10}
+    if first == 0:      # 0/10, then 10/10 three minutes later (scans aborted in between)
+        obs = [_ob(0, 10, 0, lock)] + [_ob(t, 10, 10, lock) for t in range(3, 60)]
+    elif first == 1:    # first seen with every clip already "graded"
+        obs = [_ob(t, 10, 10, lock) for t in range(0, 60)]
+    else:               # 0 -> 5 in one poll after a 10-minute gap
+        obs = [_ob(0, 10, 0, lock)] + [_ob(t, 10, 5 if t < 20 else 10, lock) for t in range(10, 70)]
+    outs = S.run(S.SVLShipped, obs)
+    assert not any(o["done"] for o in outs) and "mass_grade" in outs[-1]["reasons"]
 
 
 # ---------------- generative: the same invariants as the recommended strategy ----------------

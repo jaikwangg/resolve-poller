@@ -684,7 +684,7 @@ class SVLShipped(SVShipped):
     name, label = "SVL", "shipped server/progress_v2.py with D1 = lock (a human-set shot count confirms the scope)"
     needs = ("same as Q1 + a scope lock (count) per project_no/stage",)
     human = "someone locks the shot count per job and stage (scope_locks.json)"
-    config = {"scope_source": ("lock",)}
+    config = {"scope_source": ("lock",), "lock_counts": True}   # the counts lock needs a second opt-in
 
 
 class SVIShipped(SVShipped):

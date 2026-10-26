@@ -214,7 +214,9 @@ class Persistence(Base):
 class ScopeLock(Base):
     def test_lock_done_after_stability_then_scope_grew_after_lock(self):
         os.environ["EDITORTRACK_SCOPE_SOURCE"] = "lock"
+        os.environ["EDITORTRACK_LOCK_COUNTS"] = "1"
         self.addCleanup(os.environ.pop, "EDITORTRACK_SCOPE_SOURCE", None)
+        self.addCleanup(os.environ.pop, "EDITORTRACK_LOCK_COUNTS", None)
         with open(os.path.join(self.store, "scope_locks.json"), "w") as f:
             json.dump({"KPP-2026-0101|color": {"total": 6, "locked_at": ts(0), "by": "conform lead"}}, f)
         pms = FakePMS()
@@ -292,6 +294,17 @@ class IdentityLedger(Base):
         self.assertEqual(pms.bodies[-1]["done_count"], 5)
 
 
+class StateFile(Base):
+    def test_a_wrongly_shaped_state_file_is_moved_aside_and_ingest_keeps_working(self):
+        with open(os.path.join(self.store, pms_sync.PROGRESS_STATE_FILE), "w") as f:
+            json.dump({"v": 1, "keys": []}, f)
+        pms = FakePMS()
+        pms_sync.progress_on_ingest(rec(ts(0), 10, 2), erp_eff("KPP-2026-0101", title="BrandX"), pms, self.store)
+        self.assertEqual([b["progress_pct"] for b in pms.bodies], [20.0])
+        self.assertTrue(any(n.startswith(pms_sync.PROGRESS_STATE_FILE + ".corrupt-") for n in os.listdir(self.store)))
+        self.assertEqual(pms_sync.progress_status["errors"], 0)
+
+
 class PmsCheck(unittest.TestCase):
     """the local gate mirrors PMS 9e67f60 _check_v2 (and refuses 100 without done, our own rule)"""
     BASE = {"project_no": "P", "stage": "color", "observed_at": "2026-10-14T03:00:00Z"}
@@ -313,6 +326,7 @@ class PmsCheck(unittest.TestCase):
         self.assertTrue(self.bad(progress_pct=50, reasons=["a"] * 17))
         self.assertTrue(self.bad(progress_pct=50, total=-1))
         self.assertTrue(self.bad(progress_pct=50, done=1))
+        self.assertTrue(pv.pms_check({**self.BASE, "project_no": 1005, "progress_pct": 50}))
 
     def test_seal_only_weakens(self):
         o = pv.out("P|color", 100.0, done=True, total=8, done_count=7, confirmed=True, provisional=False)

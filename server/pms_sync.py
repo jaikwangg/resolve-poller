@@ -137,12 +137,24 @@ def _progress_enabled(erp):
 
 
 def _load_progress_state(store):
+    """the persisted engine state; a corrupt or wrongly shaped file is moved aside (kept for a look) and the
+    engine starts fresh: values stay provisional, only work_done may restart lower (said in last_error)"""
+    path = _os.path.join(str(store), PROGRESS_STATE_FILE)
     try:
-        with open(_os.path.join(str(store), PROGRESS_STATE_FILE), encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             st = _json.load(f)
-        return st if isinstance(st, dict) and st.get("v") == 1 else {}
-    except (OSError, ValueError):
+    except FileNotFoundError:
         return {}
+    except (OSError, ValueError):
+        st = None
+    if _pv.valid_state(st) and isinstance(st.get("pushed", {}), dict):
+        return st
+    try:
+        _os.replace(path, path + ".corrupt-" + datetime.datetime.now().strftime("%Y%m%d%H%M%S"))
+    except OSError:
+        pass
+    progress_status["last_error"] = "progress state file unreadable: moved aside, engine restarted"
+    return {}
 
 
 def _save_progress_state(store, engine, pushed):
@@ -151,6 +163,8 @@ def _save_progress_state(store, engine, pushed):
     fd = _os.open(tmp, _os.O_WRONLY | _os.O_CREAT | _os.O_TRUNC, 0o600)
     with _os.fdopen(fd, "w", encoding="utf-8") as f:
         _json.dump({**engine.state(), "pushed": pushed}, f, ensure_ascii=False)
+        f.flush()
+        _os.fsync(f.fileno())                    # a power cut must not leave an empty file behind os.replace
     _os.replace(tmp, path)
 
 
@@ -188,7 +202,8 @@ def _progress_step(rec, eff_job, erp, store):
     o = eng.step(_pv.obs_from_record(rec, eff, scope))
     pushed = False
     if not o["send"]:
-        why = next((r for r in _pv.HOLDS if r in o["reasons"]), "unbound")
+        why = next((r for r in _pv.HOLDS if r in o["reasons"]),
+                   "unbound" if eff.get("source") != "erp" else "unsendable")
         progress_status["withheld"][why] = progress_status["withheld"].get(why, 0) + 1
     else:
         body = _pv.payload(o, eff["job_id"], stage, rec.get("ts"), rec.get("host"))
