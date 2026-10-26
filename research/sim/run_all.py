@@ -52,10 +52,16 @@ def main(argv=None):
     lines += [f"  - {f}" for f in fails]
     bad |= bool(fails)
 
-    inv = [(sc["id"], v) for sc, _, res in asserted for v in res[rec][2]]
-    lines.append(f"- {rec} invariant violations on asserted scenarios: {len(inv)}")
-    lines += [f"  - {i}: {v}" for i, v in inv[:20]]
-    bad |= bool(inv)
+    for name in (rec,) + tuple(strategies.SHIPPED):
+        inv = [(sc["id"], v) for sc, _, res in asserted for v in res[name][2]]
+        lines.append(f"- {name} invariant violations on asserted scenarios: {len(inv)}")
+        lines += [f"  - {i}: {v}" for i, v in inv[:20]]
+        bad |= bool(inv)
+    shipped_fc = [(sc["id"], n) for sc, _, res in asserted for n in strategies.SHIPPED
+                  if res[n][1]["false_completion"] or res[n][1]["wrong_job"]]
+    lines.append(f"- shipped server path (SV, SVL) false completions / wrong job on asserted scenarios: {len(shipped_fc)}")
+    lines += [f"  - {i}: {n}" for i, n in shipped_fc]
+    bad |= bool(shipped_fc)
     for sc, _, res in new:
         lines.append(f"  - untriaged {sc['id']}: {rec} violations now {len(res[rec][2])}")
 
@@ -63,12 +69,13 @@ def main(argv=None):
     lines += ["", "## Strategies over the library", "", report.aggregate_table(agg, len(asserted)), ""]
 
     if a.fuzz:
-        found, paths = fuzz.run(a.fuzz, seed, rec, a.save_found)
-        lines.append(f"- fuzz: {a.fuzz} histories, seed {seed}: {len(found)} new minimal failures for {rec}")
-        for (i, g), _ in found.items():
-            lines.append(f"  - {i}: {g}")
-        lines += [f"  - saved {p}" for p in paths]
-        bad |= bool(found)
+        for name in (rec,) + tuple(strategies.SHIPPED):
+            found, paths = fuzz.run(a.fuzz, seed, name, a.save_found)
+            lines.append(f"- fuzz: {a.fuzz} histories, seed {seed}: {len(found)} new minimal failures for {name}")
+            for (i, g), _ in found.items():
+                lines.append(f"  - {i}: {g}")
+            lines += [f"  - saved {p}" for p in paths]
+            bad |= bool(found)
 
     try:
         from . import docs

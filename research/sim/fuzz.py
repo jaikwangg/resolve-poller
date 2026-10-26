@@ -29,8 +29,9 @@ UNOBSERVABLE_OPS = ["lut_all", "notes"]
 OPS = OBSERVABLE_OPS + UNOBSERVABLE_OPS
 
 
-def compose(genes, n0=6, observable_only=True):
-    """genes -> scenario dict (steps kind). Deterministic."""
+def compose(genes, n0=6, observable_only=True, settle_tail=0):
+    """genes -> scenario dict (steps kind). Deterministic. settle_tail = that many extra one-minute polls at
+    the end (real agents poll every 60 s), so time-window rules such as a stability window get exercised."""
     shots = [f"S{i:03d}" for i in range(1, n0 + 1)]
     live = list(shots)                 # deliverable timeline shot list
     next_id = n0 + 1
@@ -116,6 +117,8 @@ def compose(genes, n0=6, observable_only=True):
     steps[0]["ops"].append(["add", {"project": "Other_Job_grade", "timeline": "X",
                                      "shots": ["O001", "O002", "O003"], "graded": True}])
     steps.append({"t": t + 60, "host": "grade-01", "ops": []})
+    for k in range(1, settle_tail + 1):
+        steps.append({"t": t + 60 + k, "host": "grade-01", "ops": []})
     return {"id": "FZ", "title": "generated", "category": "generated", "severity": [], "status": "new",
             "stage": "color", "job": JOB, "project_name": "Fuzz Job", "observable": observable,
             "hosts": {"grade-01": {"stage": "color"}, "grade-02": {"stage": "color"}},
