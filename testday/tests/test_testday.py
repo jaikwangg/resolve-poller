@@ -233,7 +233,21 @@ class ScreenReplayEndToEnd(Tmp):
                               capture_output=True, text=True, timeout=120)
 
     def _analyze(self, run, *extra):
-        return self._run("analyze", "--run", run, "--no-operator", "--min-scans", "1", *extra)
+        return self._run("analyze", "--run", run, "--no-operator", "--min-scans", "1", "--first-frame-ok",
+                         "--planned-hours", "0.006", *extra)
+
+    def test_unconfirmed_first_frame_or_no_plan_is_incomplete(self):
+        lst = self._frames(page_jump_at=10 ** 12)
+        run = os.path.join(self.tmp, "run")
+        self._run("replay", "--list", lst, "--out", run, "--mask", "0.9,0,0.1,0.1")
+        r = self._run("analyze", "--run", run, "--no-operator", "--min-scans", "1", "--planned-hours", "0.006",
+                      "--records", self._records(self.base + 11.5), "--host", "grade-01")
+        self.assertIn("**INCOMPLETE**", r.stdout)
+        self.assertIn("first frame", r.stdout)
+        r = self._run("analyze", "--run", run, "--no-operator", "--min-scans", "1", "--first-frame-ok",
+                      "--records", self._records(self.base + 11.5), "--host", "grade-01")
+        self.assertIn("**INCOMPLETE**", r.stdout)
+        self.assertIn("planned length", r.stdout)
 
     def test_page_jump_at_agent_turn_is_detected(self):
         lst = self._frames(page_jump_at=self.base + 12)
@@ -304,14 +318,17 @@ class Coverage(unittest.TestCase):
         rows = self.rows([0, 2, 4, 100, 102])
         turns = [{"start": 50, "end": 51}]
         self.assertTrue(any("gaps" in x for x in screen_watch.coverage(rows, turns, {"interval": 2})))
-        self.assertEqual(screen_watch.coverage(rows, [{"start": 1, "end": 1.5}], {"interval": 2}), [])
+        ok_meta = {"interval": 2, "hours": 102 / 3600.0, "first_frame_confirmed": True}
+        self.assertEqual(screen_watch.coverage(rows, [{"start": 1, "end": 1.5}], ok_meta), [])
+        # a turn that only overlaps the gap is unseen too
+        self.assertTrue(screen_watch.coverage(rows, [{"start": 3, "end": 6}], ok_meta))
 
     def test_errors(self):
         rows = self.rows(list(range(0, 200, 2)), err=(10, 12))
         self.assertTrue(any("failed" in x for x in screen_watch.coverage(rows, [], {"interval": 2})))
 
     def test_disk_stop_and_unconfirmed(self):
-        p = screen_watch.coverage(self.rows([0, 2]), [], {"disk_stop": "disk_stop:max_gb",
+        p = screen_watch.coverage(self.rows([0, 2]), [], {"disk_stop": "disk_stop:max_gb", "hours": 2 / 3600.0,
                                                           "first_frame_confirmed": False})
         self.assertEqual(len(p), 2)
 
@@ -621,6 +638,11 @@ class Render(unittest.TestCase):
         res = render_timer.evaluate(self.rows([600, 602, 598], [612, 613, 611]))
         self.assertFalse(res["pass"])
         self.assertFalse(res["checks"]["mean_delta_<=1%"])
+
+    def test_resolve_time_disagreement_fails(self):
+        rows = self.rows([600, 602, 598], [601, 603, 599])
+        rows[3]["resolve_reported"] = "00:11:00"            # 660 s vs 601 s folder timing
+        self.assertFalse(render_timer.evaluate(rows, self.skips_in_on_runs(rows))["pass"])
 
     def test_too_few_runs(self):
         self.assertFalse(render_timer.evaluate(self.rows([600, 601], [600, 601]))["pass"])

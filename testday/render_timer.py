@@ -122,6 +122,10 @@ def evaluate(rows, recs=()):
         "no_agent_turns_in_off_renders": not off_with,
     }
     resolve = [(r["agent"], _hms(r.get("resolve_reported"))) for r in rows if _hms(r.get("resolve_reported"))]
+    # Resolve's own job time must agree with the folder timing (a mid-render write stall would cut a run short)
+    disagree = [r.get("label") for r in rows if _hms(r.get("resolve_reported"))
+                and abs(float(r["seconds"]) - _hms(r["resolve_reported"])) > 0.05 * _hms(r["resolve_reported"])]
+    checks["folder_timing_agrees_with_resolve_within_5%"] = not disagree
     return {"off": off, "on": on, "mean_off": mo, "mean_on": mn, "sd_off": so, "delta_s": delta,
             "delta_pct": (100.0 * delta / mo) if (delta is not None and mo) else None, "bad_turns": bad,
             "resolve_reported": resolve, "checks": checks, "pass": all(bool(v) for v in checks.values())}
@@ -129,6 +133,8 @@ def evaluate(rows, recs=()):
 
 def analyze(a):
     rows = common.read_csv(a.csv)
+    if not rows:
+        common.die("no render runs in %s" % a.csv)
     t0 = min(float(r["first_seen"]) for r in rows) - 60
     t1 = max(float(r["last_write"]) for r in rows) + 60
     recs = common.load_records(a.records, a.host, t0, t1)
@@ -156,7 +162,7 @@ def main(argv=None):
     w.add_argument("--label", required=True)
     w.add_argument("--agent", required=True, choices=["on", "off"])
     w.add_argument("--csv", required=True)
-    w.add_argument("--settle", type=float, default=10.0)
+    w.add_argument("--settle", type=float, default=30.0, help="seconds without any write that end the timing")
     an = sub.add_parser("analyze")
     an.add_argument("--csv", required=True)
     an.add_argument("--records", nargs="+", required=True)

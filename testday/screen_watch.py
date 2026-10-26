@@ -417,11 +417,14 @@ def coverage(rows, turns, meta, max_gap=None):
     if rows and errs > 0.01 * len(rows):
         problems.append("%d of %d captures failed" % (errs, len(rows)))
     gaps = [(a, b) for a, b in zip(good, good[1:]) if b - a > max_gap]
-    unseen = [tu for tu in turns if any(a < tu["start"] and tu["end"] < b for a, b in gaps)]
+    unseen = [tu for tu in turns if any(tu["start"] < b and tu["end"] > a for a, b in gaps)]   # any overlap
     if unseen:
         problems.append("%d agent turn(s) fell in capture gaps > %.0f s" % (len(unseen), max_gap))
-    if meta.get("first_frame_confirmed") is False:
-        problems.append("first frame was not confirmed to show Resolve")
+    if meta.get("first_frame_confirmed") is not True:
+        problems.append("nobody confirmed the first frame shows Resolve (not wallpaper / lock screen): look at the "
+                        "first key frame and re-run analyze with --first-frame-ok")
+    if not hours:
+        problems.append("no planned length (capture_meta.json missing or --hours 0): pass --planned-hours")
     if meta.get("disk_stop"):
         problems.append("evidence frames stopped (%s): unexplained changes after that have no frame" % meta["disk_stop"])
     return problems
@@ -445,6 +448,10 @@ def analyze(args):
         meta = prefs_load(os.path.join(run, "capture_meta.json"))
     except (OSError, ValueError):
         meta = {}
+    if args.first_frame_ok:
+        meta["first_frame_confirmed"] = True
+    if args.planned_hours:
+        meta["hours"] = args.planned_hours
     good = [r for r in rows if r.get("epoch") and "error" not in (r.get("note") or "")]
     if not good:
         common.die("no successful captures in %s" % run)
@@ -567,6 +574,9 @@ def main(argv=None):
     a.add_argument("--ignore", action="append", default=[], help="x,y,w,h fractions: drop changes fully inside")
     a.add_argument("--all", action="store_true", help="also list user changes")
     a.add_argument("--min-scans", type=int, default=10, help="full agent scans required in the period")
+    a.add_argument("--first-frame-ok", action="store_true",
+                   help="the test lead looked at the first key frame and it shows Resolve")
+    a.add_argument("--planned-hours", type=float, default=0, help="planned length when capture had no --hours")
     args = ap.parse_args(argv)
     if args.cmd == "capture":
         return capture(args)

@@ -121,8 +121,10 @@
 | **R1** | ติดตั้ง release N → อัปเกรด N+1 → ย้อนกลับ N ด้วยคำสั่งเดียว · Install N, upgrade, roll back | ย้อน ≤ 5 นาที; ไม่กระทบ Resolve; health แสดง N · Rollback ≤ 5 min, health shows N | stopwatch | ☐ | ☐ | |
 | **R2** | อัปเกรด Resolve หรือใส่เวอร์ชันปลอมที่ไม่ verify · Unverified Resolve version | agent skip `resolve_version_unverified` จน owner เพิ่มเวอร์ชัน · Skips until the owner adds the version | `turn_stats.py` reasons | ☐ | ☐ | |
 
-> **U1 หมายเหตุ / note:** Resolve เขียน preference ของตัวเองเมื่อใช้งาน ดังนั้น U1 ทำเป็นรอบเฉพาะ: snapshot ก่อน → ติดตั้ง → ใช้งาน 1 วัน →
-> uninstall → reboot → snapshot หลัง และ**วันควบคุม**แบบเดียวกันโดย**ไม่มี agent** (`prefs_snapshot.py snapshot` เช้า/เย็น แล้ว `compare --emit-allow`).
+> **U1 หมายเหตุ / note:** "ก่อน" = snapshot ข้อ 2.6 (D0 ก่อนติดตั้งครั้งแรก); "หลัง" = หลัง K5/U2 uninstall + reboot ท้ายสัปดาห์.
+> Resolve เขียน preference ของตัวเองเมื่อใช้งาน จึงต้องมี**วันควบคุม**หลัง uninstall โดย**ไม่มี agent**: `prefs_snapshot.py snapshot` เช้า → ใช้ Resolve ตามปกติ → snapshot เย็น → `compare --emit-allow`.
+> "Before" = the 2.6 snapshot (D0, before the first install); "after" = after the K5/U2 uninstall + reboot at the end of the week; then a control
+> day without the agent (snapshot morning and evening around normal Resolve use, `compare --emit-allow`).
 > ไฟล์ที่ต่างเฉพาะวันมี agent = FAIL; ไฟล์ที่ต่างในวันควบคุมด้วย → ผลเป็น **CHECK** ไม่ใช่ PASS (§7 กำหนด byte-identical; ยอมรับได้หรือไม่ owner ตัดสิน).
 > Resolve rewrites some prefs itself, so U1 is a dedicated cycle plus a control day without the agent. Files that differ only with the
 > agent = FAIL; files that also differ in the control day give **CHECK**, not PASS (§7 says byte-identical; the owner decides).

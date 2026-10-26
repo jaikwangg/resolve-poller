@@ -62,7 +62,7 @@ the workstation's local time; when analysing on another machine pass `--tz-offse
 
 ## Tests (on the build server, no workstation needed)
 
-`./run_tests.sh testday` → `testday/tests/test_testday.py` (93 tests): PNG/BMP readers and the frame diff on
+`./run_tests.sh testday` → `testday/tests/test_testday.py` (95 tests): PNG/BMP readers and the frame diff on
 sample images, an end-to-end replay → analyze where a page jump at an agent turn is a FAIL and a static screen
 with a masked clock is a PASS, generator XML/EDL structure, the P1/P2/P3/P4 evaluators, the prefs compare
 (one-byte change, added file, control churn, leftover unit), and kit-safety checks (no Resolve scripting import,

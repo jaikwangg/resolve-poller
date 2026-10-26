@@ -30,9 +30,10 @@ FIELDS = ["step", "start_local", "seconds", "result", "detail", "operator"]
 LABEL = "com.kantana.editortrack.agent"
 
 
-def log(a, step, t0, ok, detail):
+def log(a, step, t0, ok, detail, verdict=None):
+    verdict = verdict or ("PASS" if ok else "FAIL")
     common.append_csv(a.log, {"step": step, "start_local": common.iso_local(t0), "seconds": "%.1f" % (time.time() - t0),
-                              "result": "PASS" if ok else "FAIL", "detail": detail, "operator": a.operator}, FIELDS)
+                              "result": verdict, "detail": detail, "operator": a.operator}, FIELDS)
     print(common.verdict_line(ok, "%s: %s" % (step, detail)))
     return 0 if ok else 1
 
@@ -147,7 +148,8 @@ def cmd_k2(a):
     if not os.path.exists(path):
         return log(a, "K2", t0, False, "kill file %s not found" % path)
     turns, loud, grew = watch(a, t0, a.minutes, 60)
-    ok = bool(turns) and not loud and not grew
+    after = [t for t in turns if t["start"] > t0 + 60]       # silent turns must be seen after the switch
+    ok = bool(after) and not loud and not grew
     print("Operator: remove it again with  sudo rm '%s'" % path)
     return log(a, "K2", t0, ok, "turns=%d non-silent-after-60s=%d queue_growth_after_60s=%d (results: %s)" % (
         len(turns), len(loud), grew, ", ".join(t["result"] for t in turns[:6])))
@@ -238,7 +240,7 @@ def cmd_after(a):
     if res.get("check"):
         print("CHECK (owner decision): " + res["check"])
     return log(a, "U1-after", t0, res["ok"], "; ".join(res["fail"]) or res.get("check")
-               or "Resolve prefs byte-identical, nothing left")
+               or "Resolve prefs byte-identical, nothing left", verdict=res["verdict"])
 
 
 def main(argv=None):
