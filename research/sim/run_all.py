@@ -59,7 +59,7 @@ def main(argv=None):
         bad |= bool(inv)
     shipped_fc = [(sc["id"], n) for sc, _, res in asserted for n in strategies.SHIPPED
                   if res[n][1]["false_completion"] or res[n][1]["wrong_job"]]
-    lines.append(f"- shipped server path ({", ".join(strategies.SHIPPED)}) false completions / wrong job on asserted scenarios: {len(shipped_fc)}")
+    lines.append(f"- shipped server path ({', '.join(strategies.SHIPPED)}) false completions / wrong job on asserted scenarios: {len(shipped_fc)}")
     lines += [f"  - {i}: {n}" for i, n in shipped_fc]
     bad |= bool(shipped_fc)
     for sc, _, res in new:
