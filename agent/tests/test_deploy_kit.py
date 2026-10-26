@@ -108,10 +108,21 @@ class Kit(unittest.TestCase):
         self.assertIn("nice -n 19", (DEPLOY / "run-agent.sh").read_text())
 
     def test_no_shared_token_or_default_server_in_code(self):
-        r = subprocess.run(["git", "-C", str(REPO), "grep", "-n", "-I", "-e", "kpp-et-test", "--", ".",
-                            ":!*.md", ":!agent/tests/*"], capture_output=True, text=True)
-        self.assertEqual(r.stdout, "", "leaked token still in the repo")
-        self.assertNotIn("192.168.", (DEPLOY / "make-env.sh").read_text())
+        """no real token value anywhere in tracked config/scripts (placeholders only), no default in make-env."""
+        import re
+        r = subprocess.run(["git", "-C", str(REPO), "ls-files"], capture_output=True, text=True)
+        bad = []
+        for f in r.stdout.split():
+            if not f.endswith((".sh", ".example", ".service", ".plist", ".py", ".json", ".env")) or "/tests/" in f:
+                continue
+            for ln in (REPO / f).read_text(errors="ignore").splitlines():
+                m = re.search(r"EDITORTRACK_TOKEN=([^\s\"'$]+)", ln)
+                if m and m.group(1) not in ("CHANGE_ME", "xxx", "testtoken", "t"):
+                    bad.append((f, m.group(1)[:3] + "..."))
+        self.assertEqual(bad, [], "token value committed")
+        me = (DEPLOY / "make-env.sh").read_text()
+        self.assertRegex(me, r'ask TOKEN "[^"]*" ""')
+        self.assertNotIn("192.168.", me)
 
     def test_station_templates_keep_gates(self):
         for f in list((DEPLOY / "stations").glob("*.sh")) + [DEPLOY / "env.example"]:
