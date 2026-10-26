@@ -88,7 +88,7 @@ def load_records(paths, host=None, t0=None, t1=None):
 
 
 def record_turns(recs):
-    """Turn windows from server records: [ts - turn_ms - 2 s, ts + 2 s] (ts is set after the scan)."""
+    """Turn windows from server records: [ts - turn_ms, ts] (ts is set after the scan; callers add their margin)."""
     out = []
     for r in recs:
         a = r.get("agent") or {}
