@@ -107,9 +107,9 @@ class NaiveTimestamp(Base):
         self.write_today(recs + [naive], extra_lines=["{not json", ""])
         loaded = api._load_recent(2)
         self.assertEqual(sorted({r["host"] for r in loaded}), ["conform-02", "grade-01"])
-        self.assertEqual(api.load_skipped["bad_record"], 1)
-        self.assertEqual(api.load_skipped["reasons"], {"ts_without_offset": 1})
-        self.assertEqual(api.load_skipped["bad_json"], 1)
+        self.assertEqual(api.load_skipped[2]["bad_record"], 1)
+        self.assertEqual(api.load_skipped[2]["reasons"], {"ts_without_offset": 1})
+        self.assertEqual(api.load_skipped[2]["bad_json"], 1)
         self.assert_all_routes_answer()
         self.assertEqual(self.c.get("/api/health").json()["skipped"]["bad_record"], 1)
         self.assertEqual(self.c.get("/api/inbox").json()["skipped"]["reasons"], {"ts_without_offset": 1})
@@ -136,6 +136,8 @@ class AnyWrongType(Base):
         base["source"]["items"] = [{"sid": "A1.mov", "id": "u1", "graded": True}]
         base["agent"] = {"version": "1", "rss_mb": 10, "turn_ms": 5, "guard": {"ms": 3}, "queue_lines": 0}
         base["page"] = "color"
+        base["source"].update(reason="resolve_not_running", detail="x", page="color")
+        base["source"]["timeline"]["grade"] = {"pending": 0}
         recs, rejected, i = [self.good("grade-01", m) for m in (50, 48)], 0, 0
         for p in list(paths(base)):
             for v in WRONG:
@@ -143,15 +145,29 @@ class AnyWrongType(Base):
                 if isinstance(rec, dict) and p != ("ts",):
                     i += 1
                     rec["ts"] = (self.now - datetime.timedelta(seconds=40 * i)).isoformat()   # no dedupe
+                    if p != ("progress", "pct") and isinstance(rec.get("progress"), dict):
+                        rec["progress"]["pct"] = float(i % 97)       # a new value each record: report events/jumps
+                    if p[:2] != ("source", "ok") and isinstance(rec.get("source"), dict) and i % 2:
+                        rec["source"]["ok"] = False                  # half take the "could not read" branches
                 rejected += ex.record_problem(ex.finite(rec)) is not None     # NaN -> null first, as on load
                 recs.append(rec)
         self.assertGreater(rejected, 50)
         self.assertGreater(len(recs) - rejected, 300)             # most variants are accepted and rendered
         self.write_today(recs)
         self.assert_all_routes_answer()
-        self.assertEqual(api.load_skipped["bad_record"], rejected)
+        self.assertEqual(api.load_skipped[2]["bad_record"], rejected)
         pms_sync.build_windows(api._load_recent(2), 1, api._eff_job, {}, now=self.now + datetime.timedelta(hours=1),
                                lookup=lambda h, ts, p: ({"booking_id": "b"}, None))
+
+    def test_health_alert_skips_a_bad_stored_record(self):
+        import agent_health
+        import health_alert
+        bad = self.good("bad-01", 3)
+        bad["agent"] = "x"
+        naive = dict(self.good("bad-02", 3), ts=NAIVE)
+        self.write_today([self.good("grade-01", 5), bad, naive])
+        rows = agent_health.health(health_alert.load_records(self.tmp))
+        self.assertEqual(sorted(rows), ["grade-01"])
 
     def test_ingest_and_readers_use_the_same_rule(self):
         base = last_fixture()

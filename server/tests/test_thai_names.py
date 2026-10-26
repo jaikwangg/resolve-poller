@@ -68,6 +68,18 @@ class PickBooking(unittest.TestCase):
         self.assertEqual(pick([x, y], "งานท" + SARA_AM + "สี ธนาคาร"), ("x", None))
 
 
+    def test_thai_match_never_ends_inside_a_syllable(self):
+        x = {"id": "x", "project_no": None, "project_name": "โฆษณา ธนาคาร"}
+        y = {"id": "y", "project_no": None, "project_name": "BrandX TVC"}
+        self.assertEqual(pick([x, y], "โฆษณา ธนาคาร่"), (None, "ambiguous_booking"))   # + tone mark
+        self.assertEqual(pick([x, y], "โฆษณา ธนาคาร_v2"), ("x", None))
+
+    def test_tone_mark_typing_order_is_one_name(self):
+        x = {"id": "x", "project_no": None, "project_name": "กิ่งไม้ ทองคำ"}
+        y = {"id": "y", "project_no": None, "project_name": "BrandX TVC"}
+        self.assertEqual(pick([x, y], "ก่ิงไม้ ทองคำ"), ("x", None))
+
+
 class JobGuard(unittest.TestCase):
     CASES = [
         # project in Resolve, booking project_no, booking name, matches

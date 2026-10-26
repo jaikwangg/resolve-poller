@@ -164,9 +164,13 @@ def _cls(ch):
     return None
 
 
+_TONE_FIRST = re.compile("([\u0e48-\u0e4b])([\u0e31\u0e34-\u0e37\u0e47])")
+
+
 def canon(s):
     """name -> runs joined by single spaces: NFKC, casefold, decimal digits of any script as ASCII."""
     s = unicodedata.normalize("NFKC", unicodedata.normalize("NFKC", "" if s is None else str(s)).casefold())
+    s = _TONE_FIRST.sub(r"\2\1", s)                     # tone mark typed before an above vowel: กิ่ง == ก่ิง
     out, sep = [], False
     for ch in s:
         c = _cls(ch)
@@ -211,6 +215,8 @@ def _bounded(needle, hay):
         k = i - 1
         while k >= 0 and _cls(h[k]) == "m":            # a mark belongs to the letter before it
             k -= 1
+        if j < len(h) and _cls(h[j]) == "m" and _cls(runs[-1][-1]) != "m":
+            continue                                    # a mark after the match belongs to its last letter
         if _edge_ok(h[k] if k >= 0 else "", runs[0][0]) and _edge_ok(h[j] if j < len(h) else "", runs[-1][-1]):
             return True
     return False

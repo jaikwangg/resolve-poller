@@ -102,7 +102,10 @@ _SCALAR = (str, int, float, bool, _N)
 SHAPE = {
     "user": _SCALAR, "stage": _STR, "page": _SCALAR,
     "activity": _DICT, "source": _DICT, "job": _DICT, "progress": _DICT, "_rx": _DICT, "agent": _DICT,
-    "activity.idle_sec": _NUM,
+    "activity.idle_sec": _NUM, "activity.frontmost_name": _SCALAR,
+    "source.reason": _SCALAR, "source.detail": _SCALAR + (dict, list), "source.page": _SCALAR,
+    "source.timeline.grade": _DICT,
+    "progress.detail.graded_clips": _NUM, "progress.detail.video_clips": _NUM,
     "source.project": _SCALAR, "source.timeline": _DICT, "source.shots": _LIST, "source.items": _LIST,
     "source.timeline.name": _SCALAR, "source.timeline.duration_sec": _NUM, "source.timeline.video_clips": _NUM,
     "source.timeline.graded_clips": _NUM, "source.timeline.markers": _NUM,

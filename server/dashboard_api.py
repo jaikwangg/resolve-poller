@@ -65,7 +65,7 @@ def agent_control(host: str = "", v: str = "", authorization: str = Header(defau
 def api_health(days: int = 2):
     rows = agent_health.health(_load_recent(days), control=agent_health.load_control(STORE))
     return JSONResponse({"hosts": sorted(rows.values(), key=lambda r: r["host"]),
-                         "control": agent_health.load_control(STORE), "skipped": dict(load_skipped)})
+                         "control": agent_health.load_control(STORE), "skipped": load_skipped.get(days)})
 
 
 @app.get("/health")
@@ -87,8 +87,9 @@ def health_page():
 
 
 # ---------------- load / helpers ----------------
-# what the last load had to skip (bad JSON line, bad record already on disk): shown by /api/health and /api/inbox
-load_skipped = {"at": None, "bad_json": 0, "bad_record": 0, "reasons": {}}
+# what the last load of each `days` window had to skip (bad JSON line, bad record already on disk), keyed by
+# days so the pms_sync thread or /api/projects cannot overwrite what /api/health and /api/inbox show
+load_skipped = {}
 
 
 def _load_recent(days):
@@ -111,8 +112,8 @@ def _load_recent(days):
                     bad_json += 1
     reasons = {}
     out = _ex.dedupe(recs, reasons)
-    load_skipped.update({"at": datetime.datetime.now(datetime.timezone.utc).isoformat(), "bad_json": bad_json,
-                         "bad_record": sum(reasons.values()), "reasons": reasons})
+    load_skipped[days] = {"days": days, "at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                          "bad_json": bad_json, "bad_record": sum(reasons.values()), "reasons": reasons}
     return out
 
 
@@ -317,9 +318,13 @@ def build_inbox(limit=50, host=None, days=2):
     rows.sort(key=lambda r: (r.get("_rx") or {}).get("at") or r.get("ts", ""), reverse=True)
     out = []
     for r in rows[:max(1, min(limit, 500))]:
-        out.append({"explain": _ex.explain(r, _eff_job(r), room_map), "delay_sec": _ex.delay_sec(r), "record": r})
+        try:                                        # last line of defence: one odd record never 500s the inbox
+            ex = _ex.explain(r, _eff_job(r), room_map)
+        except Exception as e:
+            ex = {"summary": f"อธิบาย record นี้ไม่ได้ ({type(e).__name__})", "lines": [], "warnings": [], "fields": []}
+        out.append({"explain": ex, "delay_sec": _ex.delay_sec(r), "record": r})
     return {"generated_at": now.astimezone().isoformat(), "stale_sec": _ex.STALE_SEC,
-            "hosts": summary, "total": len(rows), "records": out, "skipped": dict(load_skipped)}
+            "hosts": summary, "total": len(rows), "records": out, "skipped": load_skipped.get(days)}
 
 
 @app.get("/api/inbox")
