@@ -81,6 +81,14 @@ def health(records, now=None, control=None):
         row["last_seen"] = t.isoformat()
         a = r.get("agent") or {}
         src = r.get("source") or {}
+        rj = a.get("rejected")
+        rj = rj if isinstance(rj, int) and not isinstance(rj, bool) and rj >= 0 else None
+        if (now - t).total_seconds() > 86400:
+            if rj is not None:
+                row["_rj_base"] = rj                   # last count before the window
+        elif rj is not None:                           # ET-5 agent >= 0.9.1: records the server refused (cumulative)
+            row.setdefault("_rj_base", rj)
+            row["_rj_last"] = rj
         if (now - t).total_seconds() <= 86400:
             row["records_24h"] += 1
             if src.get("ok") is False and src.get("reason"):
@@ -94,9 +102,13 @@ def health(records, now=None, control=None):
             row["last_ok_poll"] = t.isoformat()
         row.update({"version": a.get("version"), "python": a.get("python"), "os": a.get("os"),
                     "tripped": a.get("tripped"), "backoff_fails": a.get("backoff_fails", 0),
-                    "queue_lines": a.get("queue_lines", 0), "has_heartbeat": bool(a)})
+                    "queue_lines": a.get("queue_lines", 0), "has_heartbeat": bool(a),
+                    "rejected": rj, "reject_hold": a.get("reject_hold") is True})
     for row in hosts.values():
         alerts, warns = [], []
+        base, last = row.pop("_rj_base", None), row.pop("_rj_last", None)
+        # a counter that went down = state reset on the workstation (reinstall): count from 0 again
+        row["rejected_24h"] = (last - base if last >= base else last) if last is not None else 0
         age_min = (now - _dt(row["last_seen"])).total_seconds() / 60
         row["silent_min"] = round(age_min, 1)
         if age_min > THRESH["silent_min"]:
@@ -115,6 +127,10 @@ def health(records, now=None, control=None):
             alerts.append("Resolve calls %s ms in one poll" % row["max_guard_ms"])
         if (row.get("queue_lines") or 0) > THRESH["queue_lines"]:
             warns.append("queue %s" % row["queue_lines"])
+        if row["rejected_24h"]:
+            warns.append("server refused %d record(s) in 24 h (agent ~/.editortrack/rejected.log)" % row["rejected_24h"])
+        if row.get("reject_hold"):
+            warns.append("reject hold: the server refuses every record, agent keeps them")
         if (row.get("backoff_fails") or 0) >= THRESH["backoff_fails"]:
             warns.append("backoff x%s" % row["backoff_fails"])
         if row["skips_24h"].get("forbidden_call") or row["skips_24h"].get("state_changed_during_scan"):

@@ -22,7 +22,9 @@ import health_alert                # noqa: E402
 
 MARKERS = {"safety"}   # shared marker convention: ./run_tests.sh safety
 CTRL = pathlib.Path(TMP) / "agent_control.json"
-V = "0.9.0-safety"
+# the agent's own version (the e2e test runs the real agent, which must get a lease)
+import re as _re                   # noqa: E402
+V = _re.search(r'AGENT_VERSION = "([^"]+)"', (HERE.parents[1] / "agent" / "safety.py").read_text()).group(1)
 
 
 def write_ctrl(obj):
@@ -79,6 +81,21 @@ class Health(unittest.TestCase):
         self.assertEqual(rows["e"]["status"], "alert")
         self.assertEqual(rows["f"]["status"], "warn")
 
+    def test_rejected_records_reported_by_the_agent(self):
+        # ET-5 heartbeat: cumulative "rejected"; the row shows the 24 h increase, an old agent shows nothing
+        rows = ah.health([rec("a", 60 * 30, rejected=3), rec("a", 60, rejected=3), rec("a", 1, rejected=5),
+                          rec("b", 60, rejected=2), rec("b", 1, rejected=2),
+                          rec("c", 1), rec("d", 1, rejected="x"), rec("e", 1, rejected=0, reject_hold=True),
+                          rec("f", 60, rejected=7), rec("f", 1, rejected=1)])
+        self.assertEqual((rows["a"]["rejected"], rows["a"]["rejected_24h"], rows["a"]["status"]), (5, 2, "warn"))
+        self.assertTrue(any("refused 2 record" in w for w in rows["a"]["warnings"]))
+        self.assertEqual((rows["b"]["rejected_24h"], rows["b"]["status"]), (0, "ok"))
+        self.assertEqual((rows["c"]["rejected"], rows["c"]["rejected_24h"], rows["c"]["status"]), (None, 0, "ok"))
+        self.assertEqual((rows["d"]["rejected"], rows["d"]["status"]), (None, "ok"))
+        self.assertEqual(rows["e"]["status"], "warn")
+        self.assertTrue(any("reject hold" in w for w in rows["e"]["warnings"]))
+        self.assertEqual(rows["f"]["rejected_24h"], 1)                  # counter reset (reinstall)
+
     def test_alerts_only_on_transition(self):
         rows = ah.health([rec("a", 1, tripped="x")])
         m1, st = health_alert.transitions({}, rows)
@@ -126,6 +143,15 @@ class EndToEnd(unittest.TestCase):
                 m["resolve_poller"]._load_resolve = loader(w1)
                 self.assertEqual(m["runner"].main(), 200)
                 self.assertTrue(w1.calls)
+                # ET-5 against the real /ingest: a queued record the server refuses (400) is dropped and the
+                # record behind it is delivered; the next heartbeat carries the count to /api/health
+                ts = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                m["runner"]._enqueue([json.dumps({"host": "e2e-q", "ts": ts, "agent": "not a dict"}),
+                                      json.dumps({"host": "e2e-q", "ts": ts, "n": 2})])
+                self.assertEqual(m["runner"].main(), 200)
+                self.assertFalse((sd / "queue.jsonl").exists())
+                self.assertEqual(json.loads((sd / "rejected.json").read_text())["last"]["status"], 400)
+                self.assertEqual(m["runner"].main(), 200)
                 write_ctrl({"allowed_versions": [V], "hosts": {"e2e": {"enabled": False}}})
                 w2 = World()
                 m["resolve_poller"]._load_resolve = loader(w2)
@@ -133,6 +159,8 @@ class EndToEnd(unittest.TestCase):
                 self.assertEqual(w2.calls, [])
             recs = [json.loads(l) for f in pathlib.Path(TMP).glob("*.jsonl") for l in f.read_text().splitlines()]
             self.assertEqual(ah.health(recs)["e2e"]["version"], V)
+            self.assertEqual([r.get("n") for r in recs if r["host"] == "e2e-q"], [2])
+            self.assertEqual(ah.health(recs)["e2e"]["rejected"], 1)
         finally:
             srv.should_exit = True
             th.join(5)
