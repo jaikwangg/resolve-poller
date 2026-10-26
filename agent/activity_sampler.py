@@ -28,6 +28,12 @@ def _macos():
 
 
 # ---------- Windows ----------
+def idle_from_ticks(now_ms, last_input_ms):
+    """GetTickCount/dwTime เป็น unsigned 32-bit ที่วนทุก ~49.7 วัน → ลบแบบ modular
+    (incident: อ่านเป็น signed/ไม่ mask → idle ติดลบหรือโตผิด)"""
+    return ((int(now_ms) - int(last_input_ms)) & 0xFFFFFFFF) / 1000.0
+
+
 def _windows():
     import ctypes
     from ctypes import wintypes
@@ -40,7 +46,7 @@ def _windows():
     li = LASTINPUTINFO()
     li.cbSize = ctypes.sizeof(LASTINPUTINFO)
     user32.GetLastInputInfo(ctypes.byref(li))
-    idle = ((kernel32.GetTickCount() - li.dwTime) & 0xFFFFFFFF) / 1000.0   # modular → กัน 32-bit wrap
+    idle = idle_from_ticks(kernel32.GetTickCount(), li.dwTime)   # modular → กัน 32-bit wrap
     hwnd = user32.GetForegroundWindow()
     n = user32.GetWindowTextLengthW(hwnd)
     buf = ctypes.create_unicode_buffer(n + 1)

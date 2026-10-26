@@ -10,7 +10,7 @@ risk budget**. It gives evidence (tests, measurements, code references), not rea
 Run every automated check described here with one command from the repo root:
 
 ```sh
-./run_tests.sh safety      # API allowlist, fail-closed, resource budget, deploy kit, lease/health (65 tests)
+./run_tests.sh safety      # API allowlist, fail-closed, resource budget, deploy kit, lease/health (67 tests)
 ./run_tests.sh all         # + replay (and the progress worst-case suite once it lands)
 ```
 

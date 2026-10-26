@@ -266,6 +266,21 @@ class PreChecks(unittest.TestCase):
             self.assertFalse(v(None))
 
 
+class Incidents(unittest.TestCase):
+    """regression tests for real incidents (every incident gets one)"""
+
+    def test_windows_idle_tick_wraparound(self):
+        import activity_sampler as a
+        self.assertEqual(a.idle_from_ticks(5000, 2000), 3.0)
+        self.assertEqual(a.idle_from_ticks(1000, 0xFFFFFFFF - 999), 2.0)      # wrapped after ~49.7 days
+        self.assertGreaterEqual(a.idle_from_ticks(0x80000005, 0x7FFFFFFF), 0)  # crosses the signed boundary
+
+    def test_render_poll_page_jump_cannot_return(self):
+        import resolve_guard as RG
+        self.assertIn("GetRenderJobList", RG.DENIED)
+        self.assertNotIn("GetRenderJobList", RG.allowed_names(extended=True))
+
+
 class Watchdog(unittest.TestCase):
     def test_hard_timeout_kills_a_hung_turn(self):
         code = ("import sys,time; sys.path.insert(0, %r); import safety; safety.hard_timeout(1); time.sleep(30)"
