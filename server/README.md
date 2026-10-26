@@ -56,6 +56,7 @@ EDITORTRACK_LOCK_COUNTS=0            # lock จากจำนวนคลิป
 - lock เป็นจำนวนต่อ project_no|stage ไม่ผูก timeline: reel/timeline อื่นของงานเดียวกันที่มีจำนวนคลิปเท่ากันก็ done ได้
 - look ที่ apply ทีละไม่กี่คลิปหลายรอบ ดูเหมือนเกรดจริง (guard จับได้เฉพาะก้อนใหญ่ ≥ max(4, ครึ่งหนึ่ง) ต่อรอบ หรือเห็นครั้งแรกก็เกรดแล้ว)
 ถ้า record มี `source.items` (ขั้น 3, poller ยังไม่ส่ง) ledger ราย shot แก้สามข้อแรกได้ และ `lock` ไม่ต้องใช้ `LOCK_COUNTS`
+(ledger: timeline ที่เห็นครั้งแรกแล้วเกรดเกือบหมด — เช่น agent ติดตั้งกลางงาน — shot เหล่านั้นไม่นับจนกว่าจะถูกแตะอีกครั้ง ค่าจึงอาจค้างต่ำกว่า 100 ตามเจตนา)
 
 ยังไม่ทำ: กฎ reopen (task กลับไป REVISION → เปิดค่าใหม่) — ต้องอ่าน `GET /api/integrations/editortrack/tasks` (§4 ของสัญญา,
 ต้องให้เจ้าของอนุมัติการขยายสิทธิ์ key ก่อน) · ตอนนี้ engine รับ `pms_task` ได้แต่ server ยังไม่ดึง → หลัง done ถ้า task ถูกตีกลับ

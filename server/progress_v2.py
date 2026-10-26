@@ -500,7 +500,8 @@ class Engine:
                 base_g = pv.get("g") if pv is not None else 0
                 if base_g is not None and g - base_g >= max(MASS_MIN, MASS_FRAC * (v or 0)):
                     st["mass_at"] = t
-                    reasons.add("mass_grade")
+                    if "lock" in self.cfg.scope_source:
+                        reasons.add("mass_grade")    # only a label that matters with a lock: not shown otherwise
             views[view] = {"g": g, "v": v, "t": t}
             cmp_v, cmp_g = v, g
 
