@@ -12,10 +12,11 @@ TMP = tempfile.mkdtemp(prefix="et-health-")
 import atexit, shutil                                  # noqa: E402
 atexit.register(shutil.rmtree, TMP, True)
 os.environ["EDITORTRACK_STORE"] = TMP
-os.environ["EDITORTRACK_TOKEN"] = "t"
 for k in [k for k in os.environ if k.startswith("ERP_")]:
     del os.environ[k]
 sys.path.insert(0, str(HERE.parent))
+from tests import authfix          # noqa: E402
+authfix.install(hosts=("x", "e2e"))
 
 import agent_health as ah          # noqa: E402
 import health_alert                # noqa: E402
@@ -53,7 +54,7 @@ class Control(unittest.TestCase):
         cl = TestClient(dashboard_api.app)
         self.assertEqual(cl.get("/agent/control?host=x&v=" + V).status_code, 401)
         write_ctrl({"allowed_versions": [V], "hosts": {"x": {"enabled": True, "allow_resolve": True}}})
-        r = cl.get("/agent/control?host=x&v=" + V, headers={"Authorization": "Bearer t"})
+        r = cl.get("/agent/control?host=x&v=" + V, headers=authfix.machine("x"))
         self.assertEqual(r.json()["enabled"], True)
 
 
@@ -117,7 +118,10 @@ class EndToEnd(unittest.TestCase):
             mr = load("mock_resolve")
             World, loader = mr.World, mr.loader
             write_ctrl({"allowed_versions": [V], "hosts": {"e2e": {"enabled": True, "allow_resolve": True}}})
-            env = dict(EDITORTRACK_SERVER="http://127.0.0.1:%d/ingest" % port, EDITORTRACK_TOKEN="t",
+            env = dict(EDITORTRACK_SERVER="http://127.0.0.1:%d/ingest" % port, EDITORTRACK_TOKEN=authfix.machine_token("e2e"),
+                       # agent_env clears EDITORTRACK_*; the in-process server needs its auth files back
+                       EDITORTRACK_TOKEN_MAP=os.environ["EDITORTRACK_TOKEN_MAP"],
+                       EDITORTRACK_READ_USERS=os.environ["EDITORTRACK_READ_USERS"],
                        EDITORTRACK_REQUIRE_LEASE=None)
             with agent_env(**env) as (m, sd):
                 m["runner"].socket.gethostname = lambda: "e2e"

@@ -12,10 +12,11 @@ FIX = HERE / "fixtures" / "replay"
 os.environ["TZ"] = "Asia/Bangkok"                 # report ตัดวัน/แสดงเวลาตามเวลาเครื่อง server (ไทย)
 time.tzset()
 os.environ["EDITORTRACK_STORE"] = str(FIX)
-os.environ["EDITORTRACK_TOKEN"] = "t"
 for k in [k for k in os.environ if k.startswith("ERP_")]:
     del os.environ[k]                             # ไม่ยิง PMS จริงระหว่างเทส
 sys.path.insert(0, str(HERE.parent))
+from tests import authfix        # noqa: E402
+authfix.install()
 
 import dashboard_api as api      # noqa: E402
 import explain as ex             # noqa: E402
@@ -185,7 +186,7 @@ class Ingest(unittest.TestCase):
         api.STORE = self._store
 
     def test_rejects_record_without_ts_or_host(self):
-        h = {"Authorization": "Bearer t"}
+        h = authfix.machine("conform-01")
         self.assertEqual(self.c.post("/ingest", json={"schema": 3, "host": "selftest", "stage": "color"}, headers=h).status_code, 400)
         self.assertEqual(self.c.post("/ingest", json={"ts": "2026-10-14T10:00:00+00:00"}, headers=h).status_code, 400)
         ok = json.loads((FIX / "2026-10-14.jsonl").read_text(encoding="utf-8").splitlines()[-1])

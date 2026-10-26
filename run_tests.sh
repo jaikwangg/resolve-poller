@@ -9,6 +9,8 @@
 # Marker convention (shared with the progress worst-case suite): each test module declares
 #   MARKERS = {"safety"}            workstation safety (API allowlist, fail-closed, budgets, deploy kit, lease/health)
 #   MARKERS = {"worstcase"}         progress-metric worst cases
+#   MARKERS = {"security"}          server auth (token map, read auth), retention, server-side minimisation
+#   MARKERS = {"privacy"}           record fields == docs/DATA_SHEET.md, minimisation defaults
 # Modules without MARKERS (e.g. server/tests/test_replay.py) run under "all" and "replay".
 # Each module runs in its own process (agent modules read env at import; keeps RAM low).
 # Every future workstation incident gets a regression test here before the fix ships.

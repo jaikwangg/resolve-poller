@@ -56,7 +56,7 @@ def send(text):
 
 
 def main(argv):
-    store = os.environ.get("EDITORTRACK_STORE", "data")
+    store = os.environ.get("EDITORTRACK_STORE") or "/srv/editortrack"
     sp = pathlib.Path(os.environ.get("EDITORTRACK_HEALTH_STATE") or pathlib.Path(store) / "health_state.json")
     try:
         prev = json.loads(sp.read_text())

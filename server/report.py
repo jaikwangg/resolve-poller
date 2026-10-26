@@ -35,7 +35,7 @@ def _state(r):
     else:
         tl = (src.get("timeline") or {}).get("name")
         what = f"{src.get('project') or '?'}" + (f" / {tl}" if tl else "") + (f" · หน้า {src.get('page')}" if src.get("page") else "")
-    return (what, act.get("frontmost_name") or "?", _ex.is_active(r))
+    return (what, _ex.front_label(act), _ex.is_active(r))
 
 
 def _host_report(recs, interval_min, eff_job):
@@ -50,7 +50,7 @@ def _host_report(recs, interval_min, eff_job):
     for r in recs:
         t = _local(r.get("ts"))
         if prev is not None and t and prev[0] and (t - prev[0]).total_seconds() > gap_sec:
-            locked = (prev[1].get("activity") or {}).get("frontmost_name") == "loginwindow"
+            locked = _ex.is_locked(prev[1].get("activity") or {})
             gaps.append({"from": _hm(prev[0]), "to": _hm(t), "minutes": int((t - prev[0]).total_seconds() // 60),
                          "why": "เครื่องล็อกจอ/หลับ (record ก่อนหน้าอยู่หน้า login)" if locked
                                 else "ไม่มี record — agent หยุด ต่อ server ไม่ได้ หรือเครื่องหลับ"})
@@ -103,7 +103,7 @@ def _host_report(recs, interval_min, eff_job):
 
     active_min = sum(by_job.values())
     return {
-        "host": last.get("host"), "user": last.get("user"), "stage": last.get("stage"),
+        "host": last.get("host"), "stage": last.get("stage"),
         "summary": {"records": len(recs), "first": _hm(_local(recs[0].get("ts"))), "last": _hm(_local(last.get("ts"))),
                     "active_min": active_min, "active_text": _mins(active_min),
                     "first_active": _hm(first_active) if first_active else None,

@@ -19,7 +19,8 @@ def _envint(name, default):
 
 # ตั้งค่าต่อเครื่องผ่าน env ได้ — ห้อง color กับ ห้อง edit ใช้ค่าต่างกัน
 DETECT_GRADE = _envflag("EDITORTRACK_DETECT_GRADE", True)    # color room=on · **edit room ตั้ง =0** (ไม่ต้องสแกนสี → poll เบา)
-EXTRACT_SHOTS = _envflag("EDITORTRACK_EXTRACT_SHOTS", True)  # ดึง shots จาก marker (code + graded/conformed)
+# shot codes = client data: off by default (docs/DATA_SHEET.md); turning it on needs the client/owner consent first
+EXTRACT_SHOTS = _envflag("EDITORTRACK_EXTRACT_SHOTS", False)  # ดึง shots จาก marker (code + graded/conformed)
 EXTRACT_CLIP_META = _envflag("EDITORTRACK_EXTRACT_CLIP_META", False)  # ⚠️ หนัก: ดึง meta ราย clip (source/metadata/node label/version/fusion) — เปิดเฉพาะตอนต้องการ detail ลึก + ยืนยันด้วย probe ก่อน
 CLIP_META_MAX = _envint("EDITORTRACK_CLIP_META_MAX", 0)       # จำกัดจำนวน clip ที่ดึง detail (0 = ทั้งหมด)
 # REMOVED (zero-incident, 2026-10-26): EDITORTRACK_POLL_RENDER (GetRenderJobList jumped to the Deliver
@@ -240,7 +241,7 @@ _SRC_KEYS = ("Resolution", "Video Codec", "FPS", "File Path", "Usage", "Date Cre
 
 
 def _color_detail(item):
-    """ชั้นสีราย clip: node count + label + LUT + versions + group (ทุกตัว 🟠 version-dependent → safe)."""
+    """ชั้นสีราย clip: node count + label + versions + group (ไม่เก็บชื่อ LUT) (ทุกตัว 🟠 version-dependent → safe)."""
     c = {}
     g = _safe(item, "GetNodeGraph")
     if g is not None:
@@ -248,18 +249,14 @@ def _color_detail(item):
         if isinstance(n, int):
             c["nodes"] = n
             c["graded"] = n > 1
-            labels, luts = [], {}
+            labels = []
             for i in range(1, n + 1):
                 lb = _safe(g, "GetNodeLabel", i)
                 if lb:
                     labels.append(lb)
-                lut = _safe(g, "GetLUT", i)
-                if lut and lut not in ("", "None"):
-                    luts[str(i)] = lut
             if labels:
                 c["node_labels"] = labels
-            if luts:
-                c["luts"] = luts
+            # LUT names are never collected (data minimisation, docs/DATA_SHEET.md)
     vers = _safe(item, "GetVersionNameList", 0)   # 0 = local versions
     if vers:
         c["versions"] = vers
