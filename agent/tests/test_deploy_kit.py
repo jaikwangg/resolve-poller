@@ -4,7 +4,7 @@ no shared secret / default server in the repo, station templates keep the fail-c
 Runs the real shell scripts with stub systemctl/launchctl/pgrep/pkill/sudo on PATH and a fake
 HOME, so nothing on this machine is touched. marker: safety
 """
-import os, pathlib, stat, subprocess, sys, tempfile, unittest
+import os, pathlib, shutil, stat, subprocess, sys, tempfile, unittest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from tests.util import agent_env, AGENT            # noqa: E402
@@ -52,7 +52,8 @@ class Uninstall(unittest.TestCase):
         return other
 
     def test_uninstall_removes_everything_and_verifies(self):
-        tmp = pathlib.Path(tempfile.mkdtemp())
+        tmp = pathlib.Path(tempfile.mkdtemp(prefix="et-deploy-"))
+        self.addCleanup(shutil.rmtree, tmp, True)
         env, home, log = stub_env(tmp)
         other = self._installed(home)
         r = subprocess.run(["sh", str(DEPLOY / "uninstall.sh")], env=env, capture_output=True, text=True)
@@ -65,7 +66,8 @@ class Uninstall(unittest.TestCase):
         self.assertEqual(v.returncode, 0, v.stdout)
 
     def test_verify_detects_remnants(self):
-        tmp = pathlib.Path(tempfile.mkdtemp())
+        tmp = pathlib.Path(tempfile.mkdtemp(prefix="et-deploy-"))
+        self.addCleanup(shutil.rmtree, tmp, True)
         env, home, log = stub_env(tmp)
         self._installed(home)
         v = subprocess.run(["sh", str(DEPLOY / "uninstall.sh"), "--verify"], env=env, capture_output=True, text=True)
@@ -73,7 +75,8 @@ class Uninstall(unittest.TestCase):
         self.assertIn(".editortrack", v.stdout)
 
     def test_dry_run_changes_nothing(self):
-        tmp = pathlib.Path(tempfile.mkdtemp())
+        tmp = pathlib.Path(tempfile.mkdtemp(prefix="et-deploy-"))
+        self.addCleanup(shutil.rmtree, tmp, True)
         env, home, log = stub_env(tmp)
         self._installed(home)
         r = subprocess.run(["sh", str(DEPLOY / "uninstall.sh"), "--dry-run"], env=env, capture_output=True, text=True)
@@ -83,7 +86,8 @@ class Uninstall(unittest.TestCase):
 
 class KillSwitchScript(unittest.TestCase):
     def test_on_makes_agent_silent_and_off_reenables(self):
-        tmp = pathlib.Path(tempfile.mkdtemp())
+        tmp = pathlib.Path(tempfile.mkdtemp(prefix="et-deploy-"))
+        self.addCleanup(shutil.rmtree, tmp, True)
         env, home, log = stub_env(tmp)
         state = tmp / "state"
         env["EDITORTRACK_STATE_DIR"] = str(state)

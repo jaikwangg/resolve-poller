@@ -9,6 +9,8 @@ import datetime, json, os, pathlib, sys, tempfile, threading, time, unittest
 
 HERE = pathlib.Path(__file__).parent
 TMP = tempfile.mkdtemp(prefix="et-health-")
+import atexit, shutil                                  # noqa: E402
+atexit.register(shutil.rmtree, TMP, True)
 os.environ["EDITORTRACK_STORE"] = TMP
 os.environ["EDITORTRACK_TOKEN"] = "t"
 for k in [k for k in os.environ if k.startswith("ERP_")]:

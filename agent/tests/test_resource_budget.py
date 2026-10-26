@@ -30,10 +30,13 @@ def run_turn(server, n_clips, tracks=4, latency_us=0, scan_only=False, **env):
     args = [sys.executable, RUN_TURN, server, str(n_clips), str(tracks), str(latency_us)] + (["scan_only"] if scan_only else [])
     r = subprocess.run(args, env=e, cwd=tmp, capture_output=True, text=True, timeout=300)
     if r.returncode != 0:
+        __import__("shutil").rmtree(tmp, True)
         raise AssertionError(r.stderr[-2000:])
     out = json.loads(r.stdout.strip().splitlines()[-1])
     out["tmp"] = tmp
     out["state"] = e["EDITORTRACK_STATE_DIR"]
+    import atexit, shutil
+    atexit.register(shutil.rmtree, tmp, True)
     return out
 
 
