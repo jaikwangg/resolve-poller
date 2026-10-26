@@ -25,9 +25,31 @@ ERP_BOOKINGS_PATH=/api/integrations/editortrack/schedule?start_dt={start}&end_dt
 ERP_RECORDS_PATH=data.bookings
 ERP_ACTIVITY_PATH=/api/integrations/editortrack/activity   # เวลาทำงานเป็นช่วง 10 นาที (pms_sync.py)
 ERP_PROGRESS_PATH=/api/integrations/editortrack/progress   # % ส่งเมื่อเปลี่ยน เฉพาะ job ที่มาจาก booking
-ERP_PF_JOB=project_no  ERP_PF_STAGE=stage  ERP_PF_PCT=progress_pct
 ERP_ROOM_MAP={"conform-01":"RM-…"}                    # host → resource_code ห้องใน PMS
 ```
+
+#### % ความคืบหน้า: สัญญา v2 (`progress_v2.py`, PMS 9e67f60 §3.1)
+server คำนวณ % เอง (ไม่ใช้ % ของ agent ตรง ๆ สำหรับ color/conform) แล้วส่งฟิลด์ v2 ชื่อตรงตามสัญญา: `provisional`,
+`total_confirmed`, `done`, `done_count`, `total`, `work_done` (เพิ่มอย่างเดียว), `reasons` · `ERP_PF_*` ไม่ใช้กับ % แล้ว
+- ไม่ส่ง 100 หรือ `done=true` จนกว่าขอบเขตจะยืนยันและค่านิ่งตามเวลาที่ตั้ง · ก่อนนั้น `provisional=true` ไม่เกิน cap (99)
+- พักค่าเดิม (ไม่ส่ง) ตอน: detector ยังอ่าน grade ไม่ครบ (`grade.pending`) · เปิด timeline offline/reference ·
+  project ใน Resolve ไม่มี `project_no`/ชื่องานของ booking · record เก่ากว่าที่เคยรับจากเครื่องเดียวกัน (offline queue)
+- ค่าที่ PMS จะตอบ 422 ไม่ถูกส่ง (นับใน `GET /api/pms` → `progress.refused_locally`) · state อยู่ที่ `<store>/progress_v2_state.json`
+
+ข้อตัดสินใจของเจ้าของ (D1–D8) ยังเปิดอยู่ — ค่า default = ข้อเสนอของการศึกษา (`docs/research/STRATEGY_COMPARISON.md`):
+```
+EDITORTRACK_SCOPE_SOURCE=none        # D1: none = ไม่มีขอบเขตยืนยัน → ไม่มีวัน done · lock = คนล็อกจำนวน shot ต่อ project_no|stage
+                                     #     python3 progress_v2.py lock <store> <project_no> <stage> <จำนวน>|clear  (นับเป็นคลิปบน video track)
+EDITORTRACK_PROGRESS_DONE=advisory   # D2: advisory = ส่ง done ได้ (PMS ใช้อ้างอิงเท่านั้น) · never
+EDITORTRACK_MASS_GUARD=on            # D4: เกรดหลายคลิปในรอบเดียว (LUT ทั้ง timeline) → ไม่ done จนกว่าจะล็อกใหม่
+EDITORTRACK_JOB_GUARD=withhold       # D5: project ใน Resolve ไม่ตรง booking → ไม่ส่ง · off
+EDITORTRACK_PROGRESS_CAP=99          # D6: เพดานค่า provisional (สูงสุด 99.99)
+EDITORTRACK_STABLE_MIN=30            # D6: นาทีที่ 100% บนขอบเขตยืนยันต้องนิ่งก่อน done
+EDITORTRACK_STABLE_GAP_MIN=10        # poll ห่างเกินนี้ = เริ่มนับใหม่
+EDITORTRACK_OFFLINE_MATCH=...        # D8: ตัวเดียวกับของ agent (default เหมือนกัน)
+```
+ข้อจำกัดของ `lock` ตอนนี้ (นับจากจำนวนคลิป ยังไม่มีข้อมูลราย clip): Replace Clip ที่เก็บ grade เดิมไว้มองไม่เห็น → อาจ done ทั้งที่
+VFX เวอร์ชันใหม่ยังไม่ได้เกรด (`research/tests/test_shipped.py::test_known_limit_…`) — เปิด `lock` เมื่อเจ้าของรับข้อนี้แล้วเท่านั้น
 ไม่ตั้ง = ไม่ส่งอะไรให้ PMS · ดูสถานะการส่งที่ `GET /api/pms` · ไม่ส่ง user/ชื่อคน
 ทุกช่วงต้องผูก booking (กติกา PMS 15 ต.ค.) — ห้องมีหลาย booking พร้อมกัน → เลือกตัวที่ `project_no` หรือชื่อ project ตรงกับ project ที่เปิดใน Resolve · หาไม่ได้/ไม่ชัด = ไม่ส่ง นับไว้ที่ `unbound` ใน `/api/pms`
 → ตั้งชื่อ project ใน Resolve ให้มี `project_no` (เช่น `KPP-2026-0005_…`) จะผูกได้แม่นสุด

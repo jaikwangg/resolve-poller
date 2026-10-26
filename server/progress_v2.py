@@ -53,6 +53,7 @@ MASS_MIN = 4                          # mass-grade guard: >= this many clips ...
 MASS_FRAC = 0.5                       # ... and >= this share of the clips turning graded in one poll ...
 MASS_WINDOW_MIN = 2.0                 # ... at most this many minutes after the previous poll of that timeline
 DONE_OPEN = {"TODO", "IN_PROGRESS", "REVISION"}
+CLOCK_AHEAD_SEC = 300                 # a record stamped this far after the server received it is not trusted
 HOLDS = ("job_mismatch", "detector_pending", "reference_timeline", "late_record", "no_data")
 EXPLAINING = {"scope_change", "scope_shrink", "rework", "regression", "replaced", "reopened",
               "scope_mismatch", "job_mismatch"}
@@ -363,6 +364,11 @@ def obs_from_record(rec, eff, scope=None):
          "booking": {"project_no": eff.get("job_id") if bound else None,
                      "project_name": eff.get("title") if bound else None},
          "external": {"scope": {stage: scope} if scope else {}, "pms_task": None}}
+    rx = _epoch((rec.get("_rx") or {}).get("at"))
+    if tsec is not None and rx is not None and tsec > rx + CLOCK_AHEAD_SEC:
+        # host clock ahead of the server: its time would make every later record look late (and could
+        # stretch a stability window), so it neither moves the value nor the host's newest-time mark
+        return {**o, "ts": None, "ok": False}
     if src.get("ok") is False or not prog:
         return {**o, "ok": False}
     if stage in ("color", "conform") and tl.get("video_clips") is None and prog.get("pct") is None:

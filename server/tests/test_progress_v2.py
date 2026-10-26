@@ -164,6 +164,17 @@ class Gates(Base):
         pms_sync.progress_on_ingest(rec(ts(3), 10, 1), eff, pms, self.store)
         self.assertEqual([b["progress_pct"] for b in pms.bodies], [80.0])
 
+    def test_a_host_clock_ahead_of_the_server_is_not_trusted(self):
+        pms = FakePMS()
+        eff = erp_eff("KPP-2026-0101", title="BrandX")
+        future = rec(ts(600), 10, 9)
+        future["_rx"] = {"at": ts(1)}           # stamped 10 h after the server got it
+        pms_sync.progress_on_ingest(future, eff, pms, self.store)
+        now = rec(ts(2), 10, 3)
+        now["_rx"] = {"at": ts(2)}
+        pms_sync.progress_on_ingest(now, eff, pms, self.store)
+        self.assertEqual([b["progress_pct"] for b in pms.bodies], [30.0])
+
     def test_pms_422_is_counted_and_not_resent(self):
         pms = FakePMS(fail_422=True)
         eff = erp_eff("KPP-2026-0101", title="BrandX")

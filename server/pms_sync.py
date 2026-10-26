@@ -192,7 +192,7 @@ def _progress_step(rec, eff_job, erp, store):
         progress_status["withheld"][why] = progress_status["withheld"].get(why, 0) + 1
     else:
         body = _pv.payload(o, eff["job_id"], stage, rec.get("ts"), rec.get("host"))
-        sig = _json.dumps({k: v for k, v in body.items() if k not in ("observed_at", "host")}, sort_keys=True)
+        sig = _sig(body)
         problem = _pv.pms_check(body)
         if problem:                              # ไม่ส่งสิ่งที่ PMS จะตอบ 422 หรือผิดกติกา zero-incident ของเราเอง
             progress_status["refused_locally"] += 1
@@ -207,6 +207,13 @@ def _progress_step(rec, eff_job, erp, store):
     return pushed
 
 
+def _sig(body):
+    """what makes a new PMS row worth sending: the value and its counts. Reasons alone do not: a drop's reason
+    rides on the row that drops, and a resend of the same % with fewer reasons would hide it (PMS explains the
+    latest row against the one before it)."""
+    return _json.dumps({k: v for k, v in body.items() if k not in ("observed_at", "host", "reasons")}, sort_keys=True)
+
+
 def _post_progress(erp, body):
     """POST ตรงตามสัญญา (ไม่ผ่าน erp.push_progress ที่แมปชื่อฟิลด์ด้วย ERP_PF_*) — 422 = PMS ไม่รับ ไม่ส่งซ้ำค่าเดิม"""
     import urllib.error
@@ -218,7 +225,6 @@ def _post_progress(erp, body):
             progress_status["rejected"] += 1
             progress_status["last_error"] = f"PMS 422 for {body.get('project_no')}|{body.get('stage')}"
             key = f"{body.get('project_no')}|{body.get('stage')}"
-            _pg["pushed"][key] = _json.dumps({k: v for k, v in body.items() if k not in ("observed_at", "host")},
-                                             sort_keys=True)
+            _pg["pushed"][key] = _sig(body)
             return False
         raise
