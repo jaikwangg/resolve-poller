@@ -14,11 +14,14 @@ import json, os, pathlib, sys, tempfile, time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from resolve_poller import _load_resolve, _safe
+from resolve_guard import Ctx, allowed_names
 from grade_detect import cube_deviation, EPS
 
 
 def main():
-    resolve = _load_resolve()
+    if "--dummy-project" not in sys.argv:
+        sys.exit("probe_grade.py: ใช้กับ project ทดสอบเท่านั้น (ExportLUT ยังไม่ได้ยืนยันว่าปลอดภัย) — ยืนยันด้วย --dummy-project")
+    resolve = _load_resolve(Ctx(names=allowed_names(extended=True, probe=True) | {"ExportLUT"}))
     if resolve is None:
         sys.exit("ต่อ Resolve ไม่ได้ — เปิด Resolve Studio และเปิด external scripting (Preferences → System → General) ก่อน")
     proj = resolve.GetProjectManager().GetCurrentProject()

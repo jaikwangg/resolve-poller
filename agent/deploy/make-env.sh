@@ -19,8 +19,13 @@ echo "สร้าง env.sh (OS: $(uname)) — Enter = ใช้ค่า defau
 ask STAGE "stage (color/conform/subtitle/master/data)" "color"
 [ "$STAGE" = "color" ] && DG=1 || DG=0
 ask DETECT_GRADE "detect grade (1=color, 0=อื่น)" "$DG"
-ask SERVER "server ingest URL" "http://192.168.140.126:8000/ingest"
-ask TOKEN "token" "kpp-et-test"
+ask SERVER "server ingest URL" ""
+ask TOKEN "token (ต่อเครื่อง — ไม่มีค่า default)" ""
+ask VERIFIED "Resolve version ที่ผ่าน phase-3 แล้ว (เช่น 20.2) — ว่าง = agent ไม่สแกน" ""
+# zero-incident: ไม่มี token/server default ใน repo อีกต่อไป (token เดิมหลุดใน repo public)
+if [ -z "$SERVER" ] || [ -z "$TOKEN" ]; then
+  echo "✗ ต้องใส่ SERVER และ TOKEN (ไม่มีค่า default)"; exit 1
+fi
 
 case "$(uname)" in
   Darwin)
@@ -38,6 +43,10 @@ export EDITORTRACK_DETECT_GRADE=$DETECT_GRADE
 export EDITORTRACK_SERVER=$SERVER
 export EDITORTRACK_TOKEN=$TOKEN
 export EDITORTRACK_HTTP_TIMEOUT=5
+export EDITORTRACK_RESOLVE_VERIFIED=$VERIFIED
+# platform pin: Python/OS ที่ตรวจตอนติดตั้ง — อัปเกรดแล้วไม่ตรง → agent ไม่แตะ Resolve จนกว่าจะตรวจใหม่
+export EDITORTRACK_PYTHON_VERIFIED=$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')
+export EDITORTRACK_OS_VERIFIED="$(cd "$DIR/.." && python3 -c 'import safety; print(safety.platform_ids()["os"])')"
 export RESOLVE_SCRIPT_API="$API"
 export RESOLVE_SCRIPT_LIB="$LIB"
 export PYTHONPATH="\$PYTHONPATH:\$RESOLVE_SCRIPT_API/Modules/"

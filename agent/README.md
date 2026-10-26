@@ -11,7 +11,7 @@
 ```
 EDITORTRACK_ROLE=conform          # ห้อง edit · ห้อง color = colorist
 EDITORTRACK_DETECT_GRADE=0        # ห้อง edit=0 (ไม่สแกนสี) · ห้อง color=1
-EDITORTRACK_GRADE_METHOD=lut      # เกณฑ์ "เกรดแล้ว": lut (สีเปลี่ยนจริง, default) · nodes (node>1 แบบเดิม) — ยืนยันด้วย `python3 probe_grade.py`
+EDITORTRACK_GRADE_METHOD=lut      # เกณฑ์ "เกรดแล้ว": lut (สีเปลี่ยนจริง, default) · nodes (node>1 แบบเดิม) — lut ใช้จริงต่อเมื่อ EDITORTRACK_ALLOW_EXPORT_LUT=1 (หลัง `python3 probe_grade.py --dummy-project` ผ่าน) ไม่งั้น = nodes
 EDITORTRACK_SERVER=http://<server>:8000/ingest
 EDITORTRACK_TOKEN=<token>
 # Resolve scripting (per OS — ดู ../DATAFLOW.md §Config)
@@ -20,7 +20,7 @@ RESOLVE_SCRIPT_API / RESOLVE_SCRIPT_LIB / PYTHONPATH
 
 ## run
 ```
-python probe.py       # ตรวจ API ต่อรุ่น Resolve (ครั้งเดียวตอนตั้งค่า)
+python probe.py --dummy-project   # ตรวจ API (project ทดสอบเท่านั้น) ต่อรุ่น Resolve (ครั้งเดียวตอนตั้งค่า)
 python resolve_poller.py         # ดู snapshot จริง
 python activity_sampler.py --watch   # ดู idle/frontmost สด
 python runner.py      # 1 รอบ (เทส) → แล้วตั้ง scheduler ทุก 10 นาที
