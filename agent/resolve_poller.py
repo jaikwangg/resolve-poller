@@ -125,6 +125,13 @@ def _snapshot(ctx, idle_fn, sleep, load):
         return _skip("idle_unknown", ctx, page=start_page)
     if idle0 < MIN_IDLE_SEC:
         return _skip("user_active", ctx, page=start_page)
+    tl = proj.GetCurrentTimeline()
+    if tl:   # playback: playhead moves between two reads → ไม่สแกนระหว่างเล่น (เฟรมตกไม่ได้)
+        tc1 = _safe(tl, "GetCurrentTimecode")
+        sleep(PLAYBACK_PROBE_MS / 1000.0)
+        tc2 = _safe(tl, "GetCurrentTimecode")
+        if tc1 is None or tc1 != tc2:
+            return _skip("playback" if tc1 is not None else "timecode_unknown", ctx, page=start_page)
     pname = proj.GetName()
 
     out = {
@@ -136,15 +143,9 @@ def _snapshot(ctx, idle_fn, sleep, load):
         "timeline_count": proj.GetTimelineCount(),
         "rendering": False,
     }
-    tl = proj.GetCurrentTimeline()
     tl_id = None
     if tl:
         tl_id = _safe(tl, "GetUniqueId") or tl.GetName()
-        tc1 = _safe(tl, "GetCurrentTimecode")
-        sleep(PLAYBACK_PROBE_MS / 1000.0)
-        tc2 = _safe(tl, "GetCurrentTimecode")
-        if tc1 is None or tc1 != tc2:
-            return _skip("playback" if tc1 is not None else "timecode_unknown", ctx, page=start_page)
         out["timeline"], extra = _scan_timeline(resolve, proj, tl, pname, ctx)
         out.update(extra)
 

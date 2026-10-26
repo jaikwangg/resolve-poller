@@ -130,7 +130,11 @@ class Detector:
         self.seen = set()
         self.t0 = time.time()
         self.exported = self.pending = self.failed = 0
-        self.tmp = tempfile.mkdtemp(prefix="et-grade-") if self.method == "lut" else None
+        self.tmp = None
+        if self.method == "lut":            # temp ของ ExportLUT อยู่ใน state dir ของ agent เท่านั้น (ไม่ใช่ /tmp ส่วนกลาง)
+            d = _cache_path().parent / "tmp"
+            d.mkdir(parents=True, exist_ok=True)
+            self.tmp = tempfile.mkdtemp(prefix="et-grade-", dir=str(d))
 
     def _nodes(self, n):
         return bool(n and n > 1)
