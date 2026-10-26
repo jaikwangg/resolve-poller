@@ -3,6 +3,7 @@
 explain(rec, eff) -> {summary, lines[], warnings[], fields[]}
 """
 import datetime
+import math
 
 LATE_SEC = 120          # ts ของ agent ช้ากว่าเวลาที่ server รับเกินนี้ = มาจาก offline queue
 STALE_SEC = 300         # host เงียบเกินนี้ = ขาดการติดต่อ
@@ -89,11 +90,85 @@ RESOLVE_STAGES = {"conform", "color"}        # stage ที่ทำใน Resol
 DUP_SEC = 30            # record จาก host เดียวกันห่างกันน้อยกว่านี้ = agent รันซ้อน (เทส 8 ต.ค.: 2 ตัวห่าง 0.29 วิ) นับครั้งเดียว
 
 
-def dedupe(recs):
-    """ตัด record ที่ไม่มี host/ts และ record ซ้อนของ host เดียวกัน (< DUP_SEC) — คืนเรียงตาม host, ts"""
+# Record shape the readers rely on (/api/*, report, projects, health, pms_sync). One wrong type here made a
+# route raise (TypeError/AttributeError -> 500), so the same check runs at /ingest (400) and on every load
+# (skip + count). Only types are checked, never values: a field may always be missing or null.
+_N = type(None)
+_STR = (str, _N)
+_NUM = (int, float, _N)
+_DICT = (dict, _N)
+_LIST = (list, _N)
+_SCALAR = (str, int, float, bool, _N)
+SHAPE = {
+    "user": _SCALAR, "stage": _STR, "page": _SCALAR,
+    "activity": _DICT, "source": _DICT, "job": _DICT, "progress": _DICT, "_rx": _DICT, "agent": _DICT,
+    "activity.idle_sec": _NUM,
+    "source.project": _SCALAR, "source.timeline": _DICT, "source.shots": _LIST, "source.items": _LIST,
+    "source.timeline.name": _SCALAR, "source.timeline.duration_sec": _NUM, "source.timeline.video_clips": _NUM,
+    "source.timeline.graded_clips": _NUM, "source.timeline.markers": _NUM,
+    "job.job_id": _SCALAR, "job.title": _SCALAR, "job.role": _SCALAR, "job.resolved_by": _SCALAR,
+    "progress.stage": _SCALAR, "progress.pct": _NUM, "progress.done": _NUM, "progress.total": _NUM,
+    "progress.detail": _DICT,
+    "_rx.at": _STR, "_rx.ip": _SCALAR,
+    "agent.guard": _DICT,
+}
+
+
+def record_problem(rec):
+    """None when the record is safe for every reader, else a short reason (used by /ingest for the 400
+    and by dedupe to skip + count). A record must have a non-empty string host and an ISO ts WITH a
+    timezone offset (the agent sends UTC "+00:00"; a naive ts is rejected, never guessed)."""
+    if not isinstance(rec, dict):
+        return "not_object"
+    if not isinstance(rec.get("host"), str) or not rec["host"].strip():
+        return "bad_host"
+    if not isinstance(rec.get("ts"), str):
+        return "no_ts"
+    if _dt(rec["ts"]) is None:
+        return "ts_without_offset" if _naive(rec["ts"]) else "bad_ts"
+    for path, types in SHAPE.items():
+        cur = rec
+        for k in path.split("."):
+            cur = cur.get(k) if isinstance(cur, dict) else None
+        if not isinstance(cur, types):
+            return f"bad_type:{path}"
+    for s in (rec.get("source") or {}).get("shots") or []:
+        if not isinstance(s, dict) or not isinstance(s.get("code"), _STR):
+            return "bad_type:source.shots[]"
+    return None
+
+
+def finite(o):
+    """NaN / ±Infinity -> None, recursively (Python's JSON reads and writes them, but a JSON response refuses
+    them: one NaN in a stored record made /api/inbox 500). Explicit rule, applied at /ingest and on load."""
+    if isinstance(o, float) and not math.isfinite(o):
+        return None
+    if isinstance(o, dict):
+        return {k: finite(v) for k, v in o.items()}
+    if isinstance(o, list):
+        return [finite(v) for v in o]
+    return o
+
+
+def _naive(s):
+    try:
+        return datetime.datetime.fromisoformat(s.replace("Z", "+00:00")).tzinfo is None
+    except (TypeError, ValueError):
+        return False
+
+
+def dedupe(recs, skipped=None):
+    """ตัด record ที่ไม่มี host/ts และ record ซ้อนของ host เดียวกัน (< DUP_SEC) — คืนเรียงตาม host, ts
+    record ที่ใช้ไม่ได้ (record_problem) ถูกข้าม · skipped (dict) นับเหตุผลไว้ให้ผู้เรียก"""
+    good = []
+    for r in recs:
+        why = record_problem(r)
+        if why is None:
+            good.append(r)
+        elif skipped is not None:
+            skipped[why] = skipped.get(why, 0) + 1
     out, last = [], {}
-    for r in sorted((r for r in recs if isinstance(r, dict) and r.get("host") and _dt(r.get("ts"))),
-                    key=lambda r: (r["host"], _dt(r["ts"]))):
+    for r in sorted(good, key=lambda r: (r["host"], _dt(r["ts"]))):
         t = _dt(r["ts"])
         p = last.get(r["host"])
         if p is not None and (t - p).total_seconds() < DUP_SEC:
@@ -115,10 +190,16 @@ def is_active(rec):
 
 
 def _dt(s):
-    try:
-        return datetime.datetime.fromisoformat(str(s).replace("Z", "+00:00"))
-    except Exception:
+    """ISO time WITH a timezone offset -> aware datetime; anything else (missing, not a string, unparseable,
+    or naive like "2026-10-14T10:05:00") -> None. A naive time cannot be ordered against aware ones
+    (TypeError in sorted/min) and its zone is unknown, so it is treated as no time at all."""
+    if not isinstance(s, str):
         return None
+    try:
+        d = datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    return d if d.tzinfo is not None and d.utcoffset() is not None else None
 
 
 def _local(d):

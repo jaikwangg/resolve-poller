@@ -61,7 +61,7 @@ def control_for(store, host, version):
 def _dt(ts):
     try:
         d = datetime.datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
-        return d if d.tzinfo else d.replace(tzinfo=datetime.timezone.utc)
+        return d if d.tzinfo else None          # naive ts: zone unknown -> no time (same rule as explain._dt)
     except Exception:
         return None
 
