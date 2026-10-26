@@ -1,0 +1,198 @@
+{
+ "id": "WC17_offline_ref_and_trailer_timelines",
+ "title": "Project holds offline reference, online and trailer timelines",
+ "category": "versions",
+ "severity": [
+  "false_completion",
+  "flapping"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "The grade project contains R1_offline_ref (editorial reference, 14 clips incl. temp VFX, never graded), R1_online (deliverable) and Trailer_60s (5 online shots + 2 trailer-only shots), all on the same job. The colorist opens the offline ref to compare, grades online, then the trailer.",
+ "signals": "offline_ref 0/14 -> online 10/10 -> trailer 5/7 -> 7/7",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R1_offline_ref"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100",
+       "T1",
+       "T2",
+       "T3",
+       "T4"
+      ]
+     }
+    ],
+    [
+     "new_timeline",
+     {
+      "name": "R1_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ],
+      "timeline": "R1_online"
+     }
+    ],
+    [
+     "new_timeline",
+     {
+      "name": "Trailer_60s"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "TR_900",
+       "TR_910"
+      ],
+      "timeline": "Trailer_60s"
+     }
+    ]
+   ]
+  },
+  {
+   "t": 30,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R1_online"
+     }
+    ]
+   ]
+  },
+  {
+   "t": 120,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 150,
+   "ops": []
+  },
+  {
+   "t": 180,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "Trailer_60s"
+     }
+    ],
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 240,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "TR_900",
+       "TR_910"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 300,
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "color": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100",
+    "TR_900",
+    "TR_910"
+   ]
+  }
+ },
+ "expect": {
+  "S0": {
+   "false_completion": true
+  }
+ }
+}

@@ -1,0 +1,136 @@
+{
+ "id": "WC19_handover_between_rooms",
+ "title": "Job moves from grade-01 to grade-02 halfway (project exported/imported)",
+ "category": "multi_room",
+ "severity": [
+  "flapping"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "grade-01 grades 6 of 10 shots; the job is moved to grade-02 (project archive restored there: new item ids, same clip names). grade-01 later opens the old project once to grab a still.",
+ "signals": "grade-01 6/10 ; grade-02 6/10 -> 10/10 ; grade-01 6/10 again",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "host": "grade-01",
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R1_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "host": "grade-01",
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 120,
+   "host": "grade-02",
+   "ops": [
+    [
+     "copy_timeline",
+     {
+      "from_project": "BrandX_TVC_grade",
+      "from": "R1_online",
+      "to": "R1_online",
+      "to_project": "BrandX_TVC_grade_restored"
+     }
+    ]
+   ]
+  },
+  {
+   "t": 180,
+   "host": "grade-02",
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 200,
+   "host": "grade-01",
+   "ops": []
+  },
+  {
+   "t": 240,
+   "host": "grade-02",
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "color": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100"
+   ]
+  }
+ },
+ "expect": {
+  "C3": {
+   "false_completion": false
+  }
+ },
+ "hosts": {
+  "grade-01": {
+   "stage": "color"
+  },
+  "grade-02": {
+   "stage": "color"
+  }
+ }
+}

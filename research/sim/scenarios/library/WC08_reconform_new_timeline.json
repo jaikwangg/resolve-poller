@@ -1,0 +1,182 @@
+{
+ "id": "WC08_reconform_new_timeline",
+ "title": "Re-conform: new timeline from a new XML, grades restored by ColorTrace",
+ "category": "replacement",
+ "severity": [
+  "false_regression"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "Editorial sends a revised XML (3 shots have new takes). The conformer builds a fresh timeline R1_v2 in the grade project; it has no grades. The colorist uses ColorTrace to copy grades for unchanged shots (minutes), then grades the 3 new takes.",
+ "signals": "timeline R1_online 10/10 -> R1_v2 0/10 -> 7/10 -> 10/10",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R1_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 90,
+   "ops": []
+  },
+  {
+   "t": 120,
+   "ops": [
+    [
+     "new_timeline",
+     {
+      "name": "R1_v2",
+      "open": true
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030"
+      ],
+      "version": 2
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ],
+    [
+     "truth_done",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030"
+      ],
+      "value": false
+     }
+    ]
+   ]
+  },
+  {
+   "t": 130,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 180,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 210,
+   "ops": []
+  },
+  {
+   "t": 240,
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "color": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100"
+   ]
+  }
+ },
+ "expect": {
+  "C3": {
+   "false_completion": false
+  }
+ }
+}

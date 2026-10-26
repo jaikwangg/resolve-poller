@@ -1,0 +1,159 @@
+{
+ "id": "WC12_look_lut_on_all_clips",
+ "title": "Show LUT / CST applied to every clip at once at session start",
+ "category": "look_all",
+ "severity": [
+  "false_completion"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "First thing in the session the colorist selects all clips and applies the show LUT (or a CST node). Every clip now differs from identity, so every clip reads as graded. The real grading happens over the day.",
+ "signals": "graded 0 -> 10 in one poll (jump), then signatures change one by one as real grading happens",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R1_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ],
+    [
+     "confirm_scope",
+     {
+      "stage": "color",
+      "source": "offline_edl",
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 1,
+   "ops": [
+    [
+     "lut_all",
+     {}
+    ]
+   ]
+  },
+  {
+   "t": 40,
+   "ops": []
+  },
+  {
+   "t": 70,
+   "ops": []
+  },
+  {
+   "t": 120,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 180,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 240,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 270,
+   "ops": []
+  },
+  {
+   "t": 300,
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "color": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100"
+   ]
+  }
+ },
+ "expect": {
+  "S0": {
+   "false_completion": true
+  },
+  "C3": {
+   "false_completion": false
+  }
+ }
+}

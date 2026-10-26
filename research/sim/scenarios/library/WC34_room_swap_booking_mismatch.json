@@ -1,0 +1,115 @@
+{
+ "id": "WC34_room_swap_booking_mismatch",
+ "title": "Work happens in a room booked for another job",
+ "category": "attribution",
+ "severity": [
+  "wrong_job"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "grade-05 broke down; the colorist moves job 0101 into grade-03, which PMS still shows booked for job 0200. With one booking in the room, pick_booking() takes it without checking the Resolve project.",
+ "signals": "host booking project_no KPP-2026-0200 ; Resolve project BrandX_TVC_grade (job 0101)",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R1_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ],
+    [
+     "booking",
+     {
+      "booking_id": "B-9",
+      "project_no": "KPP-2026-0200",
+      "project_name": "Other Client Film",
+      "activity": "Grading",
+      "start_t": 0,
+      "end_t": 480
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 120,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 180,
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "color": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100"
+   ]
+  }
+ },
+ "expect": {
+  "S0": {
+   "min_wrong_job": 1
+  }
+ }
+}

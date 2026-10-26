@@ -1,0 +1,130 @@
+{
+ "id": "WC05_shots_cut_ungraded",
+ "title": "Editor cuts two shots that were not graded yet",
+ "category": "scope_shrink",
+ "severity": [
+  "never_completes"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "During grading the client approves a shorter cut: two ungraded shots are removed from the edit and the conformer ripples them out of the grade timeline.",
+ "signals": "video_clips 12 -> 10, graded 8 -> 8 -> 10",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R1_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100",
+       "R1_110",
+       "R1_120"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 120,
+   "ops": [
+    [
+     "remove",
+     {
+      "shots": [
+       "R1_110",
+       "R1_120"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 180,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 210,
+   "ops": []
+  },
+  {
+   "t": 240,
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "color": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100"
+   ]
+  }
+ },
+ "expect": {
+  "S0": {
+   "false_completion": false
+  },
+  "S1": {
+   "missed_completion": true
+  },
+  "C3": {
+   "false_completion": false
+  }
+ }
+}

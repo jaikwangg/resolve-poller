@@ -1,0 +1,138 @@
+{
+ "id": "WC21_xml_import_instant_full_duration",
+ "title": "Conform imports the XML: full duration at once, media still offline",
+ "category": "conform",
+ "severity": [
+  "false_completion"
+ ],
+ "stage": "conform",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "The conformer imports the editorial XML/AAF. The timeline has every event at full length immediately, but most media is offline (proxy names, missing reels). The real conform work is relinking, fixing mismatches and replacing offline media over the day.",
+ "signals": "duration 40 s = offline target at the first poll; items online 0/10 -> 4/10 -> 10/10 (items.online, ext)",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_conform",
+      "timeline": "R1_offline_ref"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ],
+    [
+     "new_timeline",
+     {
+      "name": "R1_conform",
+      "open": true
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ],
+      "online": false
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "ops": [
+    [
+     "conform",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 180,
+   "ops": [
+    [
+     "conform",
+     {
+      "shots": [
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 240,
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "conform": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100"
+   ]
+  }
+ },
+ "expect": {
+  "S0": {
+   "false_completion": true
+  },
+  "C3": {
+   "false_completion": false
+  }
+ },
+ "hosts": {
+  "conform-01": {
+   "stage": "conform"
+  }
+ },
+ "resolve_unverified": "can the poller read per-item media offline/online state (MediaPoolItem property) cheaply?"
+}

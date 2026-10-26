@@ -1,0 +1,189 @@
+{
+ "id": "WC04_reels_as_timelines",
+ "title": "Multi-reel job: reels are separate timelines in one project, graded in sequence",
+ "category": "scope_growth",
+ "severity": [
+  "false_completion",
+  "false_regression"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "A short film has Reel 1 and Reel 2 as timelines in one grade project. The colorist finishes Reel 1, then opens Reel 2 and starts it, then goes back to Reel 1 for a tweak.",
+ "signals": "timeline R1: 10/10 -> switch to R2: 0/8 -> 4/8 -> back to R1: 10/10",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R1_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ],
+    [
+     "new_timeline",
+     {
+      "name": "R2_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R2_010",
+       "R2_020",
+       "R2_030",
+       "R2_040",
+       "R2_050",
+       "R2_060",
+       "R2_070",
+       "R2_080"
+      ],
+      "timeline": "R2_online"
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 120,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R2_online"
+     }
+    ]
+   ]
+  },
+  {
+   "t": 180,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R2_010",
+       "R2_020",
+       "R2_030",
+       "R2_040"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 240,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R1_online"
+     }
+    ]
+   ]
+  },
+  {
+   "t": 300,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R2_online"
+     }
+    ],
+    [
+     "grade",
+     {
+      "shots": [
+       "R2_050",
+       "R2_060",
+       "R2_070",
+       "R2_080"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 360,
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "color": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100",
+    "R2_010",
+    "R2_020",
+    "R2_030",
+    "R2_040",
+    "R2_050",
+    "R2_060",
+    "R2_070",
+    "R2_080"
+   ]
+  }
+ },
+ "expect": {
+  "S0": {
+   "false_completion": true
+  },
+  "C3": {
+   "false_completion": false
+  }
+ }
+}

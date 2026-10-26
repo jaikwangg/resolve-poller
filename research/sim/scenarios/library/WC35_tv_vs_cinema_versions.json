@@ -1,0 +1,136 @@
+{
+ "id": "WC35_tv_vs_cinema_versions",
+ "title": "Cinema version graded; TV cut with 3 alternate shots made later in the same job",
+ "category": "versions",
+ "severity": [
+  "false_completion"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "The job has two deliverables: cinema and TV. Cinema is graded first (100%). The TV cut (duplicate with 3 softer alternate shots) is built next and the alternates get graded.",
+ "signals": "Cinema 10/10 ; TV timeline 10/13 -> 13/13",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "Cinema"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 120,
+   "ops": []
+  },
+  {
+   "t": 240,
+   "ops": [
+    [
+     "copy_timeline",
+     {
+      "from": "Cinema",
+      "to": "TV"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "TV_A1",
+       "TV_A2",
+       "TV_A3"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 300,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "TV_A1",
+       "TV_A2",
+       "TV_A3"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 360,
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "color": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100",
+    "TV_A1",
+    "TV_A2",
+    "TV_A3"
+   ]
+  }
+ },
+ "expect": {
+  "S0": {
+   "false_completion": true
+  }
+ }
+}

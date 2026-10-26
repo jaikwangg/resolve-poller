@@ -1,0 +1,141 @@
+{
+ "id": "WC15_duplicated_timeline_v2",
+ "title": "Colorist duplicates the timeline to R1_v2 and keeps grading there",
+ "category": "versions",
+ "severity": [
+  "false_regression",
+  "flapping"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "Before a big change the colorist duplicates R1_online to R1_v2 (grades copied, new item ids) and grades there; later opens R1_online again to compare.",
+ "signals": "R1_online 6/10 -> R1_v2 6/10 -> 10/10 -> back on R1_online 6/10",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R1_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 90,
+   "ops": [
+    [
+     "copy_timeline",
+     {
+      "from": "R1_online",
+      "to": "R1_v2"
+     }
+    ]
+   ]
+  },
+  {
+   "t": 150,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 180,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R1_online"
+     }
+    ]
+   ]
+  },
+  {
+   "t": 200,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R1_v2"
+     }
+    ]
+   ]
+  },
+  {
+   "t": 240,
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "color": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100"
+   ]
+  }
+ },
+ "expect": {
+  "C3": {
+   "false_completion": false
+  }
+ }
+}
