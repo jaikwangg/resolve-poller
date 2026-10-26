@@ -20,6 +20,7 @@ ImageMagick `import`. No pip packages. Copy this folder to `~/ET_TESTDAY/kit/` a
 | `render_timer.py` | P3 | Times each render by the output folder (read-only `stat`), 3× off / 3× on, ≤ 1 % and within 2σ |
 | `agent_cost.py` | P4 | Agent CPU per turn (systemd journal "Consumed … CPU time" / macOS `ps -S` on the launchd loop), `~/.editortrack` size |
 | `prefs_snapshot.py` | U1 | SHA-256 of every Resolve preference file + scheduler/footprint lists; `compare` = byte-identical or FAIL; control-run allow list |
+| `progress_replay.py` | V | Offline replay of the day's records through a progress-v2 checkout's engine with a fake PMS (no network): the values PMS would have got, never done/100 without a confirmed scope, every drop explained |
 | `drill.py` | K1, K2, K3/K4, K5, U1, U2 | Guided, timed kill-switch and uninstall drill around the agent's own `killswitch.sh` / `uninstall.sh` |
 
 ## Commands on the day
@@ -42,6 +43,8 @@ python3 $K/turn_stats.py --records <day>.jsonl --host $H --from <ISO> --to <ISO>
 python3 $K/render_timer.py watch --dir ~/ET_DUMMY_TESTDAY/renders/off1 --label off1 --agent off --csv $R/P3.csv
 python3 $K/render_timer.py analyze --csv $R/P3.csv --records <day>.jsonl --host $H --json $R/P3.json
 python3 $K/agent_cost.py --minutes 60 --csv $R/P4.csv
+# V (after the day, on any machine with the records and a progress-v2 checkout)
+python3 $K/progress_replay.py --server-dir ~/github/editortrack/server --records <day>.jsonl --host $H --csv $R/V.csv
 # K / U
 python3 $K/drill.py --agent-dir $A --log $R/drill.csv k1
 python3 $K/drill.py --agent-dir $A --log $R/drill.csv k2
@@ -55,7 +58,7 @@ the workstation's local time; when analysing on another machine pass `--tz-offse
 
 ## Tests (on the build server, no workstation needed)
 
-`./run_tests.sh testday` → `testday/tests/test_testday.py` (67 tests): PNG/BMP readers and the frame diff on
+`./run_tests.sh testday` → `testday/tests/test_testday.py` (71 tests): PNG/BMP readers and the frame diff on
 sample images, an end-to-end replay → analyze where a page jump at an agent turn is a FAIL and a static screen
 with a masked clock is a PASS, generator XML/EDL structure, the P1/P2/P3/P4 evaluators, the prefs compare
 (one-byte change, added file, control churn, leftover unit), and kit-safety checks (no Resolve scripting import,

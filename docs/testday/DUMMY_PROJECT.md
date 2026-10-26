@@ -76,25 +76,36 @@ node); write the preset down and reuse it for all six runs, each to a new empty 
 Each step reproduces a worst case from `research/revision-worst-cases` (`docs/research/WORST_CASES.md`, WC ids)
 on real Resolve, so phase 3 also checks the provisional, revision-aware progress (branch `night/progress-v2`).
 All grading is done by hand in the Resolve UI. Positions refer to `T0300_v1` as imported; the cut (R5) comes after
-every step that names positions. After each step wait **3 agent turns** (3 minutes) and write down what the
-server shows for the host (pct, status, reason) in the results template.
+every step that names positions. After each step wait **3 agent turns** (3 minutes) and write the step's
+clock time in the results template.
+
+PMS push is off in phase 3, and the server runs the progress-v2 engine only when a PMS progress path is set, so
+the values are produced **afterwards, offline**: `testday/progress_replay.py` feeds the day's stored records
+through the engine of a progress-v2 checkout with a fake PMS that only collects the bodies (no network), and
+checks "never done/100 without a confirmed scope" and "every drop has an explaining reason". Match its output
+times to the step times. (Checked on the build server against `night/progress-v2` c468881 with the real
+2026-10-07..14 records: it prints exactly 16.67 → 99 (`mass_grade`) → 83.33 (`regression`) → 75
+(`scope_change`), all provisional.)
 
 | Step | Operator does (Resolve UI) | Worst case | Today's server (S0) would | Expected with progress v2 |
 |---|---|---|---|---|
-| R0 | Import `T0300_v1`, make it current | — | 0 % | provisional, 0 % |
-| R1 | Grade clips 1–120 in 3 sessions of 40 (one serial node + any change), 10 min pause between | — | rises to 40 % | rises, status provisional, never complete |
-| R2 | Import `media/vfx_late`, append the 10 clips to the end (Edit → Append to End of Timeline) | WC02 VFX late, no placeholder | drop read as lost work | drop labelled `scope_added` |
-| R3 | Grade the 12 VFX clips (positions 20, 43, …, 273), then relink them to `media/vfx_v2` (same names, grades kept) | WC07 new version, grade kept | may claim done | no jump to complete, no unexplained drop |
+| R0 | Import `T0300_v1`, make it current | — | 0 % | `provisional: true`, 0 % |
+| R1 | Grade clips 1–120 in 3 sessions of 40 (one serial node + any change), 10 min pause between | — | rises to 40 % | rises, provisional, never `done` |
+| R2 | Import `media/vfx_late`, append the 10 clips to the end (Edit → Append to End of Timeline) | WC02 VFX late, no placeholder | drop read as lost work | drop labelled `scope_change` |
+| R3 | Grade the 12 VFX clips (positions 20, 43, …, 273), then relink them to `media/vfx_v2` (same names, grades kept) | WC07 new version, grade kept | may claim done | no jump to done, no unexplained drop (`replaced` only once the poller sends clip items) |
 | R4 | Reset Grades and Nodes on clips 70–84, wait 3 turns, regrade them | WC09/WC10 regrade, rework | silent drop then back | drop labelled `rework` (or a regression with a reason), back up after |
-| R5 | Ripple-delete graded clips 45–54 and ungraded clips 210–219 | WC05/WC06 shots cut | unexplained drop / jump | `scope_removed`, labelled |
-| R6 | One LUT / shared node on **all** clips | WC12 look on all clips | **100 % (false)** | not 100 %, not complete |
-| R7 | Import `T0300_v2_reconform` as a new timeline, make it current | WC08/WC15 re-conform, new timeline | false 0 % or flapping | `timeline_version` |
-| R8 | `T0006_WC01`: grade clip 1; next turn all 6; next turn reset clip 6; then put `WC01_7`, `WC01_8` on V2 | WC01 exact 14 Oct replay | 16.7 → **100** → 83.3 → 75 | at most 99 provisional, drops carry reasons, never complete |
+| R5 | Ripple-delete graded clips 45–54 and ungraded clips 210–219 | WC05/WC06 shots cut | unexplained drop / jump | `scope_shrink`, labelled |
+| R6 | One LUT / shared node on **all** clips | WC12 look on all clips | **100 % (false)** | not 100 %, not `done` (mass-grade guard) |
+| R7 | Import `T0300_v2_reconform` as a new timeline, make it current | WC08/WC15 re-conform, new timeline | false 0 % or flapping | labelled change (`scope_change`, or a `reference_timeline` hold), no false 0/100 |
+| R8 | `T0006_WC01`: grade clip 1; next turn all 6; next turn reset clip 6; then put `WC01_7`, `WC01_8` on V2 | WC01 exact 14 Oct replay | 16.7 → **100** → 83.3 → 75 | 16.67 → 99 (`mass_grade`) → 83.33 `regression` → 75 `scope_change`; never `done` |
 | R9 | `T1500_v1`, `T3000_v1`: append 50 clips, wait 3 turns, ripple-delete 50 | scale | — | same reasons as R2/R5; `guard.ms` within the P2 budget; no `scan_budget` storm |
 
-The reason-code names follow the R2-A1 brief (progress / scope_added / scope_removed / rework /
-timeline_version / detection_pending). **Before the test day, check them against the merged progress-v2 code**
-and correct this table if they differ. PMS push stays off during phase 3: the values are read on the
+Reason codes and fields are those of `server/progress_v2.py` on branch `night/progress-v2` (c468881) and the
+PMS contract v2 (`provisional`, `total_confirmed`, `done`, `done_count`, `total`, `reasons[]`): explaining codes
+`scope_change`, `scope_shrink`, `rework`, `regression`, `replaced`, `reopened`, `scope_mismatch`, `job_mismatch`;
+holds `detector_pending`, `reference_timeline`, `late_record`, `job_mismatch`, `no_data`; the provisional cap
+is 99 (`EDITORTRACK_PROGRESS_CAP`). That branch is not merged yet: **before the test day, check the table against
+the merged code** and correct it if names changed. PMS push stays off during phase 3: the values are read on the
 editortrack server only.
 
 ## 4. What was checked where

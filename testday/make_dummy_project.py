@@ -119,7 +119,7 @@ def build_plan(args):
             clips300.append(c)
     tl("T0300_v1", clips300, "revision base (R0-R6) + size 300")
 
-    # R5 reconform: a NEW timeline (timeline_version): 25 clips removed, 20 new, 2 sections swapped
+    # R7 reconform: a NEW timeline: 25 clips removed, 20 new, 2 sections swapped
     keep = [c for c in clips300 if c["n"] % 12 != 5][:280]
     new = clips_from_sources(20, start_index=301)
     v2 = keep[:100] + new[:10] + keep[180:280] + keep[100:180] + new[10:]
@@ -263,28 +263,28 @@ def revision_steps(plan):
         ("R0-import", "Import timelines/T0300_v1.xml into the DUMMY project (tick: import source clips into the "
                       "media pool). Make it the current timeline. Expect on the server: provisional, 0 %."),
         ("R1-grade", "Color page: grade clips 1-120 (any visible change, e.g. one serial node + offset), in 3 "
-                     "sessions of 40 with a 10 min pause. Expect: progress rises, status provisional, never complete."),
+                     "sessions of 40 with a 10 min pause. Expect: progress rises, provisional, never done/complete."),
         ("R2-add (WC02)", "Media pool: import the folder media/vfx_late (10 clips) and append them to the end of "
                           "T0300_v1 (Edit > Append to End of Timeline). Clips 300 -> 310. Expect: the % drops with "
-                          "reason scope_added (not shown as lost work)."),
+                          "reason scope_change (not shown as lost work)."),
         ("R3-replace (WC07)", "Grade the 12 VFX clips (positions %s), then relink them to the folder media/vfx_v2 "
                               "(same file names, new content; grades kept). Expect: no jump to complete, no "
                               "unexplained drop." % ", ".join(map(str, vfx))),
         ("R4-regrade (WC09/WC10)", "Color page: Reset Grades and Nodes on clips 70-84; wait 3 agent turns; regrade "
-                                   "them. Expect: a drop labelled rework (or regression with a reason), then back up."),
+                                   "them. Expect: a drop labelled rework (or regression), then back up."),
         ("R5-cut (WC05/WC06)", "Edit page: ripple-delete the graded clips 45-54 and the ungraded clips 210-219 "
-                               "(20 clips; positions as imported). Expect: reason scope_removed; the drop of graded "
+                               "(20 clips; positions as imported). Expect: reason scope_shrink; the drop of graded "
                                "clips is labelled, never silent."),
         ("R6-look-all (WC12)", "Apply one LUT / shared node to ALL clips (select all on the Color page). Expect: NOT "
-                               "100 %, NOT complete (a look on every clip is not 'graded')."),
+                               "100 %, NOT done (a look on every clip is not 'graded'; mass-grade guard)."),
         ("R7-reconform (WC08/WC15)", "Import timelines/T0300_v2_reconform.xml as a NEW timeline and make it current. "
-                                     "Expect: reason timeline_version; no false 0 % or 100 %."),
+                                     "Expect: a labelled change (scope_change / reference_timeline hold); no false 0 % or 100 %."),
         ("R8-WC01 replay", "Import timelines/T0006_WC01.xml (6 clips). Grade clip 1; next turn grade all 6; next turn "
                            "reset clip 6; then place WC01_7 and WC01_8 on V2 (positions as in T0006_WC01_plus2). "
                            "Today's server sent 16.7 -> 100 -> 83.3 -> 75 for this. Expect with progress v2: never "
                            "complete (at most 99, provisional), and the drops carry reasons."),
         ("R9-scale", "On T1500_v1 and T3000_v1: append 50 clips from media/src, wait 3 turns, ripple-delete 50. "
-                     "Expect: same reason codes as R2/R5; guard.ms within the P2 budget; no scan_budget storm."),
+                     "Expect: same reasons as R2/R5; guard.ms within the P2 budget; no scan_budget storm."),
     ]
 
 

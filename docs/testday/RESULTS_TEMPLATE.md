@@ -55,25 +55,25 @@
 | R1 upgrade + rollback | | | rollback ___ s | | |
 | R2 unverified Resolve version | | | reason seen ___ | | |
 
-## Progress v2 observations (during S1)
+## Progress v2 observations (steps during S1; values from `progress_replay.py` afterwards)
 
-| Step | Time | Timeline / clips | Server pct | status | reason | Expected (DUMMY_PROJECT.md §3) | OK? |
+| Step | Time | Timeline / clips | Replayed pct | provisional / done | reasons | Expected (DUMMY_PROJECT.md §3) | OK? |
 |---|---|---|---|---|---|---|---|
-| R0 import | | T0300_v1 / 300 | | | | provisional 0 % | |
+| R0 import | | T0300_v1 / 300 | | | | provisional, 0 % | |
 | R1 grade 1–40 | | | | | | rises, provisional | |
 | R1 grade 41–80 | | | | | | | |
 | R1 grade 81–120 | | | | | | | |
-| R2 add 10 late VFX | | / 310 | | | | `scope_added` | |
-| R3 grade + relink VFX | | | | | | no complete, no unexplained drop | |
-| R4 reset 70–84 | | | | | | `rework` / labelled | |
+| R2 add 10 late VFX | | / 310 | | | | `scope_change` | |
+| R3 grade + relink VFX | | | | | | no done, no unexplained drop | |
+| R4 reset 70–84 | | | | | | `rework` / `regression` | |
 | R4 regrade 70–84 | | | | | | back up | |
-| R5 cut 20 | | / 290 | | | | `scope_removed` | |
-| R6 look on all | | | | | | not 100, not complete | |
-| R7 reconform | | T0300_v2_reconform / 295 | | | | `timeline_version` | |
+| R5 cut 20 | | / 290 | | | | `scope_shrink` | |
+| R6 look on all | | | | | | not 100, not done | |
+| R7 reconform | | T0300_v2_reconform / 295 | | | | labelled change, no false 0/100 | |
 | R8 grade 1 | | T0006_WC01 / 6 | | | | 16.7 provisional | |
-| R8 grade all 6 | | | | | | ≤ 99, not complete | |
-| R8 reset clip 6 | | | | | | 83.3 with a reason | |
-| R8 +2 clips on V2 | | / 8 | | | | 75 with a reason | |
+| R8 grade all 6 | | | | | | 99 `mass_grade`, not done | |
+| R8 reset clip 6 | | | | | | 83.33 `regression` | |
+| R8 +2 clips on V2 | | / 8 | | | | 75 `scope_change` | |
 | R9 T1500 +50 / −50 | | | | | | as R2 / R5 | |
 | R9 T3000 +50 / −50 | | | | | | as R2 / R5, no scan_budget storm | |
 

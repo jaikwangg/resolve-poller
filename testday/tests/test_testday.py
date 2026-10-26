@@ -26,6 +26,7 @@ import render_timer  # noqa: E402
 import screen_watch  # noqa: E402
 import turn_stats  # noqa: E402
 import drill  # noqa: E402
+import progress_replay  # noqa: E402
 
 
 def solid(w, h, rgb=(40, 40, 40)):
@@ -636,6 +637,80 @@ class AgentLog(Tmp):
         self.assertEqual(t[0]["start"], common.parse_iso("2026-11-02T10:00:00+07:00"))
         self.assertTrue(drill.is_silent(t[1]["result"]))
         self.assertFalse(drill.is_silent(t[0]["result"]))
+
+
+# ---------------------------------------------------------------- progress v2 offline replay
+STUB_PV = """
+EXPLAINING = {"scope_change", "scope_shrink", "rework", "regression"}
+"""
+STUB_PMS = """
+import progress_v2
+_pg = {"engine": None, "pushed": {}, "store": None}
+progress_status = {}
+def progress_on_ingest(rec, eff_job, erp, store):
+    e = eff_job(rec)
+    t = rec["source"]["timeline"]
+    pct = round(100.0 * t["graded_clips"] / t["video_clips"], 2)
+    reasons = list(rec.get("stub_reasons", []))
+    erp._post_auth(erp.ERP_BASE + erp.ERP_PROGRESS_PATH, {"project_no": e["job_id"], "stage": e["stage"],
+                   "progress_pct": min(pct, rec.get("cap", 99.0)), "provisional": True, "total_confirmed": False,
+                   "done": False, "reasons": reasons, "observed_at": rec["ts"]})
+    return True
+"""
+
+
+class ProgressReplay(Tmp):
+    def setUp(self):
+        super().setUp()
+        self.server = os.path.join(self.tmp, "server")
+        os.makedirs(self.server)
+        open(os.path.join(self.server, "progress_v2.py"), "w").write(STUB_PV)
+        open(os.path.join(self.server, "pms_sync.py"), "w").write(STUB_PMS)
+        for m in ("pms_sync", "progress_v2"):
+            sys.modules.pop(m, None)
+
+    def tearDown(self):
+        for m in ("pms_sync", "progress_v2"):
+            sys.modules.pop(m, None)
+        if self.server in sys.path:
+            sys.path.remove(self.server)
+        super().tearDown()
+
+    def recs(self, spec):
+        out = []
+        for i, (v, g, reasons, cap) in enumerate(spec):
+            r = rec(1000 + 60 * i, extra={"stage": "color"})
+            r["source"]["timeline"].update({"video_clips": v, "graded_clips": g})
+            r["stub_reasons"], r["cap"] = reasons, cap
+            r["_t"], r["_bytes"] = 1000 + 60 * i, 1
+            out.append(r)
+        return out
+
+    def test_replay_collects_bodies_and_passes(self):
+        pms, pv = progress_replay.load_engine(self.server)
+        bodies, status = progress_replay.replay(self.recs([(6, 1, [], 99), (6, 6, [], 99), (6, 5, ["regression"], 99),
+                                                           (8, 6, ["scope_change"], 99)]), pms, pv, "TEST")
+        self.assertEqual([b["progress_pct"] for b in bodies], [16.67, 99.0, 83.33, 75.0])
+        self.assertEqual({b["project_no"] for b in bodies}, {"TEST"})
+        checks, _, _ = progress_replay.check(bodies, status, pv.EXPLAINING)
+        self.assertTrue(all(checks.values()), checks)
+
+    def test_silent_drop_and_false_done_fail(self):
+        pms, pv = progress_replay.load_engine(self.server)
+        bodies, status = progress_replay.replay(self.recs([(6, 6, [], 100), (6, 5, [], 99)]), pms, pv)
+        checks, false_done, silent = progress_replay.check(bodies, status, pv.EXPLAINING)
+        self.assertFalse(checks["never_done_or_100_without_confirmed_scope"])
+        self.assertFalse(checks["every_drop_has_an_explaining_reason"])
+        self.assertEqual((len(false_done), len(silent)), (1, 1))
+
+    def test_needs_a_progress_v2_checkout(self):
+        with self.assertRaises(SystemExit):
+            progress_replay.load_engine(self.tmp)
+
+    def test_fake_pms_has_no_network(self):
+        src = (KIT / "progress_replay.py").read_text(encoding="utf-8")
+        self.assertIn("pms.invalid", src)
+        self.assertNotIn("urlopen", src)
 
 
 # ---------------------------------------------------------------- the kit itself stays harmless

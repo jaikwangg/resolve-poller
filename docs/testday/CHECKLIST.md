@@ -120,14 +120,16 @@
 
 ### V — ตรวจ progress v2 ด้วย revision จริง (ไม่ใช่เกณฑ์ความปลอดภัย แต่ต้องผ่านก่อนใช้ตัวเลข) · Progress v2 validation
 
-ทำระหว่าง S1 บน project DUMMY ตาม `REVISION_STEPS.txt` (R0–R9, ดู `DUMMY_PROJECT.md`). จดค่าที่ server แสดงหลังแต่ละขั้น (pct, status, reason).
-Done during S1 on the DUMMY project; record what the server shows after each step.
+ทำระหว่าง S1 บน project DUMMY ตาม `REVISION_STEPS.txt` (R0–R9, ดู `DUMMY_PROJECT.md`) จดเวลาของแต่ละขั้น; หลังจบวันรัน
+`progress_replay.py` กับ record ของวันนั้น (offline, ไม่ส่ง PMS) แล้วเทียบค่ากับขั้นตอน.
+Done during S1 on the DUMMY project; note each step's time; afterwards replay the day's records offline with
+`progress_replay.py` (nothing goes to PMS) and match the values to the steps.
 
 | เกณฑ์ / Criterion | ☐ Mac | ☐ Linux |
 |---|---|---|
-| ไม่เคยขึ้น `complete` / 100 % โดยไม่มี scope ที่ยืนยัน (R1–R9) · Never `complete` without a confirmed scope | ☐ | ☐ |
-| ทุกครั้งที่ % ลด มี reason (`scope_added`, `scope_removed`, `rework`, `timeline_version`, …) · Every drop carries a reason | ☐ | ☐ |
-| R8 (เหตุการณ์ 14 ต.ค.): ไม่มี 100 → ไม่มี "complete" · The 14 Oct replay never reaches complete | ☐ | ☐ |
+| ไม่เคยขึ้น `done` / 100 % โดยไม่มี scope ที่ยืนยัน (R1–R9) · Never `done` / 100 % without a confirmed scope | ☐ | ☐ |
+| ทุกครั้งที่ % ลด มี reason (`scope_change`, `scope_shrink`, `rework`, `regression`, …) · Every drop carries a reason | ☐ | ☐ |
+| R8 (เหตุการณ์ 14 ต.ค.): ไม่มี 100 / ไม่มี `done` · The 14 Oct replay never reaches 100 or `done` | ☐ | ☐ |
 | ไม่มีอะไรถูกส่งไป PMS ระหว่างเฟส 3 · Nothing pushed to PMS during phase 3 | ☐ | ☐ |
 
 ---
