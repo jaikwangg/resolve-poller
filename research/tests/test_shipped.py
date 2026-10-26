@@ -198,7 +198,9 @@ def test_config_from_env_defaults_are_the_study_defaults_and_typos_stay_strict()
     ("KPP-10_x", "KPP-1", None, False), ("test", "KPP-9", "TEST commercial 2026", False),
     ("KPP20260005BrandX", "KPP-2026-0005", None, True), ("KPP-2026-0005_BrandX TVC", "KPP-2026-0005", "BrandX", True),
     ("BrandX TVC grade", "KPP-1", "BrandX TVC", True), ("Other Client TVC", "KPP-2026-0101", "BrandX", False),
-    ("KPP-2026-00051 other", "KPP-2026-0005", None, False)])
+    ("KPP-2026-00051 other", "KPP-2026-0005", None, False),
+    ("โฆษณา ธนาคาร", "KPP-2026-0002", "BrandX TVC", False), ("โฆษณา ธนาคาร 2026", "KPP-2026-0002", "BrandX 2026 TVC", False),
+    ("โฆษณาธนาคาร_color", "KPP-2026-0007", "โฆษณา ธนาคาร", True), ("2026", "KPP-2026-0002", "BrandX 2026 TVC", False)])
 def test_job_guard_matches_project_numbers_on_boundaries(project, pno, name, ok):
     assert PV.job_matches(project, pno, name) is ok
 

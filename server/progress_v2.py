@@ -33,7 +33,8 @@ setting (read once by Config.from_env):
   D4 EDITORTRACK_MASS_GUARD     on (default) | off - many clips turning graded in one poll
                                 (a look/LUT on everything) blocks done until the scope is re-locked
   D5 EDITORTRACK_JOB_GUARD      withhold (default: Resolve project must contain the booking's
-                                project_no or name, else nothing is sent) | off
+                                project_no or name, else nothing is sent; Thai-safe, never on digits
+                                alone, see job_matches) | off
   D6 EDITORTRACK_PROGRESS_CAP   99 (default; clamped to 0..99.99)
      EDITORTRACK_STABLE_MIN     30 (minutes the confirmed 100% must hold, same counts)
      EDITORTRACK_STABLE_GAP_MIN 10 (a gap between polls longer than this restarts the window)
@@ -50,6 +51,7 @@ import json
 import math
 import os
 import re
+import unicodedata
 
 STAGES = ("data", "conform", "color", "subtitle", "master")
 DEFAULT_OFFLINE_MATCH = r"offline|editorial|_ref\b|reference|picture\s*lock|ผ่านตัด"
@@ -127,10 +129,6 @@ def _epoch(ts):
     return d.timestamp() if d.tzinfo else None
 
 
-def _norm(s):
-    return re.sub(r"[^0-9a-z]+", "", str(s or "").lower())
-
-
 def _r2(x):
     return None if x is None else round(max(0.0, min(100.0, float(x))), 2)
 
@@ -139,35 +137,109 @@ def _int(x):
     return x if isinstance(x, int) and not isinstance(x, bool) and 0 <= x <= MAX_COUNT else None
 
 
-NAME_MIN = 6                          # a name match needs at least this many letters/digits (no "test" in everything)
+# ---------------------------------------------------------------- name matching (Thai-safe)
+# The old rule kept only [0-9a-z], so "โฆษณา ธนาคาร 2026" became "2026" and matched booking "BrandX 2026 TVC",
+# a Thai-only Resolve project became "" and skipped the wrong-job guard, and clips ฉาก1_เทค2 / ซีน1_เทค2 were
+# one shot "12". Rules (also used by erp.pick_booking):
+#   - NFKC (sara am U+0E33 == U+0E4D U+0E32, full-width Latin == ASCII), casefold, Thai digits -> ASCII digits.
+#   - A "run" is a maximal sequence of letters (L*), combining marks (M*: Thai vowel/tone marks) and decimal
+#     digits; everything else (spaces, _ - . zero-width space ...) is a separator.
+#   - A match never rests on digits alone: a project code needs a letter, a name needs NAME_MIN letters.
+#   - Bounded: a digit run is never inside a longer number (KPP-1 is not in KPP-10), a Latin run never inside
+#     a longer Latin word. Thai is written without spaces between words, so Thai letters need no word boundary.
+NAME_MIN = 6                          # a name match needs at least this many letters (no "test" in everything)
+_NOSPACE = ("THAI", "LAO", "KHMER", "MYANMAR")     # scripts written without spaces between words
+
+
+def _cls(ch):
+    """'d' digit, 'l' letter of a spaced script (Latin ...), 't' letter of an unspaced script (Thai ...),
+    'm' combining mark, None separator."""
+    if unicodedata.decimal(ch, None) is not None:
+        return "d"
+    cat = unicodedata.category(ch)
+    if cat.startswith("L"):
+        return "t" if unicodedata.name(ch, "").startswith(_NOSPACE) else "l"
+    if cat.startswith("M"):
+        return "m"
+    return None
+
+
+def canon(s):
+    """name -> runs joined by single spaces: NFKC, casefold, decimal digits of any script as ASCII."""
+    s = unicodedata.normalize("NFKC", unicodedata.normalize("NFKC", "" if s is None else str(s)).casefold())
+    out, sep = [], False
+    for ch in s:
+        c = _cls(ch)
+        if c is None:
+            sep = True
+            continue
+        if c == "d":
+            ch = str(unicodedata.decimal(ch))
+        if sep and out:
+            out.append(" ")
+        sep = False
+        out.append(ch)
+    return "".join(out)
+
+
+def letters(s):
+    """number of letters (not digits, not marks) in the name: how much of it is words, not numbers."""
+    return sum(1 for ch in canon(s) if _cls(ch) in ("l", "t"))
+
+
+def _edge_ok(outside, inside):
+    """the character just outside a match must not continue the run at that edge."""
+    if not outside or outside == " ":
+        return True
+    a, b = _cls(outside), _cls(inside)
+    if b == "d":
+        return a != "d"                                  # never inside a longer number
+    if b == "l":
+        return a not in ("l", "m")                       # never inside a longer word (or before its accent)
+    return True                                          # Thai: no spaces between words, no word boundary
 
 
 def _bounded(needle, hay):
-    """needle's alphanumeric runs appear in hay in order, separators optional, and not inside a longer
-    number or word: KPP-1 is not in KPP-10_x, KPP-2026-0005 is in KPP20260005BrandX."""
-    runs = re.findall(r"[0-9a-z]+", str(needle or "").lower())
+    """needle's runs appear in hay in order, separators optional, and not inside a longer number or Latin
+    word: KPP-1 is not in KPP-10_x, KPP-2026-0005 is in KPP20260005BrandX, "โฆษณา ธนาคาร" is in
+    "โฆษณาธนาคาร_grade"."""
+    runs, h = canon(needle).split(), canon(hay)
     if not runs:
         return False
-    pat = r"[^0-9a-z]*".join(re.escape(r) for r in runs)
-    first, last = runs[0][0], runs[-1][-1]
-    before = r"(?<![0-9])" if first.isdigit() else r"(?<![a-z])"
-    after = r"(?![0-9])" if last.isdigit() else r"(?![a-z])"
-    return re.search(before + pat + after, str(hay or "").lower()) is not None
+    for m in re.finditer("(?=(" + " ?".join(re.escape(r) for r in runs) + "))", h):
+        i, j = m.start(), m.start() + len(m.group(1))
+        k = i - 1
+        while k >= 0 and _cls(h[k]) == "m":            # a mark belongs to the letter before it
+            k -= 1
+        if _edge_ok(h[k] if k >= 0 else "", runs[0][0]) and _edge_ok(h[j] if j < len(h) else "", runs[-1][-1]):
+            return True
+    return False
+
+
+def code_in(code, name):
+    """project code (project_no) inside the name. A code without a letter is never used: digits alone would
+    match any name that carries the same number (a year, a date)."""
+    return letters(code) >= 1 and _bounded(code, name)
+
+
+def name_in(booking_name, name):
+    """booking name inside the project name, or the project name inside the booking name (bounded, at least
+    NAME_MIN letters on the side that is looked for)."""
+    if letters(booking_name) >= NAME_MIN and _bounded(booking_name, name):
+        return True
+    return letters(name) >= NAME_MIN and _bounded(name, booking_name)
 
 
 def job_matches(project, project_no, project_name):
-    """Resolve project name vs the booking (D5): contains the project_no (bounded), or contains the booking
-    name / is contained in it (bounded, at least NAME_MIN letters/digits). An empty Resolve project name
-    cannot be checked and passes (it carries no counts anyway)."""
-    p = _norm(project)
-    if not p:
+    """Resolve project name vs the booking (D5): contains the project_no (bounded, the code has a letter), or
+    contains the booking name / is contained in it (bounded, at least NAME_MIN letters). Never on digits
+    alone; Thai names included. Only a missing/blank Resolve project name passes unchecked (it carries no
+    counts); any other name with nothing to match on (only digits, only symbols) is a mismatch: send nothing."""
+    if project is None or not str(project).strip():
         return True
-    if project_no and _bounded(project_no, project):
+    if project_no and code_in(project_no, project):
         return True
-    pname = _norm(project_name)
-    if len(pname) >= NAME_MIN and _bounded(project_name, project):
-        return True
-    return bool(len(p) >= NAME_MIN and project_name and _bounded(project, project_name))
+    return bool(project_name) and name_in(project_name, project)
 
 
 def out(key, pct=None, done=False, total=None, done_count=None, confirmed=False, provisional=True,
@@ -209,10 +281,12 @@ NON_GRADABLE = {"title", "generator", "adjustment", "audio", "disabled"}   # D3:
 
 
 def _norm_code(s):
-    """clip name -> shot code: extension and a trailing _vNNN version stripped, punctuation dropped."""
-    s = re.sub(r"\.[A-Za-z0-9]{2,5}$", "", str(s or ""))
+    """clip name -> shot code: extension and a trailing _vNNN version stripped, separators dropped, letters of
+    every script kept (ฉาก1_เทค2 and ซีน1_เทค2 stay two shots; sara am in either form is one), Latin upper-cased."""
+    s = unicodedata.normalize("NFKC", "" if s is None else str(s))
+    s = re.sub(r"\.[A-Za-z0-9]{2,5}$", "", s)
     s = re.sub(r"[_\-. ]?v\d+$", "", s, flags=re.I)
-    return re.sub(r"[^0-9A-Za-z]+", "", s).upper()
+    return canon(s).replace(" ", "").upper()
 
 
 def _unit_done(item, stage):
