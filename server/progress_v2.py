@@ -491,12 +491,14 @@ class Engine:
         # reason for a drop (every drop > 1 pt is labelled)
         last = st.get("last")
         if last and last.get("pct") is not None and pct < last["pct"] - 1.0:
-            if cmp_v is not None and last.get("v") is not None and cmp_v > last["v"]:
+            if view != last.get("view") and book is None:
+                # another room/timeline/project of the same job: its counts are not comparable with the last
+                # one (fuzzer find, now WC44), so the drop is a change of view, never a regression
+                reasons.add("scope_change")
+            elif cmp_v is not None and last.get("v") is not None and cmp_v > last["v"]:
                 reasons.add("scope_change")
             elif cmp_g is not None and last.get("g") is not None and cmp_g < last["g"]:
                 reasons.add("regression")
-            elif view != last.get("view") and book is None:
-                reasons.add("scope_change")               # another timeline/project of the same job
             elif stage == "conform" and book is None:
                 if (obs.get("offline_target_sec") or 0) > (last.get("tgt") or 0):
                     reasons.add("scope_change")

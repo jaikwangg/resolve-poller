@@ -1,0 +1,200 @@
+{
+ "id": "WC44_two_rooms_cut_then_add_counts",
+ "title": "Two rooms on one job; one cuts a shot, then adds one: counts from different rooms are not comparable",
+ "category": "multi_room",
+ "severity": [
+  "false_regression"
+ ],
+ "status": "active",
+ "stage": "color",
+ "job": "KPP-2026-0901",
+ "project_name": "Fuzz Job",
+ "observable": true,
+ "hosts": {
+  "grade-01": {
+   "stage": "color"
+  },
+  "grade-02": {
+   "stage": "color"
+  }
+ },
+ "steps": [
+  {
+   "t": 0,
+   "host": "grade-01",
+   "ops": [
+    [
+     "open",
+     {
+      "project": "Fuzz_Job_grade",
+      "timeline": "R1"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "S001",
+       "S002",
+       "S003",
+       "S004",
+       "S005",
+       "S006"
+      ]
+     }
+    ],
+    [
+     "new_timeline",
+     {
+      "project": "Other_Job_grade",
+      "name": "X"
+     }
+    ],
+    [
+     "add",
+     {
+      "project": "Other_Job_grade",
+      "timeline": "X",
+      "shots": [
+       "O001",
+       "O002",
+       "O003"
+      ],
+      "graded": true
+     }
+    ]
+   ]
+  },
+  {
+   "t": 2,
+   "host": "grade-02",
+   "ops": [
+    [
+     "copy_timeline",
+     {
+      "from_project": "Fuzz_Job_grade",
+      "from": "R1",
+      "to_project": "Fuzz_Job_grade_room2",
+      "to": "R1"
+     }
+    ]
+   ]
+  },
+  {
+   "t": 2,
+   "host": "grade-02",
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "S001"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 4,
+   "host": "grade-01",
+   "ops": [
+    [
+     "remove",
+     {
+      "shots": [
+       "S001"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 6,
+   "host": "grade-02",
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "S002"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 8,
+   "host": "grade-01",
+   "ops": [
+    [
+     "add",
+     {
+      "shots": [
+       "S007"
+      ],
+      "kind": "vfx"
+     }
+    ]
+   ],
+   "growth_only": true
+  },
+  {
+   "t": 68,
+   "host": "grade-01",
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0901": {
+   "color": [
+    "S002",
+    "S003",
+    "S004",
+    "S005",
+    "S006",
+    "S007"
+   ]
+  }
+ },
+ "genes": [
+  [
+   "room2",
+   0,
+   1
+  ],
+  [
+   "cut",
+   0,
+   1
+  ],
+  [
+   "room2",
+   0,
+   1
+  ],
+  [
+   "add",
+   0,
+   1
+  ]
+ ],
+ "story": "Found by the fuzzer (seed 299, strategy SV) and shrunk. Room 2 gets a copy of the timeline, room 1 cuts a shot, room 2 polls, room 1 adds a shot. On counts alone the last poll (room 1) has fewer graded clips than the previous poll (room 2), so a counts strategy that compares across rooms labels pure growth a regression (INV6).",
+ "expect": {
+  "SV": {
+   "invariants": [
+    "INV6_growth_not_regression",
+    "INV3_drop_explained"
+   ]
+  },
+  "SVL": {
+   "invariants": [
+    "INV6_growth_not_regression",
+    "INV3_drop_explained"
+   ]
+  },
+  "C3": {
+   "false_completion": false
+  }
+ },
+ "signals": "video_clips/graded_clips alternate between two rooms' copies of the timeline"
+}

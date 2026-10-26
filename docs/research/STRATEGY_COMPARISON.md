@@ -32,26 +32,26 @@ added late in real jobs, so this is a structural problem, not a one-off.
 ## Results
 
 <!-- BEGIN GENERATED:aggregate -->
-Over 44 library scenarios. FC = scenarios with a false completion (done or 100% while not done); FR = scenarios with a false regression without reason code (with reason code in brackets); missed = truth done at the end but never claimed; err = max |reported - truth| per scenario (median / worst); uncorr = error episodes still open at the end; ttc = longest wrong episode (min); inv = invariant violations.
+Over 45 library scenarios. FC = scenarios with a false completion (done or 100% while not done); FR = scenarios with a false regression without reason code (with reason code in brackets); missed = truth done at the end but never claimed; err = max |reported - truth| per scenario (median / worst); uncorr = error episodes still open at the end; ttc = longest wrong episode (min); inv = invariant violations.
 
 | strategy | FC | FC polls | FR (expl.) | missed | wrong job | silent | err med/worst | uncorr | ttc | PMS stale | inv |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| S0 | 20 | 43 | 17 (0) | 4 | 3 | 2 | 25.8/100.0 | 4 | 1320 | 7 | 173 |
-| S1 | 18 | 40 | 12 (5) | 12 | 3 | 2 | 25.8/100.0 | 12 | 1320 | 3 | 149 |
-| S2 | 3 | 9 | 15 (0) | 35 | 3 | 2 | 25.3/100.0 | 4 | 1320 | 1 | 21 |
-| S3 | 14 | 33 | 1 (9) | 4 | 3 | 1 | 14.3/100.0 | 4 | 1320 | 2 | 146 |
-| S4 | 13 | 28 | 2 (0) | 8 | 3 | 2 | 24.9/100.0 | 4 | 1380 | 0 | 87 |
-| S5 | 20 | 43 | 16 (0) | 4 | 3 | 2 | 25.8/100.0 | 4 | 1320 | 1 | 171 |
-| S6 | 3 | 3 | 0 (0) | 37 | 3 | 1 | 68.8/100.0 | 38 | 4380 | 2 | 20 |
-| C1 | 12 | 26 | 4 (0) | 14 | 3 | 2 | 24.9/100.0 | 9 | 1380 | 0 | 79 |
-| C2 | 11 | 24 | 4 (0) | 7 | 3 | 1 | 20.0/100.0 | 4 | 1380 | 2 | 89 |
-| C3 | 0 | 0 | 0 (7) | 35 | 0 | 3 | 1.0/90.0 | 5 | 1320 | 2 | 0 |
-| C4 | 1 | 1 | 0 (6) | 33 | 0 | 3 | 1.0/90.0 | 5 | 1320 | 2 | 0 |
-| Q1 | 0 | 0 | 0 (14) | 38 | 0 | 4 | 22.6/99.0 | 4 | 1320 | 1 | 0 |
-| SV | 0 | 0 | 0 (14) | 38 | 0 | 4 | 22.6/99.0 | 4 | 1320 | 1 | 0 |
-| SVL | 0 | 0 | 0 (13) | 38 | 0 | 4 | 22.6/99.0 | 4 | 1320 | 1 | 0 |
-| SVI | 0 | 0 | 0 (8) | 39 | 0 | 3 | 1.0/90.0 | 5 | 1320 | 2 | 0 |
-| SVIL | 0 | 0 | 0 (7) | 39 | 0 | 3 | 1.0/90.0 | 5 | 1320 | 2 | 0 |
+| S0 | 20 | 43 | 18 (0) | 4 | 3 | 2 | 25.0/100.0 | 5 | 1320 | 7 | 175 |
+| S1 | 18 | 40 | 13 (5) | 12 | 3 | 2 | 25.0/100.0 | 13 | 1320 | 3 | 151 |
+| S2 | 3 | 9 | 16 (0) | 35 | 3 | 2 | 24.0/100.0 | 5 | 1320 | 1 | 23 |
+| S3 | 14 | 33 | 1 (10) | 4 | 3 | 1 | 15.5/100.0 | 5 | 1320 | 2 | 146 |
+| S4 | 13 | 28 | 2 (0) | 8 | 3 | 2 | 23.1/100.0 | 5 | 1380 | 0 | 87 |
+| S5 | 20 | 43 | 17 (0) | 4 | 3 | 2 | 25.0/100.0 | 5 | 1320 | 1 | 173 |
+| S6 | 3 | 3 | 0 (0) | 37 | 3 | 1 | 68.1/100.0 | 38 | 4380 | 2 | 20 |
+| C1 | 12 | 26 | 4 (0) | 14 | 3 | 2 | 23.1/100.0 | 10 | 1380 | 0 | 79 |
+| C2 | 11 | 24 | 4 (0) | 7 | 3 | 1 | 18.3/100.0 | 5 | 1380 | 2 | 89 |
+| C3 | 0 | 0 | 0 (8) | 35 | 0 | 3 | 1.0/90.0 | 6 | 1320 | 2 | 0 |
+| C4 | 1 | 1 | 0 (7) | 33 | 0 | 3 | 1.0/90.0 | 6 | 1320 | 2 | 0 |
+| Q1 | 0 | 0 | 0 (15) | 38 | 0 | 4 | 22.1/99.0 | 5 | 1320 | 1 | 1 |
+| SV | 0 | 0 | 0 (15) | 38 | 0 | 4 | 22.1/99.0 | 5 | 1320 | 1 | 0 |
+| SVL | 0 | 0 | 0 (14) | 38 | 0 | 4 | 22.1/99.0 | 5 | 1320 | 1 | 0 |
+| SVI | 0 | 0 | 0 (9) | 39 | 0 | 3 | 2.2/90.0 | 6 | 1320 | 2 | 0 |
+| SVIL | 0 | 0 | 0 (8) | 39 | 0 | 3 | 1.0/90.0 | 6 | 1320 | 2 | 0 |
 <!-- END GENERATED:aggregate -->
 
 What the numbers say:
@@ -88,11 +88,11 @@ Same library, but every scenario gets an authoritative shot list for its main jo
 
 | strategy | FC | FR (expl.) | missed | err med/worst | uncorr |
 |---|---|---|---|---|---|
-| S0 | 20 | 17 (0) | 4 | 25.8/100.0 | 4 |
+| S0 | 20 | 18 (0) | 4 | 25.0/100.0 | 5 |
 | S2 | 3 | 1 (1) | 5 | 0.0/100.0 | 5 |
 | C3 | 0 | 0 (1) | 7 | 1.0/100.0 | 6 |
 | C4 | 0 | 0 (1) | 7 | 1.0/100.0 | 6 |
-| SVL | 0 | 0 (9) | 38 | 17.3/99.0 | 10 |
+| SVL | 0 | 0 (10) | 38 | 16.7/99.0 | 11 |
 | SVIL | 0 | 0 (1) | 39 | 1.0/100.0 | 6 |
 
 C3 false completions with a confirmed list: none.
@@ -182,6 +182,7 @@ though finished, W value lands on the wrong project, L nothing sent; number = ma
 | WC36_color_starts_before_conform_done | FR 44 | Fr 44 | RM 43 | Fr 44 | F 44 | FR 44 | M 62 | F 44 | F 44 | M 1 | M 1 | rM 43 | rM 43 | rM 43 | M 1 | M 1 |
 | WC37_detector_warmup_reopen | R 100 | R 100 | RM 100 | R 100 | RM 73 | R 100 | ok 100 | RM 73 | RM 73 | M 1 | M 1 | M 1 | M 1 | M 1 | M 1 | M 1 |
 | WC43_other_project_opened_briefly | FRW 70 | FRMW 82 | RMW 69 | W 59 | W 69 | FRW 70 | MW 71 | RMW 82 | W 59 | M 1 | M 1 | M 1 | M 1 | M 1 | M 1 | M 1 |
+| WC44_two_rooms_cut_then_add_counts | R 17 | R 17 | R 17 | r 17 | ok 17 | R 17 | ok 15 | ok 17 | ok 17 | r 17 | r 17 | r 17 | r 17 | r 17 | r 17 | r 17 |
 <!-- END GENERATED:matrix -->
 
 ### Replay of the stored real records (fixture)
