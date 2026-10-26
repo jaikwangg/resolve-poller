@@ -17,8 +17,10 @@ Groups:
 
 Resolve rewrites some of its own files when it runs, independent of the agent. If the strict group differs,
 repeat the same day WITHOUT the agent (control run) and pass its differences with --allow (made by
-`compare --emit-allow`): files that change in the control run too are Resolve's own churn and are listed, not
-failed. Everything is read-only (stat + read for hashing); run it with Resolve quit.
+`compare --emit-allow`): files that change in the control run too are listed as Resolve's own churn and the
+verdict becomes CHECK (exit 2), not PASS: section 7 says byte-identical, so accepting that churn is the owner's
+decision. Unreadable preference files FAIL. Everything is read-only (stat + read for hashing); run it with
+Resolve quit.
 """
 import argparse
 import glob
@@ -109,7 +111,8 @@ def _cmd(args):
 def scheduler_lists(platform=None):
     platform = platform or sys.platform
     if platform == "darwin":
-        labels = sorted({ln.split()[-1] for ln in _cmd(["launchctl", "list"]).splitlines()[1:] if ln.split()})
+        labels = sorted({ln.split()[-1] for ln in _cmd(["launchctl", "list"]).splitlines()[1:] if ln.split()
+                         and not ln.split()[-1].startswith("application.")})   # per-launch ids change every boot
         out = {"launchctl_labels": labels}
     else:
         units = sorted(ln.split()[0] for ln in _cmd(["systemctl", "--user", "list-unit-files", "--no-legend",
@@ -168,11 +171,17 @@ def compare(before, after, allow=(), expected=()):
     strict = res["groups"]["resolve_prefs"]
     hard = [p for k in ("added", "removed", "changed") for p in strict[k] if p not in allow]
     churn = [p for k in ("added", "removed", "changed") for p in strict[k] if p in allow]
+    unreadable = [p for p, e in after["groups"].get("resolve_prefs", {}).items() if "error" in e]
+    unreadable += [p for p, e in before["groups"].get("resolve_prefs", {}).items() if "error" in e]
     if hard:
         res["fail"].append("resolve preferences not byte-identical: %d file(s)" % len(hard))
+    if unreadable:
+        res["fail"].append("preference file(s) could not be read, so cannot be proven identical: %s"
+                           % ", ".join(sorted(set(unreadable))))
     if churn:
-        res["notes"].append("%d preference file(s) differ but also differ in the control run (Resolve's own churn)"
-                            % len(churn))
+        res["check"] = ("%d preference file(s) differ but also differ in the control run without the agent. "
+                        "Section 7 asks for byte-identical: accepting Resolve's own churn is an owner decision, and an "
+                        "allow-listed file would also hide an agent change to it." % len(churn))
     res["strict_differences"] = hard
     res["control_explained"] = churn
     sched = res["groups"]["scheduler"]
@@ -181,8 +190,12 @@ def compare(before, after, allow=(), expected=()):
     lb, la = before.get("lists", {}), after.get("lists", {})
     for k in ("launchctl_labels", "systemd_user_units", "crontab_lines"):
         new = sorted(set(la.get(k) or []) - set(lb.get(k) or []))
-        if new:
-            res["fail"].append("new %s: %s" % (k, ", ".join(new)))
+        ours = [n for n in new if "editortrack" in n.lower() or "kantana" in n.lower()]
+        if ours:
+            res["fail"].append("new %s left behind: %s" % (k, ", ".join(ours)))
+        if len(new) > len(ours):
+            res["notes"].append("other new %s (not ours, check by eye): %s" % (k, ", ".join(n for n in new
+                                                                                             if n not in ours)[:400]))
     for d, names in (after.get("footprint") or {}).items():
         old = set((before.get("footprint") or {}).get(d) or [])
         new = sorted(set(names or []) - old)
@@ -195,7 +208,8 @@ def compare(before, after, allow=(), expected=()):
         res["fail"].append("editortrack paths still present: %s" % ", ".join(after["editortrack_present"]))
     if before.get("platform") != after.get("platform") or before.get("host") != after.get("host"):
         res["fail"].append("snapshots are from different machines")
-    res["ok"] = not res["fail"]
+    res["ok"] = not res["fail"] and not res.get("check")
+    res["verdict"] = "FAIL" if res["fail"] else ("CHECK" if res.get("check") else "PASS")
     return res
 
 
@@ -247,10 +261,12 @@ def main(argv=None):
             print("note: " + n)
         for f in res["fail"]:
             print("FAIL: " + f)
-        print(common.verdict_line(res["ok"], "U1 Resolve preferences byte-identical, no scheduler/footprint left"))
+        if res.get("check"):
+            print("CHECK: " + res["check"])
+        print("%s  U1 Resolve preferences byte-identical, no scheduler/footprint left" % res["verdict"])
         if a.json:
             common.write_json(a.json, res)
-        return 0 if res["ok"] else 1
+        return {"PASS": 0, "FAIL": 1}.get(res["verdict"], 2)
     ap.print_help()
     return 2
 

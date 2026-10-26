@@ -14,9 +14,11 @@ with the agent's own kill switch (`deploy/killswitch.sh on|off`) when --agent-di
 switches it and the script checks the kill file.
 
 PASS (per timeline, only valid if every OFF trial is drop-free = the timeline plays in real time):
-  0 dropped frames in every ON trial; every agent turn inside an ON trial window is a skip (playback, user_active,
-  rendering, page_*), none is a full scan, and guard.calls <= 12; at least one turn fell inside the ON trials
-  (else the trial proves nothing); no record at all inside OFF trials.
+  0 dropped frames, indicator never red/amber and min fps not below the timeline rate in every ON trial; every
+  agent turn inside an ON trial is a skip (playback, timecode_unknown, user_active, rendering, resolve_busy,
+  idle_unknown) with guard.calls <= 12, never a full scan; at least one `playback` skip per timeline (the agent
+  log must show playback skips, section 7 P1); no record inside OFF trials; the kill file matched the agent state
+  in every trial. Any OFF trial with drops / red indicator / low fps makes the timeline INVALID (not real time).
 """
 import argparse
 import os
@@ -84,9 +86,15 @@ def run(a):
             time.sleep(min(10, left))
         sys.stdout.write("\a\rSTOP playback now (Space), then come back here.\n")
         t1 = time.time()
-        dropped = common.ask("dropped frames reported by Resolve during this trial (number; 0 if none)", "0")
-        min_fps = common.ask("lowest playback fps shown in the viewer", "")
-        ind = common.ask("indicator ever red/amber? (y/n)", "n")
+        dropped = ""
+        while not dropped.isdigit():             # no default: the operator must read it off Resolve
+            dropped = common.ask("frames dropped during this trial per Resolve's viewer readout (a number)")
+        min_fps = ""
+        while not _num(min_fps):
+            min_fps = common.ask("lowest playback fps shown in the viewer (a number)")
+        ind = ""
+        while ind not in ("y", "n"):
+            ind = common.ask("playback indicator ever red/amber? (y/n)").lower()
         notes = common.ask("notes (anything noticed)", "")
         common.append_csv(a.csv, {"trial": n, "timeline": tl, "agent": state, "start": "%.3f" % t0,
                                   "end": "%.3f" % t1, "start_local": common.iso_local(t0), "dropped": dropped,
@@ -97,7 +105,30 @@ def run(a):
     return 0
 
 
-def evaluate(trials, recs):
+def _num(x):
+    try:
+        float(x)
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
+def trial_bad(t, rate):
+    """Operator-observed trouble in one trial: drops, red/amber indicator, fps below the timeline rate."""
+    why = []
+    try:
+        if int(float(t.get("dropped"))) != 0:
+            why.append("dropped=%s" % t.get("dropped"))
+    except (TypeError, ValueError):
+        why.append("dropped not recorded")
+    if (t.get("indicator") or "").lower().startswith("y"):
+        why.append("indicator red/amber")
+    if _num(t.get("min_fps")) and rate and float(t["min_fps"]) < rate - 0.01:
+        why.append("min fps %s < %s" % (t["min_fps"], rate))
+    return why
+
+
+def evaluate(trials, recs, rate=None):
     """Pure function: per timeline verdict. trials = csv dicts, recs = loaded records of the host."""
     by_tl = {}
     for t in trials:
@@ -107,38 +138,40 @@ def evaluate(trials, recs):
         off = [t for t in ts if t["agent"] == "off"]
         on = [t for t in ts if t["agent"] == "on"]
 
-        def drops(t):
-            try:
-                return int(float(t.get("dropped") or 0))
-            except ValueError:
-                return None
-
         def in_win(t):
             s, e = float(t["start"]), float(t["end"])
             # any turn overlapping the trial (turn = [ts - turn_ms, ts]) +- 2 s
             return [r for r in recs if r["_t"] >= s - 2
                     and r["_t"] - (((r.get("agent") or {}).get("turn_ms") or 0) / 1000.0) <= e + 2]
 
-        off_drops = [drops(t) for t in off]
-        on_drops = [drops(t) for t in on]
+        off_bad = [trial_bad(t, rate) for t in off]
+        on_bad = [trial_bad(t, rate) for t in on]
         on_recs = [r for t in on for r in in_win(t)]
         off_recs = [r for t in off for r in in_win(t)]
         bad = [r for r in on_recs if common.reason_of(r) not in SKIP_OK
                or (common.guard_of(r).get("calls") or 0) > MAX_SKIP_CALLS]
-        baseline_ok = all(d == 0 for d in off_drops) and None not in off_drops and bool(off)
+        mismatch = [t["trial"] for t in ts if str(t.get("kill_file", "")) in ("0", "1")
+                    and (t["agent"] == "on") == (str(t["kill_file"]) == "1")]
+        baseline_ok = bool(off) and not any(off_bad)
         checks = {
-            "baseline_realtime(off trials drop-free)": baseline_ok,
-            "0_dropped_frames_agent_on": bool(on) and all(d == 0 for d in on_drops),
+            "baseline_realtime(off trials clean)": baseline_ok,
+            "0_dropped_frames_no_red_no_low_fps_agent_on": bool(on) and not any(on_bad),
             "turns_inside_on_trials": len(on_recs) > 0,
+            "at_least_one_playback_skip": any(common.reason_of(r) == "playback" for r in on_recs),
             "every_on_turn_is_a_skip_with_<=12_calls": not bad,
             "no_records_inside_off_trials": not off_recs,
+            "kill_file_matched_agent_state": not mismatch,
         }
-        res[tl] = {"off": len(off), "on": len(on), "off_dropped": off_drops, "on_dropped": on_drops,
+        if not baseline_ok:
+            verdict = "INVALID (timeline does not play in real time with the agent off)"
+        elif mismatch:
+            verdict = "INVALID (agent state not as planned in trials %s)" % ", ".join(mismatch)
+        else:
+            verdict = "PASS" if all(checks.values()) else "FAIL"
+        res[tl] = {"off": len(off), "on": len(on), "off_trouble": off_bad, "on_trouble": on_bad,
                    "on_turns": len(on_recs), "on_reasons": sorted({common.reason_of(r) for r in on_recs}),
                    "bad_turns": [(r.get("ts"), common.reason_of(r), common.guard_of(r).get("calls")) for r in bad],
-                   "checks": checks,
-                   "verdict": "INVALID (timeline does not play in real time with the agent off)" if not baseline_ok
-                   else ("PASS" if all(checks.values()) else "FAIL")}
+                   "checks": checks, "verdict": verdict}
     return res
 
 
@@ -148,15 +181,15 @@ def analyze(a):
         common.die("no trials in %s" % a.csv)
     t0 = min(float(t["start"]) for t in trials) - 300
     t1 = max(float(t["end"]) for t in trials) + 300
-    recs = common.load_records(a.records, a.host, t0, t1) if a.records else []
-    if not a.records:
-        print("WARNING: no --records: agent turns cannot be checked (drop counts only)")
-    res = evaluate(trials, recs)
+    recs = common.load_records(a.records, a.host, t0, t1)
+    if not recs:
+        common.die("no records for host %s in the trial period: agent behaviour unproven (check --host)" % a.host)
+    res = evaluate(trials, recs, a.rate)
     ok = True
     for tl, r in res.items():
         print("\n%s: %s" % (tl, r["verdict"]))
-        print("  OFF trials %d dropped %s | ON trials %d dropped %s | turns in ON windows %d reasons %s"
-              % (r["off"], r["off_dropped"], r["on"], r["on_dropped"], r["on_turns"], r["on_reasons"]))
+        print("  OFF trials %d trouble %s | ON trials %d trouble %s | turns in ON windows %d reasons %s"
+              % (r["off"], r["off_trouble"], r["on"], r["on_trouble"], r["on_turns"], r["on_reasons"]))
         for k, v in r["checks"].items():
             print("  " + common.verdict_line(v, k))
         for b in r["bad_turns"]:
@@ -180,8 +213,9 @@ def main(argv=None):
     r.add_argument("--warmup", type=int, default=65, help="seconds to wait after switching ON before playing")
     an = sub.add_parser("analyze")
     an.add_argument("--csv", required=True)
-    an.add_argument("--records", nargs="*", default=[])
-    an.add_argument("--host")
+    an.add_argument("--records", nargs="+", required=True)
+    an.add_argument("--host", required=True)
+    an.add_argument("--rate", type=float, required=True, help="timeline frame rate (e.g. 24)")
     an.add_argument("--json")
     a = ap.parse_args(argv)
     if a.cmd == "run":

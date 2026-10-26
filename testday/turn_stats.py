@@ -49,14 +49,15 @@ def stats(recs, budget_ms=1500):
         "scan_ms_p95": common.percentile(scan_ms, 95), "clips_max": max(clips) if clips else None,
         "skip_calls_max": max(skip_calls) if skip_calls else None,
         "rss_mb_max": max(rss) if rss else None, "turn_ms_max": max(turn) if turn else None,
-        "net_bytes_per_min": round(net / minutes, 1) if minutes else None,
+        "net_bytes_per_min_est": round(net / minutes, 1) if minutes else None,
         "bad_records": len(bad), "budget_ms": budget_ms,
     }
     out["checks"] = {
         "P2_p95_guard_ms_within_budget": (out["guard_ms_p95"] is not None and out["guard_ms_p95"] <= budget_ms),
         "P2_at_least_50_scans": len(scans) >= 50,
         "P4_rss_below_100mb": (out["rss_mb_max"] is not None and out["rss_mb_max"] < 100),
-        "P4_network_below_5kb_per_min": (out["net_bytes_per_min"] is not None and out["net_bytes_per_min"] < 5120),
+        "P4_network_below_5kb_per_min_est": (out["net_bytes_per_min_est"] is not None
+                                             and out["net_bytes_per_min_est"] < 5120),
         "no_forbidden_trip_or_suspect": not bad,
     }
     return out
@@ -69,20 +70,27 @@ def main(argv=None):
     ap.add_argument("--from", dest="t0")
     ap.add_argument("--to", dest="t1")
     ap.add_argument("--budget-ms", type=float, default=1500)
+    ap.add_argument("--step", default="all", choices=["all", "P2", "P4", "none"],
+                    help="which checks decide the exit code (forbidden/tripped/suspect always do)")
     ap.add_argument("--json")
     a = ap.parse_args(argv)
     recs = common.load_records(a.records, a.host, common.parse_iso(a.t0), common.parse_iso(a.t1))
+    if not recs:
+        common.die("no records for host %s in that period (check --host: macOS may report name.local)" % a.host)
     s = stats(recs, a.budget_ms)
     for k in ("records", "scans", "from", "to", "guard_ms_p50", "guard_ms_p95", "guard_ms_max", "calls_p95",
               "calls_max", "scan_ms_p95", "clips_max", "skip_calls_max", "rss_mb_max", "turn_ms_max",
-              "net_bytes_per_min", "bad_records"):
+              "net_bytes_per_min_est", "bad_records"):
         print("%-18s %s" % (k, s[k]))
     print("reasons            " + ", ".join("%s=%d" % kv for kv in sorted(s["reasons"].items())))
     for k, v in s["checks"].items():
         print(common.verdict_line(v, k))
     if a.json:
         common.write_json(a.json, s)
-    return 0 if s["checks"]["no_forbidden_trip_or_suspect"] else 1
+    print("note: network is an estimate (record JSON + %d B per POST; the lease GET and TCP overhead are not "
+          "counted) - measure it on the workstation if it is near the limit" % HTTP_OVERHEAD_BYTES)
+    keys = [k for k in s["checks"] if a.step == "all" or k.startswith(a.step) or k.startswith("no_")]
+    return 0 if all(s["checks"][k] for k in keys) else 1
 
 
 if __name__ == "__main__":

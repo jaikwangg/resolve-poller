@@ -8,12 +8,13 @@ render output folder; it never talks to Resolve.
     # after 3 x off and 3 x on (alternate: off on off on off on):
     python3 testday/render_timer.py analyze --csv ~/ET_TESTDAY/P3_grade01.csv [--records day.jsonl --host grade-01]
 
-Timing = first appearance of a new file in --dir -> last modification of any new file, after the folder has been
-stable for --settle seconds. The operator also types the render time Resolve shows for the job (Render Queue),
+Timing = first appearance of a new file in --dir -> the last time any new file changed, both on this machine's
+clock, once the folder has been stable for --settle seconds. The operator also types the render time Resolve shows for the job (Render Queue),
 which is kept beside it as a cross-check.
 
 PASS: >= 3 runs each; mean(on) - mean(off) <= 1 % of mean(off) AND |mean(on) - mean(off)| <= 2 sd(off);
-every agent turn during an ON render is a skip (rendering / page_deliver), never a scan.
+every agent turn during an ON render is a skip (rendering / page_deliver), never a scan; at least one turn
+in every ON render and none in any OFF render (records are required).
 """
 import argparse
 import os
@@ -58,9 +59,9 @@ def watch_dir(d, settle=10.0, poll=0.5, timeout=6 * 3600, clock=time.time, sleep
             seen = new
             last_change = now
         if first is not None and last_change is not None and now - last_change >= settle:
-            last_write = max(v[1] for v in seen.values())
+            # both ends on this machine's clock (file mtimes come from the file server's clock on a SAN/NFS)
             return {"files": len(seen), "bytes": sum(v[0] for v in seen.values()), "first_seen": first,
-                    "last_write": last_write, "seconds": round(last_write - first, 2)}
+                    "last_write": last_change, "seconds": round(last_change - first, 2)}
         sleep(poll)
     return None
 
@@ -99,19 +100,26 @@ def evaluate(rows, recs=()):
     on = [float(r["seconds"]) for r in rows if r["agent"] == "on"]
     mo, mn, so = common.mean(off), common.mean(on), common.stdev(off)
     delta = (mn - mo) if (mo is not None and mn is not None) else None
-    bad = []
+    bad, on_without, off_with = [], [], []
     for r in rows:
-        if r["agent"] != "on":
-            continue
         s, e = float(r["first_seen"]), float(r["last_write"])
-        for rec in recs:
-            if s <= rec["_t"] <= e and common.reason_of(rec) not in RENDER_SKIPS:
+        inside = [rec for rec in recs if s <= rec["_t"] <= e]
+        if r["agent"] == "off":
+            if inside:
+                off_with.append(r.get("label"))
+            continue
+        if not inside:
+            on_without.append(r.get("label"))
+        for rec in inside:
+            if common.reason_of(rec) not in RENDER_SKIPS:
                 bad.append((rec.get("ts"), common.reason_of(rec)))
     checks = {
         "at_least_3_runs_each": len(off) >= 3 and len(on) >= 3,
         "mean_delta_<=1%": delta is not None and mo and delta / mo <= 0.01,
         "within_2_sd_of_off_runs": delta is not None and so is not None and abs(delta) <= 2 * so,
         "agent_skips_during_on_renders": not bad,
+        "agent_turns_seen_in_every_on_render": bool(on) and not on_without,
+        "no_agent_turns_in_off_renders": not off_with,
     }
     resolve = [(r["agent"], _hms(r.get("resolve_reported"))) for r in rows if _hms(r.get("resolve_reported"))]
     return {"off": off, "on": on, "mean_off": mo, "mean_on": mn, "sd_off": so, "delta_s": delta,
@@ -121,13 +129,11 @@ def evaluate(rows, recs=()):
 
 def analyze(a):
     rows = common.read_csv(a.csv)
-    recs = []
-    if a.records:
-        t0 = min(float(r["first_seen"]) for r in rows) - 60
-        t1 = max(float(r["last_write"]) for r in rows) + 60
-        recs = common.load_records(a.records, a.host, t0, t1)
-    else:
-        print("WARNING: no --records: agent behaviour during ON renders not checked")
+    t0 = min(float(r["first_seen"]) for r in rows) - 60
+    t1 = max(float(r["last_write"]) for r in rows) + 60
+    recs = common.load_records(a.records, a.host, t0, t1)
+    if not recs:
+        common.die("no records for host %s during the renders: agent state unproven (check --host)" % a.host)
     res = evaluate(rows, recs)
     print("off runs %s  mean %.2f s  sd %.2f" % (res["off"], res["mean_off"] or 0, res["sd_off"] or 0))
     print("on  runs %s  mean %.2f s" % (res["on"], res["mean_on"] or 0))
@@ -153,8 +159,8 @@ def main(argv=None):
     w.add_argument("--settle", type=float, default=10.0)
     an = sub.add_parser("analyze")
     an.add_argument("--csv", required=True)
-    an.add_argument("--records", nargs="*", default=[])
-    an.add_argument("--host")
+    an.add_argument("--records", nargs="+", required=True)
+    an.add_argument("--host", required=True)
     an.add_argument("--json")
     a = ap.parse_args(argv)
     if a.cmd == "watch":

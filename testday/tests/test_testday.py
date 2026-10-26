@@ -521,9 +521,14 @@ class Records(Tmp):
 
 
 class Playback(unittest.TestCase):
-    def trials(self, on_drops=0, off_drops=0):
-        return [{"trial": "1", "timeline": "PB_4K", "agent": "off", "start": "1000", "end": "1120", "dropped": str(off_drops)},
-                {"trial": "2", "timeline": "PB_4K", "agent": "on", "start": "2000", "end": "2120", "dropped": str(on_drops)}]
+    def trials(self, on_drops=0, off_drops=0, on_ind="n", on_fps="24", kill_on="0"):
+        base = {"timeline": "PB_4K", "indicator": "n", "min_fps": "24"}
+        return [dict(base, trial="1", agent="off", start="1000", end="1120", dropped=str(off_drops), kill_file="1"),
+                dict(base, trial="2", agent="on", start="2000", end="2120", dropped=str(on_drops), indicator=on_ind,
+                     min_fps=on_fps, kill_file=kill_on)]
+
+    def ev(self, trials, *recs):
+        return playback_trials.evaluate(trials, self.recs(*recs), rate=24)
 
     def recs(self, *rs):
         out = []
@@ -533,32 +538,45 @@ class Playback(unittest.TestCase):
         return out
 
     def test_pass(self):
-        res = playback_trials.evaluate(self.trials(), self.recs(rec(2060, "playback", calls=12)))
+        res = self.ev(self.trials(), rec(2060, "playback", calls=12))
         self.assertEqual(res["PB_4K"]["verdict"], "PASS")
 
     def test_scan_during_playback_fails(self):
-        res = playback_trials.evaluate(self.trials(), self.recs(rec(2060, "scan")))
+        res = self.ev(self.trials(), rec(2060, "scan"))
         self.assertEqual(res["PB_4K"]["verdict"], "FAIL")
 
     def test_too_many_calls_fails(self):
-        res = playback_trials.evaluate(self.trials(), self.recs(rec(2060, "playback", calls=13)))
+        res = self.ev(self.trials(), rec(2060, "playback", calls=13))
         self.assertEqual(res["PB_4K"]["verdict"], "FAIL")
 
     def test_drop_with_agent_fails(self):
-        res = playback_trials.evaluate(self.trials(on_drops=2), self.recs(rec(2060, "playback")))
+        res = self.ev(self.trials(on_drops=2), rec(2060, "playback"))
         self.assertEqual(res["PB_4K"]["verdict"], "FAIL")
 
     def test_baseline_not_realtime_is_invalid(self):
-        res = playback_trials.evaluate(self.trials(off_drops=3), self.recs(rec(2060, "playback")))
+        res = self.ev(self.trials(off_drops=3), rec(2060, "playback"))
         self.assertTrue(res["PB_4K"]["verdict"].startswith("INVALID"))
 
     def test_no_turn_in_on_window_is_not_pass(self):
-        res = playback_trials.evaluate(self.trials(), self.recs(rec(3000, "playback")))
+        res = self.ev(self.trials(), rec(3000, "playback"))
         self.assertEqual(res["PB_4K"]["verdict"], "FAIL")
 
     def test_record_in_off_window_fails(self):
-        res = playback_trials.evaluate(self.trials(), self.recs(rec(1060, "playback"), rec(2060, "playback")))
+        res = self.ev(self.trials(), rec(1060, "playback"), rec(2060, "playback"))
         self.assertFalse(res["PB_4K"]["checks"]["no_records_inside_off_trials"])
+
+    def test_red_indicator_or_low_fps_fails(self):
+        self.assertEqual(self.ev(self.trials(on_ind="y"), rec(2060, "playback"))["PB_4K"]["verdict"], "FAIL")
+        self.assertEqual(self.ev(self.trials(on_fps="21.5"), rec(2060, "playback"))["PB_4K"]["verdict"], "FAIL")
+
+    def test_needs_a_playback_skip(self):
+        res = self.ev(self.trials(), rec(2060, "idle_unknown"))
+        self.assertFalse(res["PB_4K"]["checks"]["at_least_one_playback_skip"])
+        self.assertEqual(res["PB_4K"]["verdict"], "FAIL")
+
+    def test_kill_file_mismatch_is_invalid(self):
+        res = self.ev(self.trials(kill_on="1"), rec(2060, "playback"))
+        self.assertTrue(res["PB_4K"]["verdict"].startswith("INVALID (agent state"))
 
     def test_schedule_alternates(self):
         s = playback_trials.schedule(["A", "B"], 2)
@@ -575,9 +593,29 @@ class Render(unittest.TestCase):
                 t += 10000
         return out
 
+    def skips_in_on_runs(self, rows, reason="rendering"):
+        out = []
+        for r in rows:
+            if r["agent"] == "on":
+                x = rec(float(r["first_seen"]) + 60, reason)
+                x["_t"] = common.parse_iso(x["ts"])
+                out.append(x)
+        return out
+
     def test_pass(self):
-        res = render_timer.evaluate(self.rows([600, 602, 598], [601, 603, 599]))
+        rows = self.rows([600, 602, 598], [601, 603, 599])
+        res = render_timer.evaluate(rows, self.skips_in_on_runs(rows))
         self.assertTrue(res["pass"], res)
+
+    def test_no_records_never_passes(self):
+        self.assertFalse(render_timer.evaluate(self.rows([600, 602, 598], [601, 603, 599]), [])["pass"])
+
+    def test_turn_in_off_render_fails(self):
+        rows = self.rows([600, 602, 598], [601, 603, 599])
+        recs = self.skips_in_on_runs(rows)
+        x = rec(60, "rendering")
+        x["_t"] = common.parse_iso(x["ts"])
+        self.assertFalse(render_timer.evaluate(rows, recs + [x])["checks"]["no_agent_turns_in_off_renders"])
 
     def test_slower_fails(self):
         res = render_timer.evaluate(self.rows([600, 602, 598], [612, 613, 611]))
@@ -610,7 +648,7 @@ class Render(unittest.TestCase):
         r = render_timer.watch_dir("/x", settle=5, poll=1, clock=lambda: clock[0], sleep=sleep, snap=snap)
         self.assertEqual(r["files"], 1)
         self.assertEqual(r["first_seen"], 3.0)
-        self.assertEqual(r["last_write"], 120.0)
+        self.assertEqual(r["last_write"], 20.0)       # observed on this clock, not the file server's mtime
 
     def test_hms(self):
         self.assertEqual(render_timer._hms("00:10:12"), 612)
@@ -693,8 +731,22 @@ class Prefs(Tmp):
         open(p, "w").close()
         self.assertFalse(prefs_snapshot.compare(a, self.snap())["ok"])
         res = prefs_snapshot.compare(a, self.snap(), allow=[p])
-        self.assertTrue(res["ok"])
+        self.assertFalse(res["ok"])                          # never a plain PASS: owner decision
+        self.assertEqual(res["verdict"], "CHECK")
         self.assertEqual(res["control_explained"], [p])
+
+    def test_unreadable_pref_fails(self):
+        a = self.snap()
+        b = self.snap()
+        b["groups"]["resolve_prefs"][os.path.join(self.prefs, "config.dat")] = {"error": "PermissionError"}
+        self.assertFalse(prefs_snapshot.compare(a, b)["ok"])
+
+    def test_unrelated_new_unit_is_a_note(self):
+        a = self.snap()
+        prefs_snapshot.scheduler_lists = lambda platform=None: {"systemd_user_units": ["a.service", "foo.timer"]}
+        res = prefs_snapshot.compare(a, self.snap())
+        self.assertTrue(res["ok"], res["fail"])
+        self.assertTrue(any("foo.timer" in n for n in res["notes"]))
 
     def test_leftover_unit_and_state_dir_fail(self):
         a = self.snap()
@@ -721,6 +773,54 @@ class Prefs(Tmp):
     def test_missing_roots_recorded(self):
         s = self.snap()
         self.assertIn("/opt/resolve/configs", s["missing"])
+
+
+class Drill(Tmp):
+    class A(object):
+        pass
+
+    def args(self):
+        a = self.A()
+        a.state_dir = self.tmp
+        return a
+
+    def log(self, *turns):
+        import time as _t
+        with open(os.path.join(self.tmp, "agent.log"), "w") as f:
+            for t, res in turns:
+                f.write("--- %s poll ---\n%s\n" % (_t.strftime("%Y-%m-%d %H:%M:%S", _t.localtime(t)), res))
+
+    def test_live_before_needs_scheduler_and_a_sent_record(self):
+        import time as _t
+        orig = drill.scheduler_active
+        try:
+            drill.scheduler_active = lambda: True
+            self.log((_t.time() - 30, "None"))
+            self.assertTrue(drill.live_before(self.args()))           # only silent turns: not live
+            self.log((_t.time() - 30, "200"))
+            self.assertEqual(drill.live_before(self.args()), [])
+            drill.scheduler_active = lambda: False
+            self.assertIn("scheduler not active", drill.live_before(self.args()))
+        finally:
+            drill.scheduler_active = orig
+
+    def test_queue_and_lease(self):
+        self.assertEqual(drill.queue_lines(self.tmp), 0)
+        with open(os.path.join(self.tmp, "queue.jsonl"), "w") as f:
+            f.write("{}\n{}\n")
+        self.assertEqual(drill.queue_lines(self.tmp), 2)
+        self.assertIsNone(drill.lease_remaining(self.tmp, 0))
+        with open(os.path.join(self.tmp, "lease.json"), "w") as f:
+            json.dump({"enabled": True, "until": 1000.0}, f)
+        self.assertEqual(drill.lease_remaining(self.tmp, 400.0), 600.0)
+        self.assertEqual(drill.lease_remaining(self.tmp, 2000.0), 0.0)
+
+    def test_watch_splits_loud_turns_after_grace(self):
+        import time as _t
+        now = _t.time()
+        self.log((now + 10, "None"), (now + 70, "200"), (now + 130, "None"))
+        turns, loud, grew = drill.watch(self.args(), now, 0, 60)
+        self.assertEqual((len(turns), len(loud), grew), (3, 1, 0))
 
 
 class AgentLog(Tmp):

@@ -90,7 +90,8 @@ def check(bodies, status, explaining):
             silent_drops.append(b)
         if p is not None:
             prev = p
-    checks = {"never_done_or_100_without_confirmed_scope": not false_done,
+    checks = {"values_produced": bool(bodies),
+              "never_done_or_100_without_confirmed_scope": not false_done,
               "every_drop_has_an_explaining_reason": not silent_drops,
               "engine_no_errors": not status.get("errors")}
     return checks, false_done, silent_drops
@@ -108,6 +109,8 @@ def main(argv=None):
     a = ap.parse_args(argv)
     pms_sync, pv = load_engine(a.server_dir)
     recs = common.load_records(a.records, a.host, common.parse_iso(a.t0), common.parse_iso(a.t1))
+    if not recs:
+        common.die("no records for host %s (check --host: macOS may report name.local)" % a.host)
     bodies, status = replay(recs, pms_sync, pv, a.job)
     checks, false_done, silent = check(bodies, status, getattr(pv, "EXPLAINING", ()))
     print("%d records -> %d values that would be sent; withheld %s; errors %s %s" % (
