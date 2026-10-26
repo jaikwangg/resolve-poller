@@ -123,8 +123,9 @@ class QueueBounds(unittest.TestCase):
     def test_flush_is_rate_limited(self):
         with FakeServer() as srv, agent_env(EDITORTRACK_SERVER=srv.url + "/ingest", EDITORTRACK_FLUSH_MAX="300") as (m, sd):
             r = m["runner"]
-            r._enqueue([json.dumps({"host": "h", "i": i}) for i in range(1000)])
-            r.post({"host": "h", "i": -1})
+            ts = "2026-10-26T10:00:00+00:00"           # F9: the agent refuses a record without a UTC ts
+            r._enqueue([json.dumps({"host": "h", "ts": ts, "i": i}) for i in range(1000)])
+            r.post({"host": "h", "ts": ts, "i": -1})
             self.assertEqual(len(srv.posts()), 301)
             self.assertEqual(len((sd / "queue.jsonl").read_text().splitlines()), 700)
 

@@ -2,7 +2,7 @@
 """A3 — poll (collector ตาม stage) → resolve job → POST (หลาย URL สำรองได้ + offline queue). record schema 3.
 stage จาก EDITORTRACK_STAGE (หรือ EDITORTRACK_ROLE เดิม): data/conform/color/subtitle/master
 """
-import json, os, sys, time, socket, getpass, datetime, platform, urllib.request, pathlib
+import json, os, sys, time, socket, getpass, datetime, platform, urllib.request, urllib.error, pathlib
 import safety
 from activity_sampler import sample
 from collect import collect, canon
@@ -19,6 +19,33 @@ QUEUE_MAX_LINES = int(os.environ.get("EDITORTRACK_QUEUE_MAX_LINES", "5000"))    
 QUEUE_MAX_BYTES = int(os.environ.get("EDITORTRACK_QUEUE_MAX_BYTES", str(10 * 1024 * 1024)))
 FLUSH_MAX = int(os.environ.get("EDITORTRACK_FLUSH_MAX", "300"))                  # record ย้อนหลังต่อรอบ
 FLUSH_BUDGET_SEC = float(os.environ.get("EDITORTRACK_FLUSH_BUDGET_SEC", "20"))
+
+
+def _envnum(name, default, cast=int):
+    try:
+        v = cast(os.environ.get(name, "") or default)
+        return v if v == v and v >= 0 else cast(default)      # NaN / negative -> default
+    except (TypeError, ValueError):
+        return cast(default)
+
+
+# ---- sender policy (ET-5, docs/research/AGENT_SEND_POLICY.md) ----
+# The server answered that THIS record is unusable: retrying can never succeed, so the record is
+# dropped from the queue, counted, logged locally (bounded) and reported in the next heartbeat.
+# 400 = explain.record_problem (bad host/ts/type) or unreadable JSON · 413 = this record is too large ·
+# 422 = request validation. Every other status (401/403 auth, 404/405/410 wrong URL or old server,
+# 408/425/429, 409, any other 4xx, 3xx, 5xx) and every network error keeps the record and backs off:
+# those describe the server, the proxy or the configuration, and treating them as final would drop
+# every record behind them.
+FINAL_STATUS = frozenset((400, 413, 422))
+SEND_BACKOFF_BASE_SEC = _envnum("EDITORTRACK_SEND_BACKOFF_BASE_SEC", 60, float)
+SEND_BACKOFF_MAX_SEC = _envnum("EDITORTRACK_SEND_BACKOFF_MAX_SEC", 900, float)
+# a run of this many final rejections with no delivery in between = the server rejects everything
+# (a server-side regression, not a bad record) -> stop dropping, keep records, back off ("reject hold")
+REJECT_HOLD_STREAK = max(1, _envnum("EDITORTRACK_REJECT_HOLD_STREAK", 10))
+REJECT_LOG_MAX_LINES = _envnum("EDITORTRACK_REJECT_LOG_MAX_LINES", 200)
+REJECT_LOG_MAX_BYTES = _envnum("EDITORTRACK_REJECT_LOG_MAX_BYTES", 256 * 1024)
+REJECT_LOG_KEEP_RECORD = 8 * 1024            # bytes; a bigger record is logged by length + sha256 only
 
 
 def _queue():
@@ -96,11 +123,16 @@ def build_record(prio=None, t0=None):
 
 def _heartbeat(prio, raw, t0):
     b = safety.backoff_state()
+    rj = _reject_state()
+    sb = _send_backoff_state()
     return {"version": safety.AGENT_VERSION, "python": platform.python_version(),
             "os": "%s %s" % (platform.system(), platform.release()), "priority": prio,
             "rss_mb": safety.peak_rss_mb(), "turn_ms": int((time.time() - t0) * 1000),
             "guard": raw.get("guard"), "tripped": safety.tripped(),
-            "backoff_fails": b.get("fails", 0), "queue_lines": _queue_len()}
+            "backoff_fails": b.get("fails", 0), "queue_lines": _queue_len(),
+            # ET-5: records the server refused as unusable (cumulative, never reset) + sender state
+            "rejected": int(rj.get("total", 0)), "reject_hold": _reject_hold(rj),
+            "send_fails": int(sb.get("fails", 0))}
 
 
 def _queue_len():
@@ -119,18 +151,56 @@ def _ordered():
     return ([last] if last in SERVERS else []) + [u for u in SERVERS if u != last]
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """A redirect is a configuration problem (http->https, proxy): never follow it. urllib would turn the
+    POST into a GET (no body, Authorization header to the new host); the 3xx comes back as an HTTPError
+    and is retried like any other non-final status."""
+    def redirect_request(self, *a, **k):
+        return None
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect)
+
+
+def _retry_after(e):
+    try:
+        v = float(str(e.headers.get("Retry-After") or "").strip())
+        return v if v == v and v > 0 else None
+    except Exception:
+        return None
+
+
+def _detail(e):
+    try:
+        return e.read(400).decode("utf-8", "replace")[:300]
+    except Exception:
+        return ""
+
+
 def _send(rec):
-    """ลองทีละ URL จนกว่าจะสำเร็จ → คืน HTTP status · ไม่สำเร็จสักตัว → None"""
+    """Try each URL in turn. -> (kind, status, info)
+       ("ok", status, None)          delivered (2xx)
+       ("final", status, detail)     the server refused this record as unusable (FINAL_STATUS)
+       ("retry", status|None, retry_after)  anything else; status None = no server answered"""
     data = json.dumps(rec, ensure_ascii=False).encode()
     order = _ordered()
+    last = ("retry", None, None)
     for url in order:
         req = urllib.request.Request(
             url, data=data,
             headers={"Content-Type": "application/json", "Authorization": f"Bearer {TOKEN}"})
         try:
-            with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT) as r:
+            with _OPENER.open(req, timeout=HTTP_TIMEOUT) as r:
                 status = r.status
+        except urllib.error.HTTPError as e:
+            if e.code in FINAL_STATUS:          # every URL is the same server: its answer is about the record
+                return ("final", e.code, _detail(e))
+            last = ("retry", e.code, _retry_after(e))
+            continue                            # 5xx / auth / wrong URL on this route -> next URL
         except Exception:
+            continue                            # offline / timeout / DNS -> next URL
+        if not 200 <= status < 300:             # 1xx and anything odd: not delivered
+            last = ("retry", status, None)
             continue
         if url != order[0] or not _last_ok().exists():
             try:
@@ -138,7 +208,134 @@ def _send(rec):
                 _last_ok().write_text(url, encoding="utf-8")
             except Exception:
                 pass
-        return status
+        return ("ok", status, None)
+    return last
+
+
+# ---- send backoff (separate from safety's Resolve backoff: a server outage never gates Resolve) ----
+def _send_backoff_state():
+    b = safety._read("send_backoff.json")
+    return b if isinstance(b, dict) and not b.get("_corrupt") else {}
+
+
+def _send_backoff_active(now=None):
+    now = now or time.time()
+    try:
+        nxt = float(_send_backoff_state().get("next_at", 0))
+    except (TypeError, ValueError):
+        return False
+    if nxt > now + SEND_BACKOFF_MAX_SEC + 60:    # clock moved backwards: never wait longer than the cap
+        return False
+    return now < nxt
+
+
+def _send_backoff_fail(status, retry_after=None, now=None):
+    now = now or time.time()
+    try:
+        n = int(_send_backoff_state().get("fails", 0)) + 1
+    except (TypeError, ValueError):
+        n = 1
+    wait = min(SEND_BACKOFF_BASE_SEC * (2 ** min(n - 1, 20)), SEND_BACKOFF_MAX_SEC)
+    if retry_after:                              # 429 / 503 Retry-After: honour it, within the cap
+        wait = min(max(wait, retry_after), SEND_BACKOFF_MAX_SEC)
+    safety._write("send_backoff.json", {"fails": n, "next_at": now + wait, "status": status})
+    return wait
+
+
+def _send_backoff_ok():
+    try:
+        (safety.state_dir() / "send_backoff.json").unlink()
+    except Exception:
+        pass
+
+
+# ---- rejected records: count + bounded local log ----
+def _reject_state():
+    r = safety._read("rejected.json")
+    return r if isinstance(r, dict) and not r.get("_corrupt") else {}
+
+
+def _reject_hold(st=None):
+    st = _reject_state() if st is None else st
+    try:
+        return int(st.get("streak", 0)) >= REJECT_HOLD_STREAK
+    except (TypeError, ValueError):
+        return False
+
+
+def _delivered():
+    """a 2xx: the server takes records again -> clear the backoff and the reject streak"""
+    _send_backoff_ok()
+    st = _reject_state()
+    if st.get("streak"):
+        st["streak"] = 0
+        safety._write("rejected.json", st)
+
+
+def _reject(line, status, reason, local=False):
+    """drop one record for good: count it (total -> heartbeat) and append a bounded log entry.
+    local=True: the agent's own check refused it before sending (does not count toward the hold streak)."""
+    st = _reject_state()
+    try:
+        total, streak = int(st.get("total", 0)), int(st.get("streak", 0))
+    except (TypeError, ValueError):
+        total, streak = 0, 0
+    st = {"total": total + 1, "streak": streak if local else streak + 1,
+          "last": {"at": datetime.datetime.now(datetime.timezone.utc).isoformat(), "status": status,
+                   "reason": str(reason)[:200]}}
+    safety._write("rejected.json", st)
+    raw = line.encode("utf-8", "replace")
+    ent = dict(st["last"])
+    if len(raw) <= REJECT_LOG_KEEP_RECORD:
+        ent["record"] = line
+    else:
+        import hashlib
+        ent["record_bytes"], ent["record_sha256"] = len(raw), hashlib.sha256(raw).hexdigest()
+    _append_bounded(safety.state_dir() / "rejected.log", json.dumps(ent, ensure_ascii=False),
+                    REJECT_LOG_MAX_LINES, REJECT_LOG_MAX_BYTES)
+
+
+def _append_bounded(path, line, max_lines, max_bytes):
+    """append one line, then keep only the newest max_lines / max_bytes. Never raises."""
+    try:
+        if max_lines <= 0 or max_bytes <= 0:
+            return
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+        if path.stat().st_size <= max_bytes and _count_lines(path) <= max_lines:
+            return
+        keep = path.read_text(encoding="utf-8", errors="replace").splitlines()[-max_lines:]
+        while keep and sum(len(l.encode("utf-8")) + 1 for l in keep) > max_bytes:
+            keep = keep[len(keep) // 10 or 1:]
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text("".join(l + "\n" for l in keep), encoding="utf-8")
+        tmp.replace(path)
+    except Exception:
+        pass
+
+
+def _count_lines(path):
+    with open(path, "rb") as f:
+        return sum(1 for _ in f)
+
+
+def _ts_problem(rec):
+    """the agent never produces or forwards a naive timestamp: ts must be ISO with a UTC offset.
+    None = fine, else the reason (same words as the server's explain.record_problem)."""
+    if not isinstance(rec, dict):
+        return "not_object"
+    ts = rec.get("ts")
+    if not isinstance(ts, str):
+        return "no_ts"
+    try:
+        d = datetime.datetime.fromisoformat(ts)
+    except ValueError:
+        return "bad_ts"
+    if d.tzinfo is None:
+        return "ts_without_offset"
+    if d.utcoffset() != datetime.timedelta(0):
+        return "ts_not_utc"
     return None
 
 
@@ -182,33 +379,65 @@ def _enqueue(lines):
 
 
 def post(rec):
-    status = _send(rec)
-    if status is None:
-        _enqueue([json.dumps(rec, ensure_ascii=False)])
+    """send this turn's record, then the backlog. -> HTTP status, or None when it was queued / refused locally."""
+    line = json.dumps(rec, ensure_ascii=False)
+    why = _ts_problem(rec)
+    if why:                                     # an agent bug: never queue or send it (the server would 400 it)
+        _reject(line, "local", why, local=True)
+        return None
+    if _send_backoff_active():                  # server failing: no network this turn, keep the record
+        _enqueue([line])
+        return None
+    kind, status, info = _send(rec)
+    if kind == "final" and _reject_hold():
+        kind, info = "retry", None              # everything is being refused: keep it, back off
+    if kind == "retry":
+        _send_backoff_fail(status, info)
+        _enqueue([line])
+        return None
+    if kind == "ok":
+        _delivered()
     else:
-        _flush_queue()
+        _reject(line, status, info)             # this record only; the server is up -> backlog may go
+        _send_backoff_ok()
+    _flush_queue()
     return status
 
 
 def _flush_queue():
-    """ส่ง record ย้อนหลังทีละไม่เกิน FLUSH_MAX / FLUSH_BUDGET_SEC ต่อรอบ (ไม่ยิงถล่ม server)."""
+    """send backlog records, oldest first: at most FLUSH_MAX requests / FLUSH_BUDGET_SEC per turn (no storm).
+    A refused record is dropped (counted + logged) and the next one is sent; the first retryable failure
+    stops the flush, keeps that record and the rest, and starts the send backoff."""
     lines = _read_queue()
     if not lines:
         return
     t0 = time.time()
-    sent = 0
+    tried = 0
     for i, ln in enumerate(lines):
-        if sent >= FLUSH_MAX or time.time() - t0 > FLUSH_BUDGET_SEC:
+        if tried >= FLUSH_MAX or time.time() - t0 > FLUSH_BUDGET_SEC:
             _rewrite_queue(lines[i:])
             return
         try:
             rec = json.loads(ln)
         except Exception:
-            continue                                # บรรทัดเสีย — ทิ้ง
-        if _send(rec) is None:                      # หลุดกลางทาง → เก็บที่เหลือไว้ รอบหน้าส่งต่อ
+            _reject(ln, "local", "bad_json", local=True)
+            continue
+        why = _ts_problem(rec)
+        if why:
+            _reject(ln, "local", why, local=True)
+            continue
+        tried += 1
+        kind, status, info = _send(rec)
+        if kind == "final" and _reject_hold():
+            kind, info = "retry", None
+        if kind == "ok":
+            _delivered()
+        elif kind == "final":
+            _reject(ln, status, info)
+        else:                                   # server failing mid-flush: keep this and the rest
+            _send_backoff_fail(status, info)
             _rewrite_queue(lines[i:])
             return
-        sent += 1
     _rewrite_queue([])
 
 
