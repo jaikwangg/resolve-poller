@@ -19,7 +19,7 @@ python3 testday/make_dummy_project.py --out ~/ET_DUMMY_TESTDAY --uhd            
 | `--fps` | 24 | 23.976, 24, 25, 29.97, 30. Set the Resolve project to the same rate and 1920x1080 **before** importing |
 | `--codec` / `--profile` | ProRes 422 Proxy (`prores_ks -profile:v 0`) | ProRes decodes on Resolve Studio for macOS and Linux. `dnxhr` (LB) and `h264` also offered |
 | `--uhd`, `--uhd-profile` | off, ProRes 422 | 60 s 4K and 8K sources + `PB_4K` / `PB_8K` playback timelines (2 min) for P1 |
-| `--sources`, `--source-sec` | 24 × 30 s | Pattern sources; clips are 1–4 s cut from them at random in points (seed `--seed 26`, deterministic) |
+| `--sources`, `--source-sec` | 24 × 30 s | Pattern sources; clips are 1–4 s cut from them at random in points (seed `--seed 26`, deterministic). The duration is set on the output (`-t`), files are written as `.part` and renamed when ffmpeg succeeds |
 | `--font` | fontconfig | Burned-in label (`ET DUMMY SRC_007`) and source timecode via `drawtext`; skipped if the ffmpeg build has no drawtext |
 | `--no-media` | | Only timelines + manifest (media made on another machine) |
 | `--media-root` | `--out` | Where the media will live on the workstation (the XML holds absolute paths) |
@@ -41,14 +41,15 @@ Output folder:
 ET_DUMMY_TESTDAY/
   MANIFEST.json            kit marker; the tool refuses to write into a non-empty folder without it
   REVISION_STEPS.txt       the R0-R9 steps below with exact clip positions (tick boxes)
-  media/src/SRC_###.mov    pattern sources (testsrc2, smptehdbars, testsrc, smptebars, rgbtestsrc, yuvtestsrc, mandelbrot, hue-shifted)
+  media/src/SRC_###.mov    pattern sources (testsrc2, smptehdbars, testsrc, smptebars, rgbtestsrc, yuvtestsrc, pal75bars, hue-shifted)
   media/vfx_v1/VFX_###.mov  12 "VFX" shots, version 1
   media/vfx_v2/VFX_###.mov  the same file names, different content (relink = replacement with grades kept)
   media/vfx_late/LATE_###.mov 10 shots that "arrive late"
   media/wc01/WC01_#.mov    the 6 + 2 clips of the 2026-10-14 replay
   media/uhd/UHD_4K.mov, UHD_8K.mov   (--uhd)
   timelines/*.xml          FCP7 XML (xmeml v5)  -> File > Import > Timeline...
-  timelines/*.edl          CMX3600 EDL fallback (media must already be in the media pool)
+  timelines/*.edl          CMX3600 EDL fallback (media must already be in the media pool); only for timelines
+                           of <= 999 events (CMX3600 event numbers have 3 digits): not for T1500/T3000
 ```
 
 ## 2. Timelines
@@ -60,9 +61,9 @@ ET_DUMMY_TESTDAY/
 | `T1500_v1` | 1500 | ~63 min | P2 middle point, R9 |
 | `T3000_v1` | 3000 | ~2 h 6 min | P2 (3000), C1 kill -9 mid-scan, R9 (protocol (c)) |
 | `T0300_v2_reconform` | 295 | ~13 min | R7: re-conform as a new timeline (25 clips gone, 20 new, two sections swapped) |
-| `T0006_WC01` | 6 | 2:41:13 (161.56 s) | R8: exact replay of the 2026-10-14 TEST false 100 % |
+| `T0006_WC01` | 6 | 00:02:41:13 (161.56 s) | R8: exact replay of the 2026-10-14 TEST false 100 % |
 | `T0006_WC01_plus2` | 6 + 2 on V2 | 161.56 s | R8 reference: where the 2 extra clips go (duration unchanged) |
-| `PB_4K`, `PB_8K` | 4 | 2 min | P1 playback (protocol (d)); valid only if it plays in real time with the agent OFF |
+| `PB_4K`, `PB_8K` | 4 | 2 min | P1 playback (protocol (d)); valid only if it plays in real time with the agent OFF. After import set each timeline's own resolution to 3840x2160 / 7680x4320 (Timeline → Timeline Settings, uncheck "use project settings"), otherwise it is 4K/8K media in an HD timeline |
 
 Import in Resolve: **File → Import → Timeline…** → pick the `.xml` → tick *Automatically import source clips into
 media pool*; leave sizing options at default. Import `T0030_v1` first as the check (2.5 in the checklist). If the
@@ -91,7 +92,7 @@ times to the step times. (Checked on the build server against `night/progress-v2
 |---|---|---|---|---|
 | R0 | Import `T0300_v1`, make it current | — | 0 % | `provisional: true`, 0 % |
 | R1 | Grade clips 1–120 in 3 sessions of 40 (one serial node + any change), 10 min pause between | — | rises to 40 % | rises, provisional, never `done` |
-| R2 | Import `media/vfx_late`, append the 10 clips to the end (Edit → Append to End of Timeline) | WC02 VFX late, no placeholder | drop read as lost work | drop labelled `scope_change` |
+| R2 | Import `media/vfx_late`, append the 10 clips to the end (Edit → Append at End of Timeline, Shift+F12) | WC02 VFX late, no placeholder | drop read as lost work | drop labelled `scope_change` |
 | R3 | Grade the 12 VFX clips (positions 20, 43, …, 273), then relink them to `media/vfx_v2` (same names, grades kept) | WC07 new version, grade kept | may claim done | no jump to done, no unexplained drop (`replaced` only once the poller sends clip items) |
 | R4 | Reset Grades and Nodes on clips 70–84, wait 3 turns, regrade them | WC09/WC10 regrade, rework | silent drop then back | drop labelled `rework` (or a regression with a reason), back up after |
 | R5 | Ripple-delete graded clips 45–54 and ungraded clips 210–219 | WC05/WC06 shots cut | unexplained drop / jump | `scope_shrink`, labelled |
