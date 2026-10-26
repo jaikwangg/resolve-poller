@@ -1,14 +1,17 @@
 """Tiny in-process server: POST /ingest and GET /agent/control, records every request.
 
 ingest_status: int, or a callable(body) -> int | (int, headers) | "hang" (sleep `hang_sec`, then 503),
-evaluated per POST, so tests can script sequences (400 for one record, 500 then 200, timeouts, ...)."""
+evaluated per POST, so tests can script sequences (400 for one record, 500 then 200, timeouts, ...).
+A plain 400 carries the real server's refusal marker (header + body) unless reject_marker=False or the
+callable returns its own headers (a "foreign" 400, e.g. from a proxy)."""
 import json, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
 class FakeServer:
-    def __init__(self, control=None, ingest_status=200, hang_sec=2.0):
+    def __init__(self, control=None, ingest_status=200, hang_sec=2.0, reject_marker=True):
         self.requests = []
+        self.reject_marker = reject_marker
         self.hang_sec = hang_sec
         self.control = control if control is not None else {"enabled": True, "lease_sec": 3600}
         self.ingest_status = ingest_status
@@ -47,8 +50,12 @@ class FakeServer:
                 if st == "hang":
                     time.sleep(srv.hang_sec)
                     st = 503
+                body = {"ok": st == 200} if st < 400 else {"detail": "fake %d" % st}
+                if st == 400 and headers is None and srv.reject_marker:     # what the real /ingest sends
+                    headers = {"X-Editortrack-Reject": "bad_type:fake"}
+                    body = {"detail": "record ใช้ไม่ได้ (bad_type:fake): fake 400"}
                 try:
-                    self._reply(st, {"ok": st == 200} if st < 400 else {"detail": "fake %d" % st}, headers)
+                    self._reply(st, body, headers)
                 except Exception:
                     pass                    # client gave up (timeout)
 

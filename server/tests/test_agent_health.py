@@ -150,7 +150,9 @@ class EndToEnd(unittest.TestCase):
                                       json.dumps({"host": "e2e-q", "ts": ts, "n": 2})])
                 self.assertEqual(m["runner"].main(), 200)
                 self.assertFalse((sd / "queue.jsonl").exists())
-                self.assertEqual(json.loads((sd / "rejected.json").read_text())["last"]["status"], 400)
+                st = json.loads((sd / "rejected.json").read_text())
+                self.assertEqual(st["last"]["status"], 400)
+                self.assertIn("bad_type:agent", st["last"]["reason"])     # X-Editortrack-Reject from the real server
                 self.assertEqual(m["runner"].main(), 200)
                 write_ctrl({"allowed_versions": [V], "hosts": {"e2e": {"enabled": False}}})
                 w2 = World()

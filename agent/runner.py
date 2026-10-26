@@ -24,22 +24,25 @@ FLUSH_BUDGET_SEC = float(os.environ.get("EDITORTRACK_FLUSH_BUDGET_SEC", "20"))
 def _envnum(name, default, cast=int):
     try:
         v = cast(os.environ.get(name, "") or default)
-        return v if v == v and v >= 0 else cast(default)      # NaN / negative -> default
+        return v if v == v and 0 <= v < float("inf") else cast(default)   # NaN / inf / negative -> default
     except (TypeError, ValueError):
         return cast(default)
 
 
 # ---- sender policy (ET-5, docs/research/AGENT_SEND_POLICY.md) ----
-# The server answered that THIS record is unusable: retrying can never succeed, so the record is
-# dropped from the queue, counted, logged locally (bounded) and reported in the next heartbeat.
-# 400 = explain.record_problem (bad host/ts/type) or unreadable JSON · 413 = this record is too large ·
-# 422 = request validation. Every other status (401/403 auth, 404/405/410 wrong URL or old server,
-# 408/425/429, 409, any other 4xx, 3xx, 5xx) and every network error keeps the record and backs off:
-# those describe the server, the proxy or the configuration, and treating them as final would drop
-# every record behind them.
-FINAL_STATUS = frozenset((400, 413, 422))
+# Final (the record is dropped from the queue, counted, logged locally (bounded) and reported in the next
+# heartbeat) ONLY when OUR server says this record is unusable: HTTP 400 carrying its refusal marker,
+# the X-Editortrack-Reject header (explain.record_problem reason) or the body {"detail": "record ใช้ไม่ได้ (..."}.
+# A 400 without the marker (a proxy, a wrong port, a foreign host behind a backup URL), 413, 422 and every
+# other status (401/403, 404/405/410, 408/409/425/429, 3xx, 5xx) and every network error keep the record,
+# try the next URL and back off: they describe the server, proxy or configuration, not the record, and a
+# "final" reading would drop every record behind them.
+FINAL_STATUS = frozenset((400,))
+REJECT_HEADER = "X-Editortrack-Reject"
+REJECT_BODY_PREFIX = "record ใช้ไม่ได้ ("
 SEND_BACKOFF_BASE_SEC = _envnum("EDITORTRACK_SEND_BACKOFF_BASE_SEC", 60, float)
-SEND_BACKOFF_MAX_SEC = _envnum("EDITORTRACK_SEND_BACKOFF_MAX_SEC", 900, float)
+# cap below the server's "silent" warning (agent_health THRESH silent_min = 10 min)
+SEND_BACKOFF_MAX_SEC = _envnum("EDITORTRACK_SEND_BACKOFF_MAX_SEC", 300, float)
 # a run of this many final rejections with no delivery in between = the server rejects everything
 # (a server-side regression, not a bad record) -> stop dropping, keep records, back off ("reject hold")
 REJECT_HOLD_STREAK = max(1, _envnum("EDITORTRACK_REJECT_HOLD_STREAK", 10))
@@ -131,8 +134,16 @@ def _heartbeat(prio, raw, t0):
             "guard": raw.get("guard"), "tripped": safety.tripped(),
             "backoff_fails": b.get("fails", 0), "queue_lines": _queue_len(),
             # ET-5: records the server refused as unusable (cumulative, never reset) + sender state
-            "rejected": int(rj.get("total", 0)), "reject_hold": _reject_hold(rj),
-            "send_fails": int(sb.get("fails", 0))}
+            "rejected": _int0(rj.get("total")), "rejected_local": _int0(rj.get("local")),
+            "reject_hold": _reject_hold(rj), "send_fails": _int0(sb.get("fails"))}
+
+
+def _int0(v):
+    """a state-file number; anything odd (null, text, bool, negative) -> 0. Never raises."""
+    try:
+        return int(v) if not isinstance(v, bool) and int(v) >= 0 else 0
+    except (TypeError, ValueError, OverflowError):
+        return 0
 
 
 def _queue_len():
@@ -170,21 +181,47 @@ def _retry_after(e):
         return None
 
 
-def _detail(e):
+def _refusal(e):
+    """-> reason text if this HTTPError is OUR server refusing the record, else None."""
+    if e.code not in FINAL_STATUS:
+        return None
     try:
-        return e.read(400).decode("utf-8", "replace")[:300]
+        h = (e.headers.get(REJECT_HEADER) or "").strip() if e.headers is not None else ""
     except Exception:
-        return ""
+        h = ""
+    body = ""
+    try:
+        body = e.read(2000).decode("utf-8", "replace")
+    except Exception:
+        pass
+    finally:
+        try:
+            e.close()
+        except Exception:
+            pass
+    detail = ""
+    try:
+        d = json.loads(body).get("detail")
+        detail = d if isinstance(d, str) else ""
+    except Exception:
+        pass
+    if h:
+        return (h + " " + detail).strip()[:300]
+    if detail.startswith(REJECT_BODY_PREFIX):
+        return detail[:300]
+    return None
 
 
 def _send(rec):
     """Try each URL in turn. -> (kind, status, info)
        ("ok", status, None)          delivered (2xx)
-       ("final", status, detail)     the server refused this record as unusable (FINAL_STATUS)
-       ("retry", status|None, retry_after)  anything else; status None = no server answered"""
+       ("final", status, reason)     our server refused this record as unusable (_refusal) and no URL took it
+       ("retry", status|None, retry_after)  anything else; status None = no server answered
+    Every URL is tried until one delivers, so a backup URL still gets the record when another URL refuses it."""
     data = json.dumps(rec, ensure_ascii=False).encode()
     order = _ordered()
     last = ("retry", None, None)
+    final = None
     for url in order:
         req = urllib.request.Request(
             url, data=data,
@@ -193,10 +230,16 @@ def _send(rec):
             with _OPENER.open(req, timeout=HTTP_TIMEOUT) as r:
                 status = r.status
         except urllib.error.HTTPError as e:
-            if e.code in FINAL_STATUS:          # every URL is the same server: its answer is about the record
-                return ("final", e.code, _detail(e))
+            why = _refusal(e)
+            if why is not None:
+                final = final or ("final", e.code, why)
+                continue                        # still try the other URLs
             last = ("retry", e.code, _retry_after(e))
-            continue                            # 5xx / auth / wrong URL on this route -> next URL
+            try:
+                e.close()
+            except Exception:
+                pass
+            continue                            # 5xx / auth / wrong URL / foreign 400 on this route -> next URL
         except Exception:
             continue                            # offline / timeout / DNS -> next URL
         if not 200 <= status < 300:             # 1xx and anything odd: not delivered
@@ -209,7 +252,7 @@ def _send(rec):
             except Exception:
                 pass
         return ("ok", status, None)
-    return last
+    return final or last
 
 
 # ---- send backoff (separate from safety's Resolve backoff: a server outage never gates Resolve) ----
@@ -231,10 +274,7 @@ def _send_backoff_active(now=None):
 
 def _send_backoff_fail(status, retry_after=None, now=None):
     now = now or time.time()
-    try:
-        n = int(_send_backoff_state().get("fails", 0)) + 1
-    except (TypeError, ValueError):
-        n = 1
+    n = _int0(_send_backoff_state().get("fails")) + 1
     wait = min(SEND_BACKOFF_BASE_SEC * (2 ** min(n - 1, 20)), SEND_BACKOFF_MAX_SEC)
     if retry_after:                              # 429 / 503 Retry-After: honour it, within the cap
         wait = min(max(wait, retry_after), SEND_BACKOFF_MAX_SEC)
@@ -257,10 +297,7 @@ def _reject_state():
 
 def _reject_hold(st=None):
     st = _reject_state() if st is None else st
-    try:
-        return int(st.get("streak", 0)) >= REJECT_HOLD_STREAK
-    except (TypeError, ValueError):
-        return False
+    return _int0(st.get("streak")) >= REJECT_HOLD_STREAK
 
 
 def _delivered():
@@ -273,14 +310,13 @@ def _delivered():
 
 
 def _reject(line, status, reason, local=False):
-    """drop one record for good: count it (total -> heartbeat) and append a bounded log entry.
-    local=True: the agent's own check refused it before sending (does not count toward the hold streak)."""
+    """drop one record for good: count it and append a bounded log entry.
+    total = refused by the server (heartbeat "rejected"); local = refused by the agent's own check before
+    sending (heartbeat "rejected_local"; does not count toward the hold streak)."""
     st = _reject_state()
-    try:
-        total, streak = int(st.get("total", 0)), int(st.get("streak", 0))
-    except (TypeError, ValueError):
-        total, streak = 0, 0
-    st = {"total": total + 1, "streak": streak if local else streak + 1,
+    total, nloc, streak = _int0(st.get("total")), _int0(st.get("local")), _int0(st.get("streak"))
+    st = {"total": total + (0 if local else 1), "local": nloc + (1 if local else 0),
+          "streak": streak if local else streak + 1,
           "last": {"at": datetime.datetime.now(datetime.timezone.utc).isoformat(), "status": status,
                    "reason": str(reason)[:200]}}
     safety._write("rejected.json", st)
@@ -329,7 +365,7 @@ def _ts_problem(rec):
     if not isinstance(ts, str):
         return "no_ts"
     try:
-        d = datetime.datetime.fromisoformat(ts)
+        d = datetime.datetime.fromisoformat(ts[:-1] + "+00:00" if ts.endswith("Z") else ts)   # Z: py < 3.11
     except ValueError:
         return "bad_ts"
     if d.tzinfo is None:

@@ -146,7 +146,7 @@ compatibility matrix.
 | Where | What | Cap / retention | Where enforced |
 |---|---|---|---|
 | Workstation `~/.editortrack/agent.log` | one line per turn | 1 MB, then cut to the last 200 KB | `deploy/run-agent.sh:15` (Linux/mac; **Windows TO BUILD**) |
-| Workstation `queue.jsonl` | records not yet delivered | 5000 lines / 10 MB, oldest dropped; flush ≤ 300 requests per turn; a record the server refuses (400/413/422) is dropped, never blocks the queue | `agent/runner.py` (`_flush_queue`, `AGENT_SEND_POLICY.md`) |
+| Workstation `queue.jsonl` | records not yet delivered | 5000 lines / 10 MB, oldest dropped; flush ≤ 300 requests per turn; a record our server refuses (400 with its X-Editortrack-Reject marker) is dropped, never blocks the queue | `agent/runner.py` (`_flush_queue`, `AGENT_SEND_POLICY.md`) |
 | Workstation `rejected.log` / `rejected.json` | records the server refused or the agent's ts check dropped | 200 lines / 256 KB, newest kept; record kept only if ≤ 8 KB | `agent/runner.py:_reject` |
 | Workstation `send_backoff.json` | sender backoff | tiny | `agent/runner.py:_send_backoff_fail` |
 | Workstation `grade_cache.json` | per-clip grade results (clip UIDs) | 8 timelines | `agent/grade_detect.py:MAX_TIMELINES` |
