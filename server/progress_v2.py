@@ -24,8 +24,12 @@ setting (read once by Config.from_env):
                                 <store>/scope_locks.json (see scope_locks() below). Precedence list,
                                 comma separated, first source that has a scope wins.
   D2 EDITORTRACK_PROGRESS_DONE  advisory (default: done may be sent, PMS treats it as advisory) | never
-  D3 unit = clips on video tracks as counted by the poller today (titles/generators/adjustment/
-     disabled cannot be told apart without per-item data: that is step 3)
+  D3 unit = with per-item data (step 3): shots, excluding titles, generators, adjustment layers,
+     audio and disabled clips (NON_GRADABLE); without it: clips on video tracks as the poller counts them
+  step 3 (identity ledger, class Ledger): when a record carries source.items (unique id, clip name,
+     kind, track, start/end, graded, grade signature, media version, online) the value comes from one
+     shot list per job and stage across rooms, timelines and projects. TODAY'S POLLER DOES NOT SEND
+     ITEMS: the agent change (core getters only, behind a flag) needs owner sign-off for real rooms
   D4 EDITORTRACK_MASS_GUARD     on (default) | off - many clips turning graded in one poll
                                 (a look/LUT on everything) blocks done until the scope is re-locked
   D5 EDITORTRACK_JOB_GUARD      withhold (default: Resolve project must contain the booking's
@@ -164,6 +168,166 @@ def seal(o, cap=99.0):
     return o
 
 
+# ---------------------------------------------------------------- step 3: per-clip identity ledger
+NON_GRADABLE = {"title", "generator", "adjustment", "audio", "disabled"}   # D3: not units of color work
+
+
+def _norm_code(s):
+    """clip name -> shot code: extension and a trailing _vNNN version stripped, punctuation dropped."""
+    s = re.sub(r"\.[A-Za-z0-9]{2,5}$", "", str(s or ""))
+    s = re.sub(r"[_\-. ]?v\d+$", "", s, flags=re.I)
+    return re.sub(r"[^0-9A-Za-z]+", "", s).upper()
+
+
+def _unit_done(item, stage):
+    if stage == "conform":
+        return bool(item.get("online")) and item.get("kind") != "placeholder"
+    return bool(item.get("graded"))
+
+
+def identities(items):
+    """items -> {ident: [items]} for gradable items. ident = normalised clip name (sid) when the poller
+    sends one, else the Resolve unique id. Same-name items that touch on one track (a blade) share one
+    ident; a non-adjacent reuse of one source gets #2, #3."""
+    groups, by_name = {}, {}
+    its = [i for i in items or [] if isinstance(i, dict) and i.get("kind") not in NON_GRADABLE]
+    for i in sorted(its, key=lambda x: (x.get("track", 1), x.get("start", 0))):
+        base = _norm_code(i["sid"]) if i.get("sid") else "UID:" + str(i.get("id"))
+        by_name.setdefault(base, []).append(i)
+    for base, lst in by_name.items():
+        n, prev = 1, None
+        for i in lst:
+            if prev is not None and not (prev.get("track") == i.get("track")
+                                         and abs((prev.get("end") or 0) - (i.get("start") or 0)) < 1e-6):
+                n += 1
+            groups.setdefault(base if n == 1 else f"{base}#{n}", []).append(i)
+            prev = i
+    return groups
+
+
+class Ledger:
+    """One shot list per (job, stage) across hosts, projects and timelines (C3 rollout step 3).
+
+    Each shot keeps one state per view (host, project, timeline) it appears in. A shot counts as done
+    when, in the most recently *changed* view holding its newest media version, it is done (graded /
+    online), its grade was not merely carried onto new media (Replace Clip), and it was not part of a
+    mass apply (D4). A view seen for the first time with nothing changed never overrides work done
+    elsewhere (D7: most recent change wins). State is plain JSON (persisted with the engine)."""
+
+    def __init__(self, st, mass_guard=True):
+        self.st, self.mass_guard = st, mass_guard
+        st.setdefault("views", {})      # view -> [idents]
+        st.setdefault("view_t", {})     # view -> t of its last poll
+        st.setdefault("shots", {})      # ident -> {view: {done, ver, sig, replaced, mass, changed_t, seen_ver}}
+        st.setdefault("work", {})       # "ident|sig-or-version" -> 1 : monotonic work counter
+
+    @staticmethod
+    def _ok(vs):
+        return vs["done"] and not vs["replaced"] and not vs["mass"]
+
+    def shot_done(self, ident):
+        views = self.st["shots"].get(ident) or {}
+        if not views:
+            return False
+        top = max(v["ver"] for v in views.values())
+        latest = max((v for v in views.values() if v["ver"] == top),
+                     key=lambda v: float("-inf") if v["changed_t"] is None else v["changed_t"])
+        return self._ok(latest)
+
+    def _work(self, ident, what):
+        self.st["work"][f"{ident}|{what}"] = 1
+
+    def update(self, obs, t):
+        stage = obs.get("stage")
+        S = self.st
+        view = "\x1f".join(str(obs.get(k)) for k in ("host", "project", "timeline"))
+        groups = identities(obs.get("items"))
+        reasons = set()
+        prev = S["views"].get(view)
+        cur = set(groups)
+        was_done = {i: self.shot_done(i) for i in S["shots"]}
+        before = set(S["shots"])
+        if prev is not None:
+            for gid in set(prev) - cur:
+                vs = S["shots"].get(gid, {})
+                vs.pop(view, None)
+                if not vs:
+                    S["shots"].pop(gid, None)
+                    reasons.add("scope_shrink")
+        newly = []
+        for ident, its in groups.items():
+            done = all(_unit_done(i, stage) for i in its)
+            ver = max(int(i.get("version") or 0) for i in its)
+            sig = sorted({str(i.get("sig")) for i in its})           # blade halves share one grade
+            views = S["shots"].setdefault(ident, {})
+            s = views.get(view)
+            if s is None:
+                top = max([v["ver"] for v in views.values()] or [ver])
+                carried = any(v["sig"] == sig and v["ver"] < ver for v in views.values())
+                views[view] = {"done": done, "ver": ver, "sig": sig,
+                               "replaced": bool(stage == "color" and done and ver > top and carried), "mass": False,
+                               "changed_t": None if len(views) else t, "seen_ver": ver}
+                if done and prev is not None:
+                    newly.append(ident)
+                if done:
+                    self._work(ident, "|".join(sig) if stage == "color" else ver)
+                continue
+            if ver != s["ver"]:
+                reasons.add("replaced")
+                if stage == "color" and done and sig == s["sig"]:
+                    s["replaced"] = True                             # grade carried onto new media
+                s["ver"] = ver
+                if stage == "conform" and done:
+                    self._work(ident, ver)
+            if stage == "color" and done and sig != s["sig"]:
+                if s["done"] and not s["mass"]:
+                    reasons.add("rework")
+                s["replaced"] = False
+                if s["done"]:
+                    s["mass"] = False                                # touched again after a mass apply
+                self._work(ident, "|".join(sig))
+            if done and not s["done"]:
+                self._work(ident, "|".join(sig) if stage == "color" else ver)
+                newly.append(ident)
+            if not done:
+                s["mass"] = False
+            if (done, sig) != (s["done"], s["sig"]) or ver != s.get("seen_ver", ver):
+                s["changed_t"] = t
+            s["seen_ver"] = ver
+            s["done"], s["sig"] = done, sig
+        dt = t - S["view_t"].get(view, -1e18)
+        S["view_t"][view] = t
+        if (self.mass_guard and stage == "color" and dt <= MASS_WINDOW_MIN
+                and len(newly) >= max(MASS_MIN, MASS_FRAC * len(S["shots"]))):
+            for ident in newly:
+                S["shots"][ident][view]["mass"] = True
+            reasons.add("mass_grade")
+        if before and set(S["shots"]) - before:
+            reasons.add("scope_change")
+        if any(was_done.get(i) and not self.shot_done(i) for i in S["shots"]):
+            reasons.add("regression")
+        S["views"][view] = sorted(cur)
+        total = len(S["shots"])
+        dc = sum(1 for i in S["shots"] if self.shot_done(i))
+        return total, dc, reasons
+
+    def bases(self):
+        return {i.split("#")[0] for i in self.st["shots"]}
+
+    def work_count(self):
+        return len(self.st["work"])
+
+    def done_of(self, codes):
+        idx = {}
+        for ident in self.st["shots"]:
+            idx.setdefault(ident.split("#")[0], []).append(ident)
+        return sum(1 for c in codes if idx.get(_norm_code(c)) and all(self.shot_done(i) for i in idx[_norm_code(c)]))
+
+    def unknown_vs(self, codes):
+        want = {_norm_code(c) for c in codes}
+        return {i for i in self.st["shots"] if i.split("#")[0] not in want}
+
+
 # ---------------------------------------------------------------- engine
 class Engine:
     """Stateful per (project_no, stage). step(obs) -> output dict (see out()).
@@ -182,9 +346,10 @@ class Engine:
         self.keys = st.get("keys", {})         # key -> per-key state
         self.host_t = st.get("host_t", {})     # host -> newest record time (epoch s) seen
         self.last = st.get("last", {})         # key -> last output (sent or not)
+        self.hints = st.get("hints", {})       # job -> [shot codes] from offline timelines / the conform ledger
 
     def state(self):
-        return {"v": 1, "keys": self.keys, "host_t": self.host_t, "last": self.last}
+        return {"v": 1, "keys": self.keys, "host_t": self.host_t, "last": self.last, "hints": self.hints}
 
     # ---- holds: previous value kept, nothing sent
     def _hold(self, key, reason, st=None):
@@ -243,55 +408,82 @@ class Engine:
 
     def _value(self, key, obs, st, stage):
         pct, dc, total = self._base(obs, stage)
-        if pct is None:
+        use_items = isinstance(obs.get("items"), list) and stage in ("color", "conform")
+        if pct is None and not use_items:
             return None
         t = float(obs.get("t") or 0.0)
         reasons = set()
         view = "\x1f".join(str(obs.get(k)) for k in ("host", "project", "timeline"))
         v, g = obs.get("video_clips"), obs.get("graded_clips")
-
-        # work_done: monotonic count of clips that turned graded (approximate without per-item data)
-        views = st.setdefault("views", {})
-        pv = views.get(view)
-        if stage == "color" and g is not None:
-            if pv is None:
-                if not views:
-                    st["work"] = st.get("work", 0) + g      # first timeline of this job: what is graded counts
-            elif pv.get("g") is not None and g > pv["g"]:
-                st["work"] = st.get("work", 0) + (g - pv["g"])
-        work = st.get("work") if stage == "color" else None
-
-        # mass-grade guard (D4): many clips graded at once on one timeline (look/LUT on everything)
-        if (self.cfg.mass_guard and stage == "color" and pv is not None and g is not None
-                and pv.get("g") is not None and t - pv.get("t", -1e9) <= MASS_WINDOW_MIN):
-            jump = g - pv["g"]
-            if jump >= max(MASS_MIN, MASS_FRAC * (v or 0)):
-                st["mass_at"] = t
-                reasons.add("mass_grade")
-        views[view] = {"g": g, "v": v, "t": t}
+        job = key.rsplit("|", 1)[0]
+        book = None
+        if use_items:
+            # step 3: one shot list per job and stage across rooms, timelines and projects
+            book = Ledger(st.setdefault("book", {}), self.cfg.mass_guard)
+            total, dc, r = book.update(obs, t)
+            reasons |= r
+            work = book.work_count()
+            hint = set(self.hints.get(job) or [])
+            hint |= {_norm_code(x) for x in obs.get("offline_shots") or []}
+            if stage == "conform":
+                hint |= book.bases()
+            self.hints[job] = sorted(hint)
+            extra = hint - book.bases() if stage == "color" or obs.get("offline_shots") else set()
+            if extra:
+                total += len(extra)                          # shots known elsewhere for this job, not here yet
+                reasons.add("scope_hint")
+            pct = 100.0 * dc / total if total else None
+            if pct is None:
+                return None
+            cmp_v, cmp_g = total, dc
+        else:
+            # counts only (today's poller): work_done = clips that turned graded (approximate)
+            views = st.setdefault("views", {})
+            pv = views.get(view)
+            if stage == "color" and g is not None:
+                if pv is None:
+                    if not views:
+                        st["work"] = st.get("work", 0) + g   # first timeline of this job: what is graded counts
+                elif pv.get("g") is not None and g > pv["g"]:
+                    st["work"] = st.get("work", 0) + (g - pv["g"])
+            work = st.get("work") if stage == "color" else None
+            # mass-grade guard (D4) from counts: many clips graded at once on one timeline
+            if (self.cfg.mass_guard and stage == "color" and pv is not None and g is not None
+                    and pv.get("g") is not None and t - pv.get("t", -1e9) <= MASS_WINDOW_MIN):
+                if g - pv["g"] >= max(MASS_MIN, MASS_FRAC * (v or 0)):
+                    st["mass_at"] = t
+                    reasons.add("mass_grade")
+            views[view] = {"g": g, "v": v, "t": t}
+            cmp_v, cmp_g = v, g
 
         # confirmed scope (D1)
-        confirmed, sc = False, None
-        if "lock" in self.cfg.scope_source and stage == "color":
+        confirmed = False
+        if "lock" in self.cfg.scope_source:
             sc = ((obs.get("external") or {}).get("scope") or {}).get(stage) or None
-            total_lock = _int((sc or {}).get("total")) or (len((sc or {}).get("shots") or []) or None)
-            if total_lock:
-                confirmed = True
+            shots = (sc or {}).get("shots") or None
+            total_lock = _int((sc or {}).get("total")) or (len(shots) if shots else None)
+            if total_lock and (book is not None or stage == "color"):
                 if st.get("lock_total") != total_lock:      # a new or changed lock counts as set now
                     st["lock_total"], st["lock_seen_t"] = total_lock, t
                 lock_t = (sc or {}).get("locked_t", st["lock_seen_t"])
-                if st.get("mass_at") is not None and (lock_t is None or lock_t <= st["mass_at"]):
-                    reasons.add("mass_grade")            # not cleared until the scope is locked again
-                if v is not None and v > total_lock:
-                    # more clips than the lock: the lock no longer describes the timeline. Report the
-                    # counts as seen, unconfirmed, and say why (PMS shows "scope grew")
-                    confirmed = False
+                if book is not None and shots:
+                    confirmed = True                         # a shot list: matched shot by shot
+                    total, dc = len(shots), book.done_of(shots)
+                    if book.unknown_vs(shots):
+                        reasons.add("scope_mismatch")
+                    pct = 100.0 * dc / total
+                elif cmp_v is not None and cmp_v > total_lock:
+                    # more units than the lock: the lock no longer describes the work. Report what is
+                    # seen, unconfirmed, and say why (PMS shows "scope grew")
                     reasons |= {"scope_grew_after_lock", "scope_change"}
                 else:
+                    confirmed = True
+                    if book is None and st.get("mass_at") is not None and (lock_t is None or lock_t <= st["mass_at"]):
+                        reasons.add("mass_grade")            # counts: not cleared until the scope is locked again
+                    if cmp_v is not None and cmp_v < total_lock:
+                        reasons.add("scope_mismatch")         # units missing vs the lock
                     total = total_lock
-                    dc = min(g or 0, total)
-                    if v is not None and v < total:
-                        reasons.add("scope_mismatch")     # clips missing vs the lock
+                    dc = min(cmp_g or 0, total)
                     pct = 100.0 * dc / total
         if not confirmed:
             reasons.add("scope_unconfirmed")
@@ -299,13 +491,13 @@ class Engine:
         # reason for a drop (every drop > 1 pt is labelled)
         last = st.get("last")
         if last and last.get("pct") is not None and pct < last["pct"] - 1.0:
-            if v is not None and last.get("v") is not None and v > last["v"]:
+            if cmp_v is not None and last.get("v") is not None and cmp_v > last["v"]:
                 reasons.add("scope_change")
-            elif g is not None and last.get("g") is not None and g < last["g"]:
+            elif cmp_g is not None and last.get("g") is not None and cmp_g < last["g"]:
                 reasons.add("regression")
-            elif view != last.get("view"):
+            elif view != last.get("view") and book is None:
                 reasons.add("scope_change")               # another timeline/project of the same job
-            elif stage == "conform":
+            elif stage == "conform" and book is None:
                 if (obs.get("offline_target_sec") or 0) > (last.get("tgt") or 0):
                     reasons.add("scope_change")
                 else:
@@ -316,14 +508,14 @@ class Engine:
                 reasons.add("regression")
             if not reasons & EXPLAINING:
                 reasons.add("unexplained_drop")
-        st["last"] = {"pct": pct, "v": v, "g": g, "view": view, "tgt": obs.get("offline_target_sec"),
+        st["last"] = {"pct": pct, "v": cmp_v, "g": cmp_g, "view": view, "tgt": obs.get("offline_target_sec"),
                       "total": total, "dc": dc}
 
         # done (D2, D6): confirmed, complete, no blocker, stable for the window, PMS task not reopened
         task = (obs.get("external") or {}).get("pms_task")
         blockers = reasons & {"scope_mismatch", "mass_grade", "scope_grew_after_lock"}
-        complete = confirmed and dc is not None and total and dc >= total and not blockers
-        sig = [total, dc, v, view]
+        complete = bool(confirmed and dc is not None and total and dc >= total and not blockers)
+        sig = [total, dc] if book is not None else [total, dc, v, view]
         prev_t = st.get("seen_t")
         if complete:
             gap = prev_t is not None and t - prev_t > self.cfg.stable_gap_min
@@ -338,7 +530,7 @@ class Engine:
         if task == "REVISION":
             reasons.add("rework")
         stable = st.get("hi_since") is not None and t - st["hi_since"] >= self.cfg.stable_min
-        done = bool(complete and stable and self.cfg.send_done and st.get("hi_since") is not None)
+        done = bool(complete and stable and self.cfg.send_done)
         if complete and not done:
             reasons.add("awaiting_stability")
         provisional = not (confirmed and not blockers)
@@ -377,7 +569,9 @@ def obs_from_record(rec, eff, scope=None):
             "video_clips": tl.get("video_clips"), "graded_clips": tl.get("graded_clips"),
             "duration_sec": tl.get("duration_sec"), "offline_target_sec": src.get("offline_target_sec"),
             "grade_pending": (tl.get("grade") or {}).get("pending") or 0,
-            "agent": {"pct": prog.get("pct"), "done": prog.get("done"), "total": prog.get("total")}}
+            "agent": {"pct": prog.get("pct"), "done": prog.get("done"), "total": prog.get("total")},
+            **({"items": src["items"]} if isinstance(src.get("items"), list) else {}),
+            **({"offline_shots": src["offline_shots"]} if isinstance(src.get("offline_shots"), list) else {})}
 
 
 def payload(o, project_no, stage, observed_at, host):

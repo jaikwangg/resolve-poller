@@ -249,6 +249,49 @@ class ScopeLock(Base):
         self.assertEqual(max(b["progress_pct"] for b in pms.bodies), 99.0)
 
 
+def irec(minute, host, graded, project="KPP-2026-0101 BrandX", replaced=()):
+    """a record from a poller that sends per-item identity (step 3; not sent by today's poller)"""
+    items = [{"id": f"{host}-u{i}", "sid": f"SH{i:03d}_v{2 if i in replaced else 1:03d}.mov", "kind": "video",
+              "track": 1, "start": 4.0 * i, "end": 4.0 * i + 4, "graded": i in graded,
+              "sig": f"g{i}" if i in graded else None, "version": 2 if i in replaced else 1, "online": True}
+             for i in range(6)]
+    r = rec(ts(minute), 6, len(graded), project=project, host=host)
+    r["source"]["items"] = items
+    r["_rx"] = {"at": ts(minute)}
+    return r
+
+
+class IdentityLedger(Base):
+    def test_two_rooms_one_job_union_and_restart(self):
+        pms = FakePMS()
+        eff = erp_eff("KPP-2026-0101", title="BrandX")
+        pms_sync.progress_on_ingest(irec(0, "grade-01", {0, 1, 2}), eff, pms, self.store)
+        pms_sync.progress_on_ingest(irec(1, "grade-02", set()), eff, pms, self.store)
+        self.assertEqual(pms.bodies[-1]["progress_pct"], 50.0)          # room 2 opening a copy undoes nothing
+        reset()                                                          # restart: the ledger is in the state file
+        pms_sync.progress_on_ingest(irec(2, "grade-02", {3, 4}), eff, pms, self.store)
+        b = pms.bodies[-1]
+        self.assertEqual((b["progress_pct"], b["done_count"], b["total"]), (83.33, 5, 6))
+        self.assertEqual(b["work_done"], 5)
+        self.assertTrue(b["provisional"] and not b["done"])
+
+    def test_lock_with_identity_sees_replace_clip_with_a_kept_grade(self):
+        os.environ["EDITORTRACK_SCOPE_SOURCE"] = "lock"
+        self.addCleanup(os.environ.pop, "EDITORTRACK_SCOPE_SOURCE", None)
+        with open(os.path.join(self.store, "scope_locks.json"), "w") as f:
+            json.dump({"KPP-2026-0101|color": {"total": 6, "locked_at": ts(0)}}, f)
+        pms = FakePMS()
+        eff = erp_eff("KPP-2026-0101", title="BrandX")
+        for m in range(6):
+            pms_sync.progress_on_ingest(irec(m, "grade-01", set(range(m + 1))), eff, pms, self.store)
+        for m in range(6, 20):                                          # VFX v2 replaces SH002, grade carried
+            pms_sync.progress_on_ingest(irec(m, "grade-01", set(range(6)), replaced={2}), eff, pms, self.store)
+        for m in range(20, 60):
+            pms_sync.progress_on_ingest(irec(m, "grade-01", set(range(6)), replaced={2}), eff, pms, self.store)
+        self.assertFalse(any(b["done"] for b in pms.bodies))
+        self.assertEqual(pms.bodies[-1]["done_count"], 5)
+
+
 class PmsCheck(unittest.TestCase):
     """the local gate mirrors PMS 9e67f60 _check_v2 (and refuses 100 without done, our own rule)"""
     BASE = {"project_no": "P", "stage": "color", "observed_at": "2026-10-14T03:00:00Z"}

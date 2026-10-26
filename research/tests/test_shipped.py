@@ -48,9 +48,41 @@ def test_shipped_path_on_every_library_scenario(path, sc):
 
 @pytest.mark.parametrize("path,sc", SCENARIOS, ids=[p.stem for p, _ in SCENARIOS])
 def test_lock_mode_with_a_confirmed_scope_never_falsely_completes(path, sc):
-    _, res = library.evaluate(report.with_confirmed_scope(sc), ["SVL"])
-    outs, m, inv = res["SVL"]
-    assert m["false_completion"] is False and inv == []
+    _, res = library.evaluate(report.with_confirmed_scope(sc), ["SVL", "SVIL"])
+    for name in ("SVL", "SVIL"):
+        outs, m, inv = res[name]
+        assert m["false_completion"] is False and inv == [], name
+
+
+# step 3 is a port of the study's reference ledger (C3): the shipped code must give the same answers.
+# Expected differences, each stricter on the shipped side: with D1 none the scenarios that confirm a scope
+# (confirm_scope op: WC02b, WC10, WC11, WC12) are never done; a hold restarts the stability window (WC37).
+SVI_VS_C3 = {"WC02b_vfx_late_confirmed_list", "WC10_client_notes_rework", "WC11_revision_days_after_delivery",
+             "WC12_look_lut_on_all_clips"}
+SVIL_VS_C3_CONFIRMED = {"WC37_detector_warmup_reopen"}
+
+
+class _NoGap(S.SVILShipped):
+    name = "SVIL_nogap"
+    config = {"scope_source": ("lock",), "stable_gap_min": 1e9}
+
+
+@pytest.mark.parametrize("path,sc", SCENARIOS, ids=[p.stem for p, _ in SCENARIOS])
+def test_identity_ledger_matches_the_reference_c3(path, sc):
+    _, res = library.evaluate(sc, ["C3", "SVI"])
+    if sc["id"] not in SVI_VS_C3:
+        assert report.cell(res["SVI"][1]) == report.cell(res["C3"][1])
+    else:
+        assert not res["SVI"][1]["false_completion"]
+    obs = engine.expand(report.with_confirmed_scope(sc))
+    c3, ng = S.run(S.C3Recommended, obs), S.run(_NoGap, obs)
+    from sim import metrics
+    mc, mn = metrics.score(obs, c3), metrics.score(obs, ng)
+    if sc["id"] not in SVIL_VS_C3_CONFIRMED:
+        assert report.cell(mn) == report.cell(mc)        # same answers once polls are dense enough
+    assert not mn["false_completion"]
+    for a, b in zip(c3, ng):                             # never done where the reference is not
+        assert not b["done"] or a["done"]
 
 
 def test_the_2026_10_14_replay_never_emits_complete_or_100():
@@ -182,6 +214,14 @@ def test_shipped_never_unconfirmed_done_even_with_invisible_edits(genes):
 
 
 @SET
+@given(st.lists(st.tuples(st.sampled_from(DENSE_OPS + ["replace", "replace", "peek_old"]), st.integers(0, 9),
+                          st.integers(1, 3)), min_size=3, max_size=16))
+def test_identity_ledger_lock_done_is_true_on_dense_observable_histories_with_replace(genes):
+    sc = fuzz.compose(genes, settle_tail=40)
+    assert fuzz.violations(sc, "SVIL") == []
+
+
+@SET
 @given(st.lists(GENE_DENSE, min_size=3, max_size=16))
 def test_lock_mode_done_is_true_on_dense_observable_histories_without_replace(genes):
     sc = fuzz.compose(genes, settle_tail=40)
@@ -196,3 +236,4 @@ def test_known_limit_lock_mode_counts_cannot_see_replace_clip_with_a_kept_grade(
     sc = fuzz.compose(genes, settle_tail=40)
     assert {x["inv"] for x in fuzz.violations(sc, "SVL")} == {"INV7_done_is_true"}
     assert fuzz.violations(sc, "SV") == []
+    assert fuzz.violations(sc, "SVIL") == []          # the identity ledger (step 3) sees the new version

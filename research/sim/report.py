@@ -22,6 +22,8 @@ DATA = {
     "C4": ("as S3 + offline timeline item list", "partly: offline timeline is read today for duration only"),
     "SV": ("same as Q1 (counts + grade.pending + booking project_no/name)", "yes (shipped on night/progress-v2)"),
     "SVL": ("as SV + a human scope lock (shot count) per project_no/stage", "yes (scope_locks.json; off by default)"),
+    "SVI": ("as SV + per-item identity from the poller (items, offline_shots)", "server yes; poller NO (change pending owner sign-off)"),
+    "SVIL": ("as SVI + a scope lock", "server yes; poller NO; lock file yes"),
 }
 
 
@@ -121,7 +123,7 @@ def with_confirmed_scope(sc):
     return sc
 
 
-def confirmed_table(dirs=None, names=("S0", "S2", "C3", "C4", "SVL")):
+def confirmed_table(dirs=None, names=("S0", "S2", "C3", "C4", "SVL", "SVIL")):
     rows = []
     for _, sc in library.load_all(dirs):
         if sc.get("status") == "new":
@@ -143,8 +145,9 @@ def confirmed_table(dirs=None, names=("S0", "S2", "C3", "C4", "SVL")):
     missed = [sc["id"] for sc, _, res in rows if res["C3"][1]["missed_completion"]]
     out += ["", f"C3 false completions with a confirmed list: {', '.join(fc) or 'none'}.",
             f"C3 still never done with a confirmed list: {', '.join(missed) or 'none'}."]
-    if "SVL" in names:
-        fcl = [sc["id"] for sc, _, res in rows if res["SVL"][1]["false_completion"]]
-        out.append(f"SVL (shipped server path, D1 = lock, counts only) false completions with a confirmed list: "
-                   f"{', '.join(fcl) or 'none'}.")
+    for n in ("SVL", "SVIL"):
+        if n in names:
+            fcl = [sc["id"] for sc, _, res in rows if res[n][1]["false_completion"]]
+            out.append(f"{n} (shipped server path, D1 = lock) false completions with a confirmed list: "
+                       f"{', '.join(fcl) or 'none'}.")
     return "\n".join(out)
