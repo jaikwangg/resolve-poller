@@ -1,5 +1,10 @@
 #!/bin/sh
-# One command for every automated check:   ./run_tests.sh [safety|worstcase|replay|all]   (default all)
+# One command for every automated check:   ./run_tests.sh [safety|worstcase|replay|research|all]   (default all)
+#   all       = every agent/server unittest module + the progress research suite (research/run.sh, fast mode)
+#   research  = only research/run.sh (pytest "not slow" + sim.run_all summary); needs pytest + hypothesis:
+#               PY_RESEARCH (default ./.venv-research/bin/python, else python3)
+# RAM is tight: run the whole command under ONE outer lock, e.g.  flock /path/test.lock ./run_tests.sh all
+# (research/run.sh is called with LOCK=none so it does not take a second lock and deadlock under the outer one).
 #
 # Marker convention (shared with the progress worst-case suite): each test module declares
 #   MARKERS = {"safety"}            workstation safety (API allowlist, fail-closed, budgets, deploy kit, lease/health)
@@ -18,6 +23,7 @@ fail=0; ran=0; failed=""
 has_marker() { grep -Eq "^MARKERS *= *\{[^}]*\"$2\"" "$1"; }
 
 for side in agent server; do
+  [ "$SEL" = research ] && break
   [ -d "$ROOT/$side/tests" ] || continue
   PY=$PY_AGENT; [ $side = server ] && PY=$PY_SERVER
   for f in "$ROOT/$side"/tests/test_*.py; do
@@ -38,6 +44,17 @@ for side in agent server; do
     fi
   done
 done
-echo "--- $ran module(s), selection=$SEL"
+if [ "$SEL" = all ] || [ "$SEL" = research ]; then
+  PY_RESEARCH="${PY_RESEARCH:-$ROOT/.venv-research/bin/python}"
+  [ -x "$PY_RESEARCH" ] || PY_RESEARCH=python3
+  ran=$((ran + 1))
+  echo "research research/run.sh (fast)"
+  if PY="$PY_RESEARCH" LOCK="${RESEARCH_LOCK:-none}" sh "$ROOT/research/run.sh"; then
+    echo "research research/run.sh               ok"
+  else
+    echo "research research/run.sh               FAIL"; fail=1; failed="$failed research/run.sh"
+  fi
+fi
+echo "--- $ran unit(s), selection=$SEL"
 [ $fail = 0 ] && echo "ALL PASSED" || echo "FAILED:$failed"
 exit $fail

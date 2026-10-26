@@ -175,7 +175,7 @@ though finished, W value lands on the wrong project, L nothing sent; number = ma
 ### Replay of the stored real records (fixture)
 
 <!-- BEGIN GENERATED:replay -->
-Replay of 263 real records from /home/worakij/github/editortrack-wc/server/tests/fixtures/replay
+Replay of 263 real records from server/tests/fixtures/replay
 
 | strategy | premature_100 | drop | unexplained_drop | jump | switch | sent |
 |---|---|---|---|---|---|---|

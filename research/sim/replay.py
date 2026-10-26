@@ -133,8 +133,17 @@ def run(dirs=None):
     return out
 
 
+def _shown(d):
+    """Repo-relative path when inside the repo, so generated docs do not depend on the checkout location."""
+    p = pathlib.Path(d).resolve()
+    try:
+        return str(p.relative_to(REPO))
+    except ValueError:
+        return str(p)
+
+
 def markdown(res, detail=("S0", "C3")):
-    lines = [f"Replay of {res['records']} real records from {', '.join(res['dirs'])}", ""]
+    lines = [f"Replay of {res['records']} real records from {', '.join(_shown(d) for d in res['dirs'])}", ""]
     if not res["records"]:
         return "\n".join(lines + ["(no records)"])
     lines += ["| strategy | " + " | ".join(FLAGS) + " | sent |", "|---" * (len(FLAGS) + 2) + "|"]
