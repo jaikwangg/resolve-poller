@@ -219,7 +219,7 @@ class Guarded:
         ctx = object.__getattribute__(self, "_c")
         obj = object.__getattribute__(self, "_o")
         if name in CONSTANTS:
-            return getattr(obj, name, None)
+            return wrap(getattr(obj, name, None), ctx)   # a non-primitive constant still comes back guarded
         if name.startswith("__"):
             raise AttributeError(name)
         if name not in ctx.names:               # refuse before touching the remote object
