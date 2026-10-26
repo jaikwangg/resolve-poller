@@ -37,7 +37,8 @@ python3 $K/screen_watch.py capture --out $R/baseline --hours 0.5                
 python3 $K/screen_watch.py analyze --run $R/baseline --no-operator    # INCOMPLETE by design: read the hotspots
 # S1 / S2 / S3 (masks from the baseline hotspots)
 python3 $K/screen_watch.py capture --out $R/S1 --hours 8 --mask 0.9,0,0.1,0.03
-python3 $K/screen_watch.py analyze --run $R/S1 --agent-log ~/.editortrack/agent.log --records <day>.jsonl --host $H
+python3 $K/screen_watch.py analyze --run $R/S1 --agent-log ~/.editortrack/agent.log --records <day>.jsonl --host $H \
+    [--first-frame-ok]     # only if the capture-time question was skipped and the lead checked the first key frame
 python3 $K/screen_watch.py analyze --run $R/S3 --agent-log ~/.editortrack/agent.log --records <day>.jsonl --host $H --no-operator
 # P1-P4
 python3 $K/playback_trials.py run --csv $R/P1.csv --timelines PB_4K,PB_8K --agent-dir $A
