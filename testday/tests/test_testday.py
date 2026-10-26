@@ -160,7 +160,7 @@ class Classify(unittest.TestCase):
     def test_user_change_at_turn_ok(self):
         rows = cap_rows([(998, 50, 0, None), (1000.8, 0.4, 1, "10,10,20,20")])
         _, st = screen_watch.classify(rows, self.turns)
-        self.assertEqual((st["fail"], st["user"]), (0, 1))
+        self.assertEqual((st["fail"], st["review"], st["user"]), (0, 1, 0))
 
     def test_unexplained_away_from_turn_needs_explaining(self):
         rows = cap_rows([(1100, 50, 0, None), (1102, 52, 1, "1,1,2,2")])
@@ -190,70 +190,154 @@ class Classify(unittest.TestCase):
 
     def test_grab_errors_skipped(self):
         rows = cap_rows([(998, 50, 0, None)]) + [{"epoch": "999", "note": "grab_error:OSError"}]
-        self.assertEqual(screen_watch.classify(rows, self.turns)[1]["frames"], 1)
+        st = screen_watch.classify(rows, self.turns)[1]
+        self.assertEqual((st["frames"], st["errors"]), (1, 1))
 
 
 class ScreenReplayEndToEnd(Tmp):
-    """Sample images through the real CLI: replay -> analyze, with an agent.log, as on the test day."""
+    """Sample images through the real CLI: replay -> analyze, with agent.log + records, as on the test day."""
+    base = 1761530400.0
 
-    def _frames(self, page_jump_at):
+    def _frames(self, page_jump_at, n=12, clock=True, idle0=120):
         ui = solid(160, 90, (30, 30, 30))
         ui = paint(ui, 0, 80, 160, 90, (60, 60, 70))        # page bar
         ui = paint(ui, 10, 82, 30, 88, (200, 120, 0))       # current page = "Edit" tab highlighted
         jumped = paint(paint(ui, 10, 82, 30, 88, (60, 60, 70)), 130, 82, 150, 88, (200, 120, 0))  # -> "Deliver"
-        listing, base = [], 1761530400.0                    # 2025-10-27 02:00:00 UTC (any fixed epoch)
-        for k in range(12):
-            t = base + 2 * k
+        listing = []
+        for k in range(n):
+            t = self.base + 2 * k
             f = jumped if t >= page_jump_at else ui
-            if k % 5 == 4:                                   # clock in the top-right corner ticks
+            if clock and k % 5 == 4:                         # clock in the top-right corner ticks
                 f = paint(f, 150, 0, 159, 3, (255, 255, 255))
             p = os.path.join(self.tmp, "f%02d.png" % k)
             with open(p, "wb") as fh:
                 fh.write(imgdiff.write_png(f))
-            listing.append((t, 120 + 2 * k, p))
+            listing.append((t, idle0 + 2 * k, p))
         lst = os.path.join(self.tmp, "frames.csv")
         with open(lst, "w") as fh:
             fh.write("epoch,idle_sec,path\n" + "".join("%s,%s,%s\n" % x for x in listing))
-        return base, lst
+        return lst
 
-    def _agent_log(self, turn_epoch):
+    def _agent_log(self, turn_epoch, result="200"):
         import time as _t
         p = os.path.join(self.tmp, "agent.log")
         with open(p, "w") as fh:
-            fh.write("--- %s poll ---\n200\n" % _t.strftime("%Y-%m-%d %H:%M:%S", _t.localtime(turn_epoch)))
+            fh.write("--- %s poll ---\n%s\n" % (_t.strftime("%Y-%m-%d %H:%M:%S", _t.localtime(turn_epoch)), result))
         return p
+
+    def _records(self, *epochs):
+        return write_jsonl(os.path.join(self.tmp, "day.jsonl"), [rec(e, turn_ms=500) for e in epochs])
 
     def _run(self, *args):
         return subprocess.run([sys.executable, str(KIT / "screen_watch.py")] + list(args),
                               capture_output=True, text=True, timeout=120)
 
+    def _analyze(self, run, *extra):
+        return self._run("analyze", "--run", run, "--no-operator", "--min-scans", "1", *extra)
+
     def test_page_jump_at_agent_turn_is_detected(self):
-        base, lst = self._frames(page_jump_at=1761530400.0 + 12)
+        lst = self._frames(page_jump_at=self.base + 12)
         run = os.path.join(self.tmp, "run")
         r = self._run("replay", "--list", lst, "--out", run, "--mask", "0.9,0,0.1,0.1")
         self.assertEqual(r.returncode, 0, r.stderr)
-        r = self._run("analyze", "--run", run, "--agent-log", self._agent_log(base + 11), "--no-operator")
+        r = self._analyze(run, "--records", self._records(self.base + 11.5), "--host", "grade-01")
         self.assertEqual(r.returncode, 1, r.stdout)
-        self.assertIn("FAIL", r.stdout)
+        self.assertIn("**FAIL**", r.stdout)
         res = json.load(open(os.path.join(run, "analysis.json")))
         self.assertEqual(res["stats"]["fail"], 1)
         self.assertEqual(res["stats"]["changes"], 1)          # the masked clock never counted
 
-    def test_static_screen_passes(self):
-        base, lst = self._frames(page_jump_at=10 ** 12)      # never
+    def test_static_screen_with_scans_passes(self):
+        lst = self._frames(page_jump_at=10 ** 12)
         run = os.path.join(self.tmp, "run")
         self._run("replay", "--list", lst, "--out", run, "--mask", "0.9,0,0.1,0.1")
-        r = self._run("analyze", "--run", run, "--agent-log", self._agent_log(base + 11), "--no-operator")
+        r = self._analyze(run, "--records", self._records(self.base + 11.5), "--host", "grade-01",
+                          "--agent-log", self._agent_log(self.base + 11))
         self.assertEqual(r.returncode, 0, r.stdout)
-        self.assertIn("PASS", r.stdout)
+        self.assertIn("**PASS**", r.stdout)
 
-    def test_no_turns_is_not_a_pass(self):
-        base, lst = self._frames(page_jump_at=10 ** 12)
+    def test_no_records_is_incomplete_never_pass(self):
+        lst = self._frames(page_jump_at=10 ** 12)
+        run = os.path.join(self.tmp, "run")
+        self._run("replay", "--list", lst, "--out", run, "--mask", "0.9,0,0.1,0.1")
+        r = self._analyze(run, "--agent-log", self._agent_log(self.base + 11))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("**INCOMPLETE**", r.stdout)
+        self.assertNotIn("PASS", open(os.path.join(run, "analysis.md")).read())
+
+    def test_silent_agent_is_not_evidence(self):
+        lst = self._frames(page_jump_at=10 ** 12)
+        run = os.path.join(self.tmp, "run")
+        self._run("replay", "--list", lst, "--out", run, "--mask", "0.9,0,0.1,0.1")
+        recs = write_jsonl(os.path.join(self.tmp, "day.jsonl"), [rec(self.base + 11.5, "user_active")])
+        r = self._analyze(run, "--agent-log", self._agent_log(self.base + 11, "None"), "--records", recs,
+                          "--host", "grade-01")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("**INCOMPLETE**", r.stdout)
+        self.assertIn("silent 'None' 1 ignored", r.stdout)
+
+    def test_change_away_from_turns_is_pending(self):
+        lst = self._frames(page_jump_at=self.base + 20)
+        run = os.path.join(self.tmp, "run")
+        self._run("replay", "--list", lst, "--out", run, "--mask", "0.9,0,0.1,0.1")
+        r = self._analyze(run, "--records", self._records(self.base + 3.5), "--host", "grade-01")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("**PENDING**", r.stdout)
+
+    def test_records_need_host(self):
+        lst = self._frames(page_jump_at=10 ** 12)
         run = os.path.join(self.tmp, "run")
         self._run("replay", "--list", lst, "--out", run)
-        r = self._run("analyze", "--run", run, "--no-operator")
-        self.assertEqual(r.returncode, 1)
-        self.assertIn("no agent turns", r.stdout)
+        r = self._analyze(run, "--records", self._records(self.base + 3.5))
+        self.assertNotEqual(r.returncode, 0)
+
+
+class Coverage(unittest.TestCase):
+    def rows(self, epochs, err=()):
+        return [{"epoch": str(t), "note": "grab_error:OSError" if t in err else ""} for t in epochs]
+
+    def test_short_run(self):
+        p = screen_watch.coverage(self.rows([0, 2, 4]), [], {"hours": 1, "interval": 2})
+        self.assertTrue(any("covers" in x for x in p))
+
+    def test_turn_in_gap(self):
+        rows = self.rows([0, 2, 4, 100, 102])
+        turns = [{"start": 50, "end": 51}]
+        self.assertTrue(any("gaps" in x for x in screen_watch.coverage(rows, turns, {"interval": 2})))
+        self.assertEqual(screen_watch.coverage(rows, [{"start": 1, "end": 1.5}], {"interval": 2}), [])
+
+    def test_errors(self):
+        rows = self.rows(list(range(0, 200, 2)), err=(10, 12))
+        self.assertTrue(any("failed" in x for x in screen_watch.coverage(rows, [], {"interval": 2})))
+
+    def test_disk_stop_and_unconfirmed(self):
+        p = screen_watch.coverage(self.rows([0, 2]), [], {"disk_stop": "disk_stop:max_gb",
+                                                          "first_frame_confirmed": False})
+        self.assertEqual(len(p), 2)
+
+
+class KeeperAndStack(Tmp):
+    def test_budget_stops_keeping(self):
+        os.makedirs(os.path.join(self.tmp, "frames"))
+        k = screen_watch.Keeper(self.tmp, max_gb=1e-9 * 10, min_free_gb=0)
+        self.assertTrue(k.keep(1.5, solid(40, 20), [], "change"))
+        self.assertEqual(k.keep(2.5, solid(40, 20), [], "change"), "")
+        self.assertEqual(k.stopped, "disk_stop:max_gb")
+        self.assertEqual(len(os.listdir(os.path.join(self.tmp, "frames"))), 1)
+
+    def test_min_free(self):
+        os.makedirs(os.path.join(self.tmp, "frames"))
+        k = screen_watch.Keeper(self.tmp, max_gb=5, min_free_gb=1e9)    # more free space than any disk has
+        self.assertEqual(k.keep(1.0, solid(4, 4), [], "x"), "")
+        self.assertEqual(k.stopped, "disk_stop:min_free")
+
+    def test_stack_two_displays(self):
+        a, b = solid(10, 4), paint(solid(10, 6), 0, 0, 1, 1, (9, 9, 9))
+        f = screen_watch.stack([a, b])
+        self.assertEqual((f.w, f.h), (10, 10))
+        self.assertTrue(imgdiff.diff(screen_watch.stack([a, solid(10, 6)]), f)["changed"])
+        with self.assertRaises(ValueError):
+            screen_watch.stack([a, solid(12, 4)])
 
 
 # ---------------------------------------------------------------- dummy project generator
