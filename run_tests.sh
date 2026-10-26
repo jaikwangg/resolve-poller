@@ -1,9 +1,10 @@
 #!/bin/sh
-# One command for every automated check:   ./run_tests.sh [safety|worstcase|replay|all]   (default all)
+# One command for every automated check:   ./run_tests.sh [safety|worstcase|testday|replay|all]   (default all)
 #
 # Marker convention (shared with the progress worst-case suite): each test module declares
 #   MARKERS = {"safety"}            workstation safety (API allowlist, fail-closed, budgets, deploy kit, lease/health)
 #   MARKERS = {"worstcase"}         progress-metric worst cases
+#   MARKERS = {"testday"}           phase-3 test-day kit (testday/: generator, screen diff, measurements, drill)
 # Modules without MARKERS (e.g. server/tests/test_replay.py) run under "all" and "replay".
 # Each module runs in its own process (agent modules read env at import; keeps RAM low).
 # Every future workstation incident gets a regression test here before the fix ships.
@@ -17,7 +18,7 @@ fail=0; ran=0; failed=""
 
 has_marker() { grep -Eq "^MARKERS *= *\{[^}]*\"$2\"" "$1"; }
 
-for side in agent server; do
+for side in agent server testday; do
   [ -d "$ROOT/$side/tests" ] || continue
   PY=$PY_AGENT; [ $side = server ] && PY=$PY_SERVER
   for f in "$ROOT/$side"/tests/test_*.py; do
