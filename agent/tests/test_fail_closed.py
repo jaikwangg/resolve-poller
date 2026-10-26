@@ -15,7 +15,7 @@ from tests.util import agent_env, idle, AGENT        # noqa: E402
 from tests.mock_resolve import World, loader          # noqa: E402
 from tests.fake_server import FakeServer              # noqa: E402
 
-SAFETY = True
+MARKERS = {"safety"}   # shared marker convention: ./run_tests.sh safety
 PREFLIGHT = {"GetProductName", "GetVersionString", "GetProjectManager", "GetCurrentProject",
              "GetCurrentPage", "IsRenderingInProgress"}
 

@@ -25,6 +25,7 @@ import explain as _ex
 import report as _rep
 import projects as _proj
 import pms_sync
+import agent_health
 
 _last_pushed = {}          # (job_id, stage) -> % ล่าสุดที่ส่ง PMS สำเร็จ
 
@@ -61,6 +62,40 @@ async def ingest(req: Request, authorization: str = Header(default="")):
         except Exception:
             pass
     return {"ok": True, "pushed": pushed}
+
+
+# ---------------- agent fleet control + health ----------------
+@app.get("/agent/control")
+def agent_control(host: str = "", v: str = "", authorization: str = Header(default="")):
+    """lease ที่ agent ต้องได้ก่อนแตะ Resolve — ไม่มีไฟล์/ไม่รู้จัก/เวอร์ชันไม่อนุญาต = ปิด (fail closed)"""
+    if not TOKEN or authorization != f"Bearer {TOKEN}":
+        raise HTTPException(status_code=401, detail="unauthorized")
+    return agent_health.control_for(STORE, host, v)
+
+
+@app.get("/api/health")
+def api_health(days: int = 2):
+    rows = agent_health.health(_load_recent(days), control=agent_health.load_control(STORE))
+    return JSONResponse({"hosts": sorted(rows.values(), key=lambda r: r["host"]),
+                         "control": agent_health.load_control(STORE)})
+
+
+@app.get("/health")
+def health_page():
+    from fastapi.responses import HTMLResponse
+    import html
+    rows = agent_health.health(_load_recent(2), control=agent_health.load_control(STORE))
+    tr = "".join(
+        "<tr class='%s'><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % tuple(
+            html.escape(str(x)) for x in (r["status"], r["host"], r["status"], r.get("version"), r.get("last_seen"),
+                                          r.get("last_ok_poll"), r.get("max_rss_mb"), r.get("queue_lines"),
+                                          "; ".join(r["alerts"] + r["warnings"])))
+        for r in sorted(rows.values(), key=lambda r: r["host"]))
+    return HTMLResponse("<!doctype html><meta charset=utf-8><title>Agent health</title>"
+                        "<style>body{font:14px system-ui;margin:16px;background:#fff;color:#111}"
+                        "td,th{padding:4px 8px;border-bottom:1px solid #ddd}.alert{background:#fde2e2}.warn{background:#fff4d6}</style>"
+                        "<h1>Agent health</h1><table><tr><th>host</th><th>status</th><th>version</th><th>last seen</th>"
+                        "<th>last Resolve poll</th><th>max RSS MB</th><th>queue</th><th>issues</th></tr>" + tr + "</table>")
 
 
 # ---------------- load / helpers ----------------

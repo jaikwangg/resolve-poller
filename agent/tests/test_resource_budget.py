@@ -15,7 +15,7 @@ from tests.util import agent_env, idle, BASE_ENV, AGENT     # noqa: E402
 from tests.mock_resolve import World, loader                 # noqa: E402
 from tests.fake_server import FakeServer                     # noqa: E402
 
-SAFETY = True
+MARKERS = {"safety"}   # shared marker convention: ./run_tests.sh safety
 RUN_TURN = str(pathlib.Path(__file__).with_name("run_turn.py"))
 
 

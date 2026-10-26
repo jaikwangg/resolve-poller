@@ -9,7 +9,7 @@ import os, pathlib, stat, subprocess, sys, tempfile, unittest
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from tests.util import agent_env, AGENT            # noqa: E402
 
-SAFETY = True
+MARKERS = {"safety"}   # shared marker convention: ./run_tests.sh safety
 DEPLOY = AGENT / "deploy"
 REPO = AGENT.parent
 

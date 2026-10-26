@@ -18,7 +18,7 @@ from tests.util import agent_env, idle, AGENT          # noqa: E402
 from tests.mock_resolve import World, loader            # noqa: E402
 import resolve_guard as RG                              # noqa: E402
 
-SAFETY = True
+MARKERS = {"safety"}   # shared marker convention: ./run_tests.sh safety
 
 RUNTIME = ["runner.py", "collect.py", "resolve_poller.py", "grade_detect.py", "scope.py", "joblink.py",
            "fs_collector.py", "subtitle_collector.py", "safety.py", "resolve_guard.py", "activity_sampler.py"]
