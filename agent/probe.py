@@ -14,6 +14,17 @@ render job 1 ตัวในคิว จะยืนยันได้ครบ
 """
 import os, sys, json, datetime, pathlib
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from resolve_guard import guard, Ctx, allowed_names
+
+# zero-incident: probe เรียก method หลายตัวเพื่อสำรวจ → รันได้เฉพาะ project ทดสอบ (dummy) เท่านั้น
+#   python3 probe.py --dummy-project                 # ไม่แตะ render queue / ไม่เปลี่ยนหน้า
+#   python3 probe.py --dummy-project --unsafe-render # + §4 render queue (เด้ง Deliver) + คืนหน้าด้วย OpenPage
+UNSAFE_RENDER = "--unsafe-render" in sys.argv
+if "--dummy-project" not in sys.argv:
+    sys.exit("probe.py: ใช้กับ project ทดสอบเท่านั้น (ไม่ใช่งานลูกค้า) — ยืนยันด้วย --dummy-project")
+CTX = Ctx(names=allowed_names(extended=True, probe=True, probe_unsafe=UNSAFE_RENDER))
+
 REPORT = {"ts": datetime.datetime.now().isoformat(), "checks": {}, "methods": {}, "color": {}, "audio": {}}
 
 
@@ -77,7 +88,7 @@ def load_resolve():
     if mod not in sys.path:
         sys.path.append(mod)
     import DaVinciResolveScript as bmd
-    return bmd.scriptapp("Resolve")
+    return guard(bmd.scriptapp("Resolve"), CTX)
 
 
 def save_and_exit(code=0):
@@ -85,7 +96,7 @@ def save_and_exit(code=0):
     try:
         r = globals().get("resolve")
         sp = globals().get("_START_PAGE")
-        if r is not None and sp:
+        if UNSAFE_RENDER and r is not None and sp:
             r.OpenPage(sp)
             print(f"  ↩ คืนหน้าเดิม: {sp}")
     except Exception:
@@ -155,7 +166,7 @@ if not proj:
 
 probe_list(proj, [("GetName",), ("GetTimelineCount",), ("IsRenderingInProgress",),
                   ("GetCurrentRenderMode",), ("GetSetting", ("timelineFrameRate",)),
-                  ("GetRenderJobList",), ("GetCurrentTimeline",)], "Project", "project")
+                  ("GetCurrentTimeline",)], "Project", "project")
 
 tl = proj.GetCurrentTimeline()
 if not tl:
@@ -179,8 +190,10 @@ print(f"\n  → fps = {FPS}")
 
 # ---------- 4. render queue — ชื่อ key จริง ----------
 h("4. RENDER QUEUE — ชื่อ key จริง")
-print("  (ℹ️ ขั้นนี้จะเด้งไปหน้า Deliver ชั่วคราว — probe จะคืนหน้าเดิมให้ตอนจบ)")
-_, jobs = call(proj, "GetRenderJobList", show=False)
+if not UNSAFE_RENDER:
+    print("  ข้าม (GetRenderJobList เด้งหน้า Deliver) — agent ไม่ใช้ render queue แล้ว · ใส่ --unsafe-render ถ้าจำเป็นจริง")
+print("  (ℹ️ ขั้นนี้จะเด้งไปหน้า Deliver ชั่วคราว — probe จะคืนหน้าเดิมให้ตอนจบ)" if UNSAFE_RENDER else "")
+_, jobs = call(proj, "GetRenderJobList", show=False) if UNSAFE_RENDER else (False, None)
 jobs = jobs or []
 print(f"  jobs ในคิว = {len(jobs)}")
 if not jobs:

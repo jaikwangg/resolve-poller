@@ -20,10 +20,10 @@ def canon(s):
     return _ALIAS.get((s or "").strip().lower(), (s or "").strip().lower())
 
 
-def collect(stage):
+def collect(stage, idle_fn=None):
     s = canon(stage)
     if s in ("conform", "color"):
-        return _resolve(s)
+        return _resolve(s, idle_fn)
     if s in ("data", "master"):
         import fs_collector
         return fs_collector.collect(s)
@@ -33,9 +33,9 @@ def collect(stage):
     return {"ok": False, "stage": s, "reason": "unknown_stage", "project": None, "job_hint": None}
 
 
-def _resolve(stage):
+def _resolve(stage, idle_fn=None):
     import resolve_poller, scope
-    snap = resolve_poller.snapshot()
+    snap = resolve_poller.snapshot(idle_fn=idle_fn)
     if not snap.get("ok"):
         return {"ok": False, "stage": stage, "reason": snap.get("reason"),
                 "project": None, "job_hint": None, "raw": snap}
@@ -60,4 +60,6 @@ def _resolve(stage):
 
 if __name__ == "__main__":
     import json, os
-    print(json.dumps(collect(os.environ.get("EDITORTRACK_STAGE", "conform")), ensure_ascii=False, indent=2, default=str))
+    import resolve_poller
+    print(json.dumps(collect(os.environ.get("EDITORTRACK_STAGE", "conform"), resolve_poller.idle_seconds),
+                     ensure_ascii=False, indent=2, default=str))

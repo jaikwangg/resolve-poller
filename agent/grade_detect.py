@@ -13,18 +13,29 @@ ExportLUT เขียนไฟล์ temp อย่างเดียว ไม
 เปลี่ยน, หรือครบ RECHECK_SEC · จำกัด export ต่อรอบด้วย BUDGET_MS
 """
 import json, os, pathlib, tempfile, time
+from resolve_guard import ForbiddenCall, ScanAborted, GATED
 
+# lut ต้องเปิด gate EDITORTRACK_ALLOW_EXPORT_LUT=1 ด้วย (ExportLUT ไม่ใช่ getter ล้วน — ดู resolve_guard.GATED)
+# ไม่เปิด gate → ใช้ nodes เสมอ (fail closed) แม้ตั้ง METHOD=lut
 METHOD = os.environ.get("EDITORTRACK_GRADE_METHOD", "lut").strip().lower()
+
+
+def lut_allowed():
+    return (os.environ.get(GATED["ExportLUT"][0]) or "").strip() == "1"
+
 RECHECK_SEC = int(os.environ.get("EDITORTRACK_GRADE_RECHECK_SEC", "900"))
 BUDGET_MS = int(os.environ.get("EDITORTRACK_GRADE_BUDGET_MS", "3000"))
 EPS = float(os.environ.get("EDITORTRACK_GRADE_EPS", "0.004"))      # ~1/255 — ต่ำกว่านี้ถือว่าไม่ได้เปลี่ยนสี
 MAX_TIMELINES = 8              # จำผลไว้กี่ timeline (สลับ project ไปมาแล้วไม่ต้อง export ใหม่ทั้งหมด)
-CACHE = pathlib.Path(os.path.expanduser("~/.editortrack/grade_cache.json"))
+def _cache_path():
+    return pathlib.Path(os.environ.get("EDITORTRACK_STATE_DIR") or os.path.expanduser("~/.editortrack")) / "grade_cache.json"
 
 
 def _safe(obj, method, *args):
     try:
         return getattr(obj, method)(*args)
+    except (ForbiddenCall, ScanAborted):
+        raise
     except Exception:
         return None
 
@@ -74,6 +85,8 @@ def _export_dev(resolve, item, tmpdir):
             return None
         with open(path, encoding="utf-8", errors="replace") as f:
             return cube_deviation(f.read())
+    except (ForbiddenCall, ScanAborted):
+        raise
     except Exception:
         return None
     finally:
@@ -85,17 +98,18 @@ def _export_dev(resolve, item, tmpdir):
 
 def _load_cache():
     try:
-        return json.loads(CACHE.read_text(encoding="utf-8"))
+        return json.loads(_cache_path().read_text(encoding="utf-8"))
     except Exception:
         return {}
 
 
 def _save_cache(c):
     try:
-        CACHE.parent.mkdir(parents=True, exist_ok=True)
-        tmp = CACHE.with_suffix(".tmp")
+        cache = _cache_path()
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        tmp = cache.with_suffix(".tmp")
         tmp.write_text(json.dumps(c), encoding="utf-8")
-        tmp.replace(CACHE)
+        tmp.replace(cache)
     except Exception:
         pass
 
@@ -106,7 +120,10 @@ class Detector:
     def __init__(self, resolve, timeline, method=None, key=None):
         self.resolve = resolve
         self.method = (method or METHOD)
-        self.cur = _safe(_safe(timeline, "GetCurrentVideoItem"), "GetUniqueId")
+        self.gated = self.method == "lut" and not lut_allowed()
+        if self.gated:
+            self.method = "nodes"                         # ExportLUT ยังไม่ได้รับอนุญาต → nodes
+        self.cur = _safe(_safe(timeline, "GetCurrentVideoItem"), "GetUniqueId") if self.method == "lut" else None
         self.key = key or str(_safe(timeline, "GetUniqueId") or _safe(timeline, "GetName"))
         self.all = _load_cache() if self.method == "lut" else {}     # timeline key -> {uid: ผล}
         self.cache = self.all.pop(self.key, {})
@@ -119,9 +136,10 @@ class Detector:
         return bool(n and n > 1)
 
     def graded(self, item):
+        if self.method != "lut":                           # 2 calls ต่อ clip เท่านั้น
+            g = _safe(item, "GetNodeGraph")
+            return self._nodes(_safe(g, "GetNumNodes") if g is not None else None)
         sig, n = _signature(item)
-        if self.method != "lut":
-            return self._nodes(n)
         uid = _safe(item, "GetUniqueId") or f"{_safe(item, 'GetStart')}:{_safe(item, 'GetName')}"
         self.seen.add(uid)
         c = self.cache.get(uid)
@@ -155,5 +173,5 @@ class Detector:
                 pass
             if self.failed and not self.exported:
                 method = "nodes"                           # ExportLUT ใช้ไม่ได้ทั้งรอบ
-        return {"method": method, "exported": self.exported, "pending": self.pending,
+        return {"method": method, "lut_gated": self.gated, "exported": self.exported, "pending": self.pending,
                 "failed": self.failed, "ms": int((time.time() - self.t0) * 1000)}
