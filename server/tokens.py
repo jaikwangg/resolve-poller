@@ -95,8 +95,8 @@ def main(argv=None):
         print("\n".join([f"basic {u}" for u in sorted(users)] + [f"token {t}" for t in sorted(tokens)]) or "(none)")
         return 0
     if a.cmd == "reader-rm":
-        gone = users.pop(a.name, None) or tokens.pop(a.name, None)
-        if gone is None:
+        gone = [x for x in (users.pop(a.name, None), tokens.pop(a.name, None)) if x is not None]
+        if not gone:
             sys.exit(f"{a.name}: not in {path}")
         _save(path, data)
         print(f"removed {a.name}")

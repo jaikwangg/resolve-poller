@@ -10,7 +10,10 @@ a valid date + .jsonl are ever touched; agent_control.json and anything else is 
   python3 retention.py --scrub-personal [--dry-run]
                                             also rewrite kept files without the personal fields
                                             (user, activity.frontmost_name/bundle) that agents
-                                            before the data-minimisation change sent
+                                            before the data-minimisation change sent; today's
+                                            file is skipped (the server may be appending to it),
+                                            so run it with the server stopped to cover today too
+                                            (--include-today)
 
   N    = --days or EDITORTRACK_RETENTION_DAYS (default 90, minimum 1)
   store= --store or EDITORTRACK_STORE (default /srv/editortrack)
@@ -70,14 +73,21 @@ def scrub_file(path, dry_run):
         out.append(ln)
     if changed and not dry_run:
         fd, tmp = tempfile.mkstemp(prefix=".scrub-", dir=str(path.parent))
-        os.fchmod(fd, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write("".join(x + "\n" for x in out))
-        os.replace(tmp, path)
+        try:
+            os.fchmod(fd, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write("".join(x + "\n" for x in out))
+            os.replace(tmp, path)
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
     return changed
 
 
-def run(store, days, dry_run=False, scrub=False, today=None, echo=print):
+def run(store, days, dry_run=False, scrub=False, today=None, echo=print, include_today=False):
     store = pathlib.Path(store)
     if not store.is_dir():
         raise SystemExit(f"store {store} is not a directory")
@@ -88,8 +98,9 @@ def run(store, days, dry_run=False, scrub=False, today=None, echo=print):
             p.unlink()
     scrubbed = 0
     if scrub:
-        for _, p in day_files(store):
-            if p in gone:
+        today = today or datetime.date.today()
+        for d, p in day_files(store):
+            if p in gone or (d >= today and not include_today):
                 continue
             n = scrub_file(p, dry_run)
             if n:
@@ -106,9 +117,10 @@ def main(argv=None):
     ap.add_argument("--store")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--scrub-personal", action="store_true")
+    ap.add_argument("--include-today", action="store_true", help="scrub today's file too (server must be stopped)")
     a = ap.parse_args(argv)
     store = a.store or os.environ.get("EDITORTRACK_STORE") or DEFAULT_STORE
-    run(store, retention_days(a.days), a.dry_run, a.scrub_personal)
+    run(store, retention_days(a.days), a.dry_run, a.scrub_personal, include_today=a.include_today)
     return 0
 
 

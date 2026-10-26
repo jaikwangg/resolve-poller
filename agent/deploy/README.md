@@ -40,7 +40,7 @@ cat > deploy/env.sh <<'EOF'
 export EDITORTRACK_STAGE=color
 export EDITORTRACK_DETECT_GRADE=1
 export EDITORTRACK_SERVER=http://localhost:8000/ingest
-export EDITORTRACK_TOKEN=testtoken
+export EDITORTRACK_TOKEN="<token จาก tokens.py host-add>"
 export EDITORTRACK_HTTP_TIMEOUT=5
 export RESOLVE_SCRIPT_API="/Library/Application Support/Blackmagic Design/DaVinci Resolve/Developer/Scripting"
 export RESOLVE_SCRIPT_LIB="/Applications/DaVinci Resolve/DaVinci Resolve.app/Contents/Libraries/Fusion/fusionscript.so"
@@ -53,7 +53,7 @@ cat > deploy/env.sh <<'EOF'
 export EDITORTRACK_STAGE=color
 export EDITORTRACK_DETECT_GRADE=1
 export EDITORTRACK_SERVER=http://localhost:8000/ingest
-export EDITORTRACK_TOKEN=testtoken
+export EDITORTRACK_TOKEN="<token จาก tokens.py host-add>"
 export EDITORTRACK_HTTP_TIMEOUT=5
 export RESOLVE_SCRIPT_API="/opt/resolve/Developer/Scripting"
 export RESOLVE_SCRIPT_LIB="/opt/resolve/libs/Fusion/fusionscript.so"
@@ -62,7 +62,9 @@ EOF
 ```
 จากนั้น Terminal นึงเปิด server:
 ```sh
-cd ../server && pip3 install fastapi uvicorn && EDITORTRACK_TOKEN=testtoken uvicorn dashboard_api:app --port 8000
+cd ../server && pip3 install fastapi uvicorn && export EDITORTRACK_STORE=/tmp/et-data EDITORTRACK_TOKEN_MAP=/tmp/et-tokens.json EDITORTRACK_READ_AUTH=off \
+  && python3 tokens.py host-add "$(hostname)" && uvicorn dashboard_api:app --host 127.0.0.1 --port 8000
+# token ที่ host-add พิมพ์ออกมา = EDITORTRACK_TOKEN ของ agent (ไม่มี token ร่วมแล้ว — docs/SECURITY.md)
 ```
 อีก Terminal ยิง 1 รอบ (ต้อง `. deploy/env.sh` ก่อนเสมอ):
 ```sh
@@ -178,9 +180,11 @@ tail -f ~/.editortrack/agent.log
 **ชั้น 5 — end-to-end** (รัน server ทดสอบบนเครื่องเดียวกันก่อน):
 ```sh
 # Terminal A — server
-cd ../server && pip3 install fastapi uvicorn && EDITORTRACK_TOKEN=testtoken uvicorn dashboard_api:app --port 8000
+cd ../server && pip3 install fastapi uvicorn && export EDITORTRACK_STORE=/tmp/et-data EDITORTRACK_TOKEN_MAP=/tmp/et-tokens.json EDITORTRACK_READ_AUTH=off \
+  && python3 tokens.py host-add "$(hostname)" && uvicorn dashboard_api:app --host 127.0.0.1 --port 8000
+# token ที่ host-add พิมพ์ออกมา = EDITORTRACK_TOKEN ของ agent (ไม่มี token ร่วมแล้ว — docs/SECURITY.md)
 # Terminal B — ยิง 1 รอบไป localhost แล้วเปิด dashboard
-cd agent && . deploy/env.sh && EDITORTRACK_SERVER=http://localhost:8000/ingest EDITORTRACK_TOKEN=testtoken python3 runner.py   # ได้ 200
+cd agent && . deploy/env.sh && EDITORTRACK_SERVER=http://localhost:8000/ingest EDITORTRACK_TOKEN="<token จาก tokens.py host-add>" python3 runner.py   # ได้ 200
 ```
 เปิด `http://localhost:8000/`
 

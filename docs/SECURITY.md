@@ -52,8 +52,12 @@ Current live state (read on 2026-10-26, values not copied here):
 - No agent has sent a record since 2026-10-14; no agent is installed on a real machine.
 
 Why the order below is safe: the new variables are ignored by the old code, and the new code fails
-closed (401) if they are missing, so no step can expose data; the worst case is "pages need login /
-ingest refused".
+closed (401) if they are missing, so no step can expose data. **The real risk is autodeploy**: its smoke
+check (`SMOKE_URL="http://127.0.0.1:8000/"` in `~/tools/autodeploy/services/editortrack.conf`) needs a 200,
+and with the new code `/` answers 401. Autodeploy would then never record the deploy and would rebuild and
+restart the server every 2–3 minutes. It can also deploy the new code by itself as soon as the merge is on
+origin/main and the checkout is clean. Step C therefore pauses the autodeploy timer first and moves the smoke
+check to `/livez`.
 
 ### Step A — revoke the leaked token now (works with the code that is live today)
 
@@ -106,17 +110,23 @@ Unit diff (old -> `server/deploy/editortrack-server.service`):
 ```
 
 ```sh
+# 0) BEFORE the merge reaches origin/main: pause autodeploy and point its smoke check at /livez
+systemctl --user stop autodeploy@editortrack.timer
+C=~/tools/autodeploy/services/editortrack.conf; cp -p "$C" "$C.bak-$(date +%Y%m%d)"
+sed -i 's|^SMOKE_URL=.*|SMOKE_URL="http://127.0.0.1:8000/livez"|' "$C"
 U=~/.config/systemd/user/editortrack-server.service
 cp -p "$U" "$U.bak-stepC-$(date +%Y%m%d)"
+PREV=$(git -C ~/github/editortrack rev-parse HEAD); echo "$PREV"   # write it down for the rollback
 # 1) code: after review + push approval, night/security-min reaches origin/main; then in the live checkout
 #    (NEXT_STEPS.md must be committed or stashed first, owner decision #9):
 git -C ~/github/editortrack status --short            # must be empty
 systemctl --user stop editortrack-server.service
-git -C ~/github/editortrack pull --ff-only
+git -C ~/github/editortrack fetch -q origin && git -C ~/github/editortrack checkout -q --detach origin/main   # same as autodeploy does
+~/.editortrack-venv/bin/pip install -q -r ~/github/editortrack/server/requirements.txt
 # 2) data: copy (not move) the old store, private modes
 cp -a ~/github/editortrack/server/data/. /srv/editortrack/
 chmod 700 /srv/editortrack && find /srv/editortrack -type f -exec chmod 600 {} +
-python3 ~/github/editortrack/server/retention.py --store /srv/editortrack --scrub-personal --dry-run   # review, then without --dry-run
+python3 ~/github/editortrack/server/retention.py --store /srv/editortrack --scrub-personal --include-today --dry-run   # review, then without --dry-run (server is stopped here)
 # 3) unit
 cp ~/github/editortrack/server/deploy/editortrack-server.service "$U"
 systemctl --user daemon-reload && systemctl --user start editortrack-server.service
@@ -130,16 +140,33 @@ curl -s -o /dev/null -w '%{http_code}\n' $H/livez                 # 200
 curl -s -o /dev/null -w '%{http_code}\n' $H/api/jobs              # 401
 curl -s -o /dev/null -w '%{http_code}\n' $H/                      # 401
 curl -s -o /dev/null -w '%{http_code}\n' -u director $H/api/jobs  # 200 (password prompt)
-curl -s -o /dev/null -w '%{http_code}\n' -X POST $H/ingest -H 'Authorization: Bearer old-or-random-value-xxxxxxxxxxxx' -d '{}'   # 401
+curl -s -o /dev/null -w '%{http_code}\n' -X POST $H/ingest -H 'Authorization: Bearer random-value-xxxxxxxxxxxxxxxxxxxx' -d '{}'   # 401
+printf 'old token: '; read -rs OLD; echo
+curl -s -o /dev/null -w '%{http_code}\n' -X POST $H/ingest -H "Authorization: Bearer $OLD" -d '{}'   # 401 (leaked token)
+unset OLD
 journalctl --user -u editortrack-server -n 20 --no-pager           # warnings list anything missing
 ls -la /srv/editortrack                                            # drwx------ / -rw-------
+# all good: record the deploy for autodeploy, then resume it
+mkdir -p ~/.local/state/autodeploy
+git -C ~/github/editortrack rev-parse HEAD > ~/.local/state/autodeploy/editortrack.deployed
+systemctl --user start autodeploy@editortrack.timer
 ```
 
-Rollback C (≤ 1 min): `systemctl --user stop editortrack-server.service`,
-`cp -p "$U.bak-stepC-YYYYMMDD" "$U"`, `git -C ~/github/editortrack reset --hard <previous main sha>` only if the
-owner agrees (the checkout is the autodeploy source; otherwise `git revert` the merge on main and push),
-`systemctl --user daemon-reload && systemctl --user start editortrack-server.service`. The old data dir is
-untouched by step C (copied, not moved), so the old unit finds it as before. Delete
+Rollback C (≤ 1 min). Keep the autodeploy timer **stopped** until origin/main is reverted, or it redeploys
+the new code within a minute:
+
+```sh
+systemctl --user stop autodeploy@editortrack.timer editortrack-server.service
+cp -p "$U.bak-stepC-YYYYMMDD" "$U"
+cp -p "$C.bak-YYYYMMDD" "$C"                       # old code has no /livez (404), so the smoke check goes back to /
+git -C ~/github/editortrack checkout -q --detach "$PREV"
+systemctl --user daemon-reload && systemctl --user start editortrack-server.service
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8000/          # 200 = old code back
+# later, with push approval: git revert the merge on main, push, then
+# echo <reverted sha> > ~/.local/state/autodeploy/editortrack.deployed; start the timer
+```
+
+The old data dir is untouched by step C (copied, not moved), so the old unit finds it as before. Delete
 `~/github/editortrack/server/data` only after a week of clean running.
 
 ## 4. Routine rotation
@@ -186,3 +213,4 @@ Basic auth over plain HTTP on the LAN sends the password base64-encoded; TLS (Ca
 3. Caddy + TLS in front, or app auth alone on the LAN.
 4. Retention 90 days (data sheet says 90) and installing the retention timer.
 5. Who gets read logins.
+6. Step C edits `~/tools/autodeploy/services/editortrack.conf` (SMOKE_URL -> `/livez`), outside this repo.

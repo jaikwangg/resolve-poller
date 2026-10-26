@@ -63,6 +63,13 @@ class ReadAuth(Base):
             self.assertEqual(r.status_code, 401, p)
             self.assertIn("Basic", r.headers.get("www-authenticate", ""), p)
 
+    def test_methods_slashes_and_encoded_paths_need_auth(self):
+        for method, p in (("HEAD", "/api/jobs"), ("OPTIONS", "/api/jobs"), ("GET", "/api/jobs/"),
+                          ("GET", "//api/jobs"), ("GET", "/%61pi/jobs"), ("GET", "/api%2Fjobs"),
+                          ("GET", "/livez/"), ("GET", "/Ingest"), ("GET", "/agent/control/"),
+                          ("POST", "/ingest/"), ("GET", "/deck.html")):
+            self.assertEqual(self.c.request(method, p).status_code, 401, (method, p))
+
     def test_machine_token_does_not_grant_read(self):
         for p in ("/api/jobs", "/api/inbox", "/"):
             self.assertEqual(self.c.get(p, headers=authfix.machine("grade-01")).status_code, 401, p)
@@ -216,10 +223,13 @@ class Retention(unittest.TestCase):
 
     def test_scrub_personal(self):
         retention.run(self.d, 90, dry_run=True, scrub=True, today=self.today, echo=lambda *_: None)
-        self.assertIn('"user"', (self.d / "2026-10-26.jsonl").read_text())
+        self.assertIn('"user"', (self.d / "2026-10-25.jsonl").read_text())
         retention.run(self.d, 90, scrub=True, today=self.today, echo=lambda *_: None)
+        self.assertNotIn('"user"', (self.d / "2026-10-25.jsonl").read_text())
+        self.assertEqual(stat.S_IMODE((self.d / "2026-10-25.jsonl").stat().st_mode), 0o600)
+        self.assertIn('"user"', (self.d / "2026-10-26.jsonl").read_text())       # today: server may be appending
+        retention.run(self.d, 90, scrub=True, today=self.today, echo=lambda *_: None, include_today=True)
         self.assertNotIn('"user"', (self.d / "2026-10-26.jsonl").read_text())
-        self.assertEqual(stat.S_IMODE((self.d / "2026-10-26.jsonl").stat().st_mode), 0o600)
 
     def test_days_from_env_and_validation(self):
         os.environ["EDITORTRACK_RETENTION_DAYS"] = "30"
