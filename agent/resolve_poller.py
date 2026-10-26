@@ -32,6 +32,8 @@ MAX_CALLS = _envint("EDITORTRACK_MAX_CALLS", 20000)            # API calls per p
 MAX_CLIPS = _envint("EDITORTRACK_MAX_CLIPS", 5000)             # above this: counts only, no per-clip calls
 MIN_IDLE_SEC = _envint("EDITORTRACK_SCAN_MIN_IDLE_SEC", 5)     # scan only when no input for this long
 PLAYBACK_PROBE_MS = _envint("EDITORTRACK_PLAYBACK_PROBE_MS", 250)
+CHUNK_CLIPS = _envint("EDITORTRACK_CHUNK_CLIPS", 200)          # every N clips: yield to Resolve + re-check user input
+YIELD_MS = _envint("EDITORTRACK_YIELD_MS", 10)
 SKIP_PAGES = {p.strip() for p in os.environ.get("EDITORTRACK_SKIP_PAGES", "deliver").split(",") if p.strip()}
 # Resolve versions verified on a dummy project (phase 3). Unknown version -> no scan (fail closed).
 VERIFIED_VERSIONS = [v.strip() for v in os.environ.get("EDITORTRACK_RESOLVE_VERIFIED", "").split(",") if v.strip()]
@@ -95,6 +97,8 @@ def snapshot(idle_fn=None, sleep=time.sleep, load=None):
     except ForbiddenCall as e:
         return {"ok": False, "reason": "forbidden_call", "forbidden": str(e), "guard": _guard_info(ctx)}
     except ScanAborted as e:
+        if str(e) == "user_returned":                 # ผู้ใช้กลับมาแตะเครื่องระหว่างสแกน → หยุดทันที (ไม่ใช่ error)
+            return _skip("user_returned", ctx)
         return _skip("scan_budget", ctx, budget=str(e))
 
 
@@ -146,7 +150,7 @@ def _snapshot(ctx, idle_fn, sleep, load):
     tl_id = None
     if tl:
         tl_id = _safe(tl, "GetUniqueId") or tl.GetName()
-        out["timeline"], extra = _scan_timeline(resolve, proj, tl, pname, ctx)
+        out["timeline"], extra = _scan_timeline(resolve, proj, tl, pname, ctx, idle_fn, idle0, sleep)
         out.update(extra)
 
     # post-check: ถ้าระหว่างสแกน project/timeline/หน้าเปลี่ยน → ทิ้งผลรอบนี้ (ไม่คืนหน้าให้ — ห้ามแตะ UI)
@@ -168,7 +172,7 @@ def _snapshot(ctx, idle_fn, sleep, load):
     return out
 
 
-def _scan_timeline(resolve, proj, tl, pname, ctx):
+def _scan_timeline(resolve, proj, tl, pname, ctx, idle_fn=None, idle0=None, sleep=time.sleep):
     try:
         fps = float(proj.GetSetting("timelineFrameRate")) or 24.0
     except (ForbiddenCall, ScanAborted):
@@ -190,8 +194,15 @@ def _scan_timeline(resolve, proj, tl, pname, ctx):
     ranges = []          # (start, end, graded) ต่อ clip — ใช้ match marker→shot (สแกนรอบเดียว)
     clips_detail = []    # เปิดด้วย EXTRACT_CLIP_META เท่านั้น (ดึง meta ลึกราย clip)
     if per_clip:
+        n = 0
         for i, items in tracks:
             for it in items:
+                n += 1
+                if CHUNK_CLIPS and n % CHUNK_CLIPS == 0:
+                    sleep(YIELD_MS / 1000.0)          # ปล่อย main thread ของ Resolve เป็นช่วง ๆ
+                    now_idle = idle_fn() if idle_fn else None
+                    if now_idle is None or (idle0 is not None and now_idle < idle0):
+                        raise ScanAborted("user_returned")
                 g = det.graded(it) if det else None
                 if g:
                     graded += 1

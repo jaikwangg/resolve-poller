@@ -232,6 +232,16 @@ class PreChecks(unittest.TestCase):
                 self.assertLessEqual(set(w.calls) - PREFLIGHT, {"GetCurrentTimeline", "GetCurrentTimecode"})
                 self.assertLessEqual(len(w.calls), 12)
 
+    def test_user_returns_mid_scan_aborts_within_one_chunk(self):
+        with agent_env(EDITORTRACK_CHUNK_CLIPS="100", EDITORTRACK_YIELD_MS="0") as (m, sd):
+            w = World(n_clips=3000, tracks=3)
+            seq = iter([30] + [31] * 5 + [0.2] * 1000)     # input arrives after ~5 chunks
+            s = m["resolve_poller"].snapshot(idle_fn=lambda: next(seq), load=loader(w))
+            self.assertEqual(s["reason"], "user_returned")
+            self.assertLess(len(w.calls), 6 * 100 * 4 + 60)   # stopped at the next chunk boundary
+            m["runner"]  # no backoff for a user_returned skip
+            self.assertFalse(m["safety"].backoff_active())
+
     def test_no_project(self):
         s, w = self.snap(world=World(no_project=True))
         self.assertEqual(s["reason"], "no_project_open")
