@@ -90,6 +90,7 @@ spare machine first, then update the env and `killswitch.sh off`.
 | Agent | Resolve | OS | Python | Verified on | Steps passed | Signed |
 |---|---|---|---|---|---|---|
 | 0.9.0-safety | — | — | — | not yet verified on any machine | — | — |
+| 0.9.1-safety (ET-5 send policy, `AGENT_SEND_POLICY.md`) | — | — | — | not yet verified on any machine; stage 1 = phase-3 test day (C7) | — | — |
 
 ## 3. Runbooks
 
@@ -145,7 +146,9 @@ compatibility matrix.
 | Where | What | Cap / retention | Where enforced |
 |---|---|---|---|
 | Workstation `~/.editortrack/agent.log` | one line per turn | 1 MB, then cut to the last 200 KB | `deploy/run-agent.sh:15` (Linux/mac; **Windows TO BUILD**) |
-| Workstation `queue.jsonl` | records not yet delivered | 5000 lines / 10 MB, oldest dropped; flush ≤ 300 per turn | `agent/runner.py:18-20,145-213` |
+| Workstation `queue.jsonl` | records not yet delivered | 5000 lines / 10 MB, oldest dropped; flush ≤ 300 requests per turn; a record our server refuses (400 with its X-Editortrack-Reject marker) is dropped, never blocks the queue | `agent/runner.py` (`_flush_queue`, `AGENT_SEND_POLICY.md`) |
+| Workstation `rejected.log` / `rejected.json` | records the server refused or the agent's ts check dropped | 200 lines / 256 KB, newest kept; record kept only if ≤ 8 KB | `agent/runner.py:_reject` |
+| Workstation `send_backoff.json` | sender backoff | tiny | `agent/runner.py:_send_backoff_fail` |
 | Workstation `grade_cache.json` | per-clip grade results (clip UIDs) | 8 timelines | `agent/grade_detect.py:MAX_TIMELINES` |
 | Workstation `tmp/` | ExportLUT temp (only if gated on) | deleted per clip and per poll | `grade_detect.py:_export_dev`, `finish` |
 | Workstation total | | < 15 MB expected (§7 P4 verifies) | — |

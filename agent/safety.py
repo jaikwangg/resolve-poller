@@ -17,7 +17,7 @@ in particular never inside Resolve's project library / disk database / cache fol
 """
 import json, os, pathlib, sys, time, threading
 
-AGENT_VERSION = "0.9.0-safety"
+AGENT_VERSION = "0.9.1-safety"
 
 
 def _int(name, default):

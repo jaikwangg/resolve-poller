@@ -39,7 +39,10 @@ async def ingest(req: Request, authorization: str = Header(default="")):
     rec = _ex.finite(rec)                           # NaN/Infinity -> null (cannot be served back as JSON)
     why = _ex.record_problem(rec)
     if why:
-        raise HTTPException(status_code=400, detail=f"record ใช้ไม่ได้ ({why}): ต้องมี host และ ts (ISO มี timezone)")
+        # X-Editortrack-Reject: the marker that makes agent >= 0.9.1 drop THIS record instead of retrying it
+        # (a 400 without it, e.g. from a proxy, is retried) · AGENT_SEND_POLICY.md
+        raise HTTPException(status_code=400, detail=f"record ใช้ไม่ได้ ({why}): ต้องมี host และ ts (ISO มี timezone)",
+                            headers={"X-Editortrack-Reject": why})
     # เวลา/IP ฝั่ง server — ใช้ดูว่ามาสดหรือมาจาก offline queue
     rec["_rx"] = {"at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                   "ip": req.client.host if req.client else None}
