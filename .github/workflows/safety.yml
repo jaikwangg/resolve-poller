@@ -1,0 +1,37 @@
+# Workstation-safety + replay tests on every push/PR and nightly (catches drift even without commits).
+# Same entry point as local runs: ./run_tests.sh <selection>
+name: safety
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "17 19 * * *"        # 02:17 Asia/Bangkok
+  workflow_dispatch:
+jobs:
+  agent-and-server:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]   # grade rooms = Linux, conform = Mac. Windows: not covered yet (see MAINTENANCE.md)
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install fastapi uvicorn httpx
+      - name: safety suite
+        env:
+          PY_AGENT: python
+          PY_SERVER: python
+        run: ./run_tests.sh safety
+      - name: research harness deps
+        if: matrix.os == 'ubuntu-latest'
+        run: python -m pip install pytest hypothesis
+      - name: everything else (replay, worst cases, research/run.sh)
+        if: matrix.os == 'ubuntu-latest'
+        env:
+          PY_AGENT: python
+          PY_SERVER: python
+          PY_RESEARCH: python
+        run: ./run_tests.sh all

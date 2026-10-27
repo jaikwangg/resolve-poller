@@ -1,0 +1,175 @@
+{
+ "id": "WC24_compound_nesting",
+ "title": "Ten shots nested into a compound clip and graded as one",
+ "category": "clip_kinds",
+ "severity": [
+  "false_regression",
+  "never_completes"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "For a stylised sequence the colorist nests 10 shots into a compound clip and grades the compound.",
+ "signals": "video_clips 20 -> 11, graded 10 -> 10 -> 11",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R1_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100",
+       "R1_110",
+       "R1_120",
+       "R1_130",
+       "R1_140",
+       "R1_150",
+       "R1_160",
+       "R1_170",
+       "R1_180",
+       "R1_190",
+       "R1_200"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 120,
+   "ops": [
+    [
+     "remove",
+     {
+      "shots": [
+       "R1_110",
+       "R1_120",
+       "R1_130",
+       "R1_140",
+       "R1_150",
+       "R1_160",
+       "R1_170",
+       "R1_180",
+       "R1_190",
+       "R1_200"
+      ]
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "CMP_A"
+      ],
+      "kind": "compound",
+      "dur": 40
+     }
+    ]
+   ]
+  },
+  {
+   "t": 180,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "CMP_A"
+      ]
+     }
+    ],
+    [
+     "truth_done",
+     {
+      "shots": [
+       "R1_110",
+       "R1_120",
+       "R1_130",
+       "R1_140",
+       "R1_150",
+       "R1_160",
+       "R1_170",
+       "R1_180",
+       "R1_190",
+       "R1_200"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 240,
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "color": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100",
+    "R1_110",
+    "R1_120",
+    "R1_130",
+    "R1_140",
+    "R1_150",
+    "R1_160",
+    "R1_170",
+    "R1_180",
+    "R1_190",
+    "R1_200"
+   ]
+  }
+ },
+ "expect": {
+  "S1": {
+   "missed_completion": true
+  }
+ }
+}

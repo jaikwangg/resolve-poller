@@ -1,0 +1,182 @@
+{
+ "id": "WC18_two_rooms_one_job",
+ "title": "Two grade rooms grade different reels of the same job at the same time",
+ "category": "multi_room",
+ "severity": [
+  "false_completion",
+  "flapping"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "Deadline: grade-01 grades Reel 1, grade-02 grades Reel 2 of the same job, each in its own project copy. Both rooms are booked on the same project_no.",
+ "signals": "grade-01: R1 0/10 -> 10/10 ; grade-02: R2 0/8 -> 4/8 -> 8/8 ; PMS key (job, color) receives both",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "host": "grade-01",
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade_R1",
+      "timeline": "R1_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 0,
+   "host": "grade-02",
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade_R2",
+      "timeline": "R2_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R2_010",
+       "R2_020",
+       "R2_030",
+       "R2_040",
+       "R2_050",
+       "R2_060",
+       "R2_070",
+       "R2_080"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "host": "grade-01",
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 61,
+   "host": "grade-02",
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R2_010",
+       "R2_020",
+       "R2_030",
+       "R2_040"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 120,
+   "poll": "all",
+   "ops": []
+  },
+  {
+   "t": 180,
+   "host": "grade-02",
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R2_050",
+       "R2_060",
+       "R2_070",
+       "R2_080"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 240,
+   "poll": "all",
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "color": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100",
+    "R2_010",
+    "R2_020",
+    "R2_030",
+    "R2_040",
+    "R2_050",
+    "R2_060",
+    "R2_070",
+    "R2_080"
+   ]
+  }
+ },
+ "expect": {
+  "S0": {
+   "false_completion": true
+  },
+  "C3": {
+   "false_completion": false
+  }
+ },
+ "hosts": {
+  "grade-01": {
+   "stage": "color"
+  },
+  "grade-02": {
+   "stage": "color"
+  }
+ }
+}

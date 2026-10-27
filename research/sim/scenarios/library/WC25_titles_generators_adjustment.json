@@ -1,0 +1,138 @@
+{
+ "id": "WC25_titles_generators_adjustment",
+ "title": "Titles, a solid generator and an adjustment layer counted as clips",
+ "category": "clip_kinds",
+ "severity": [
+  "never_completes"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "The grade timeline has 10 shots plus 3 title cards, one solid-colour generator and an adjustment layer carrying the film look over everything. Titles and generator are never graded.",
+ "signals": "video_clips 15 ; graded 0 -> 11 (10 shots + adjustment) and stays",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R1_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "TITLE1",
+       "TITLE2",
+       "TITLE3"
+      ],
+      "kind": "title",
+      "track": 3
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "SOLID"
+      ],
+      "kind": "generator"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "ADJ_LOOK"
+      ],
+      "kind": "adjustment",
+      "track": 2,
+      "dur": 40
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "ADJ_LOOK",
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 120,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 180,
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "color": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100"
+   ]
+  }
+ },
+ "expect": {
+  "S0": {
+   "missed_completion": true
+  }
+ },
+ "resolve_unverified": "can the poller tell title/generator/adjustment items apart (GetMediaPoolItem None? type property?)"
+}

@@ -1,0 +1,272 @@
+{
+ "id": "WC43_other_project_opened_briefly",
+ "title": "Colorist opens another job's project for a reference grade",
+ "category": "attribution",
+ "severity": [
+  "wrong_job",
+  "flapping"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "Seen in the real 2026-10-14 data (a 55-clip project opened on conform-01 a minute before TEST). The colorist opens last month's project to grab a grade still, then returns. The room's single booking takes both.",
+ "signals": "project A 3/10 -> project B 55/55 graded -> project A 3/10",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R1_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ],
+    [
+     "new_timeline",
+     {
+      "name": "Reel",
+      "project": "OldFilm_REEL"
+     }
+    ],
+    [
+     "timeline_job",
+     {
+      "project": "OldFilm_REEL",
+      "timeline": "Reel",
+      "job": "KPP-2026-0042"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "OF_010",
+       "OF_020",
+       "OF_030",
+       "OF_040",
+       "OF_050",
+       "OF_060",
+       "OF_070",
+       "OF_080",
+       "OF_090",
+       "OF_100",
+       "OF_110",
+       "OF_120",
+       "OF_130",
+       "OF_140",
+       "OF_150",
+       "OF_160",
+       "OF_170",
+       "OF_180",
+       "OF_190",
+       "OF_200",
+       "OF_210",
+       "OF_220",
+       "OF_230",
+       "OF_240",
+       "OF_250",
+       "OF_260",
+       "OF_270",
+       "OF_280",
+       "OF_290",
+       "OF_300",
+       "OF_310",
+       "OF_320",
+       "OF_330",
+       "OF_340",
+       "OF_350",
+       "OF_360",
+       "OF_370",
+       "OF_380",
+       "OF_390",
+       "OF_400",
+       "OF_410",
+       "OF_420",
+       "OF_430",
+       "OF_440",
+       "OF_450",
+       "OF_460",
+       "OF_470",
+       "OF_480",
+       "OF_490",
+       "OF_500",
+       "OF_510",
+       "OF_520",
+       "OF_530",
+       "OF_540",
+       "OF_550"
+      ],
+      "project": "OldFilm_REEL",
+      "timeline": "Reel",
+      "graded": true,
+      "done": true
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 70,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "OldFilm_REEL",
+      "timeline": "Reel"
+     }
+    ]
+   ]
+  },
+  {
+   "t": 80,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R1_online"
+     }
+    ]
+   ]
+  },
+  {
+   "t": 140,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 200,
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "color": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100"
+   ]
+  },
+  "KPP-2026-0042": {
+   "color": [
+    "OF_010",
+    "OF_020",
+    "OF_030",
+    "OF_040",
+    "OF_050",
+    "OF_060",
+    "OF_070",
+    "OF_080",
+    "OF_090",
+    "OF_100",
+    "OF_110",
+    "OF_120",
+    "OF_130",
+    "OF_140",
+    "OF_150",
+    "OF_160",
+    "OF_170",
+    "OF_180",
+    "OF_190",
+    "OF_200",
+    "OF_210",
+    "OF_220",
+    "OF_230",
+    "OF_240",
+    "OF_250",
+    "OF_260",
+    "OF_270",
+    "OF_280",
+    "OF_290",
+    "OF_300",
+    "OF_310",
+    "OF_320",
+    "OF_330",
+    "OF_340",
+    "OF_350",
+    "OF_360",
+    "OF_370",
+    "OF_380",
+    "OF_390",
+    "OF_400",
+    "OF_410",
+    "OF_420",
+    "OF_430",
+    "OF_440",
+    "OF_450",
+    "OF_460",
+    "OF_470",
+    "OF_480",
+    "OF_490",
+    "OF_500",
+    "OF_510",
+    "OF_520",
+    "OF_530",
+    "OF_540",
+    "OF_550"
+   ]
+  }
+ },
+ "expect": {
+  "S0": {
+   "false_completion": true
+  },
+  "C3": {
+   "false_completion": false
+  }
+ }
+}

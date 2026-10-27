@@ -1,0 +1,106 @@
+{
+ "id": "WC14_invisible_grade_group_or_nr",
+ "title": "Grade lives in group/timeline nodes or is NR/blur only: detector sees nothing",
+ "category": "detector_blind",
+ "severity": [
+  "false_under_report"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "The colorist grades with group pre-clip nodes (one grade per scene) and a timeline node, leaving clip nodes empty; some shots only get noise reduction. ExportLUT per clip is identity (group/timeline effect not seen - unverified on a real machine).",
+ "signals": "graded stays 0-2 while the grade is finished",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R1_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 120,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ],
+      "visible": false
+     }
+    ]
+   ]
+  },
+  {
+   "t": 180,
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "color": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100"
+   ]
+  }
+ },
+ "expect": {
+  "S0": {
+   "missed_completion": true
+  }
+ },
+ "resolve_unverified": "does ExportLUT on a clip include group pre/post-clip and timeline nodes?"
+}

@@ -1,0 +1,155 @@
+{
+ "id": "WC29_crash_and_sleep_gaps",
+ "title": "Resolve crash with unsaved grades, then the Mac sleeps for two hours",
+ "category": "outage",
+ "severity": [
+  "lost_data",
+  "false_regression"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "Resolve crashes at 11:00; the last 3 grades were not saved (live save off) and are gone. The agent reports 'resolve_not_running' for 30 min. Later the Mac sleeps 2 h while the colorist works on the other screen of a different machine; when it wakes counts jump.",
+ "signals": "graded 6 -> (down) -> 3 -> ... gap 2 h ... -> 10",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade",
+      "timeline": "R1_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 90,
+   "ops": [
+    [
+     "down"
+    ]
+   ]
+  },
+  {
+   "t": 100,
+   "ops": []
+  },
+  {
+   "t": 120,
+   "ops": [
+    [
+     "up"
+    ],
+    [
+     "crash_revert",
+     {
+      "shots": [
+       "R1_040",
+       "R1_050",
+       "R1_060"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 150,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_040",
+       "R1_050",
+       "R1_060"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 200,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ],
+   "poll": false
+  },
+  {
+   "t": 300,
+   "ops": []
+  },
+  {
+   "t": 330,
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "color": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100"
+   ]
+  }
+ },
+ "expect": {
+  "C3": {
+   "false_completion": false
+  }
+ }
+}

@@ -9,7 +9,11 @@ env:
   EDITORTRACK_TARGET_COUNT   เป้าจำนวนไฟล์ (เช่น จำนวน reel/shot ที่ต้อง ingest/master)
   EDITORTRACK_TARGET_SIZE_GB เป้าขนาดรวม (ใช้ถ้าไม่มี target count)
 """
-import os, glob, fnmatch, datetime
+import os, glob, fnmatch, datetime, time
+
+# เพดาน: watch folder อาจอยู่บน SAN เดียวกับที่ห้องเกรดเล่น 4K/8K → walk ใหญ่ = แย่ง I/O
+MAX_ENTRIES = int(os.environ.get("EDITORTRACK_WATCH_MAX_ENTRIES", "50000"))
+MAX_WALK_SEC = float(os.environ.get("EDITORTRACK_WATCH_MAX_SEC", "5"))
 
 
 def collect(stage="data"):
@@ -24,7 +28,11 @@ def collect(stage="data"):
 
     files = []
     if recursive:
+        t0, seen = time.time(), 0
         for root, _, fs in os.walk(watch):
+            seen += len(fs) + 1
+            if seen > MAX_ENTRIES or time.time() - t0 > MAX_WALK_SEC:
+                return {"ok": False, "stage": stage, "reason": "watch_budget", "detail": {"watch_dir": watch}}
             files += [os.path.join(root, f) for f in fs if fnmatch.fnmatch(f, pattern)]
     else:
         files = [p for p in glob.glob(os.path.join(watch, pattern)) if os.path.isfile(p)]

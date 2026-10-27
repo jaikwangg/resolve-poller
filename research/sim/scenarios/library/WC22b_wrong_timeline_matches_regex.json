@@ -1,0 +1,157 @@
+{
+ "id": "WC22b_wrong_timeline_matches_regex",
+ "title": "A short trailer reference matches the regex and becomes the target",
+ "category": "conform",
+ "severity": [
+  "false_completion"
+ ],
+ "stage": "conform",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "The project has 'reference_trailer' (12 s) created before the real offline (40 s) is imported. The poller takes the first match, so the target is 12 s and conform reads 100% after three shots.",
+ "signals": "offline_target_sec 12 ; duration 0 -> 20 -> 40",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_conform",
+      "timeline": "reference_trailer"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030"
+      ]
+     }
+    ],
+    [
+     "new_timeline",
+     {
+      "name": "R1_offline"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ],
+      "timeline": "R1_offline"
+     }
+    ],
+    [
+     "new_timeline",
+     {
+      "name": "R1_conform",
+      "open": true
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "ops": [
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050"
+      ]
+     }
+    ],
+    [
+     "conform",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 120,
+   "ops": [
+    [
+     "add",
+     {
+      "shots": [
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ],
+    [
+     "conform",
+     {
+      "shots": [
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 180,
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "conform": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100"
+   ]
+  }
+ },
+ "expect": {
+  "S0": {
+   "false_completion": true
+  }
+ },
+ "hosts": {
+  "conform-01": {
+   "stage": "conform"
+  }
+ }
+}

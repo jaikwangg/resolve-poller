@@ -1,0 +1,182 @@
+{
+ "id": "WC33_one_job_many_projects",
+ "title": "One job split into one Resolve project per reel",
+ "category": "attribution",
+ "severity": [
+  "false_completion",
+  "flapping"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "A feature is graded reel by reel; each reel is its own project (Film_R1, Film_R2, Film_R3) on the same project_no.",
+ "signals": "R1 6/6 -> R2 0/6 -> 6/6 -> R3 0/6 ...",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_R1",
+      "timeline": "R1"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "F1_010",
+       "F1_020",
+       "F1_030",
+       "F1_040",
+       "F1_050",
+       "F1_060"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "F1_010",
+       "F1_020",
+       "F1_030",
+       "F1_040",
+       "F1_050",
+       "F1_060"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 120,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_R2",
+      "timeline": "R2"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "F2_010",
+       "F2_020",
+       "F2_030",
+       "F2_040",
+       "F2_050",
+       "F2_060"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 180,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "F2_010",
+       "F2_020",
+       "F2_030",
+       "F2_040",
+       "F2_050",
+       "F2_060"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 240,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_R3",
+      "timeline": "R3"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "F3_010",
+       "F3_020",
+       "F3_030",
+       "F3_040",
+       "F3_050",
+       "F3_060"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 300,
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "F3_010",
+       "F3_020",
+       "F3_030",
+       "F3_040",
+       "F3_050",
+       "F3_060"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 360,
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "color": [
+    "F1_010",
+    "F1_020",
+    "F1_030",
+    "F1_040",
+    "F1_050",
+    "F1_060",
+    "F2_010",
+    "F2_020",
+    "F2_030",
+    "F2_040",
+    "F2_050",
+    "F2_060",
+    "F3_010",
+    "F3_020",
+    "F3_030",
+    "F3_040",
+    "F3_050",
+    "F3_060"
+   ]
+  }
+ },
+ "expect": {
+  "S0": {
+   "false_completion": true
+  },
+  "C3": {
+   "false_completion": false
+  }
+ }
+}

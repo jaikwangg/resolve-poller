@@ -30,3 +30,8 @@ agent/deploy/env.sh
 
 # replay fixture (ข้อมูลเทส 7–14 ต.ค. ที่ลบชื่อ/IP แล้ว) — ใช้ใน tests/test_replay.py
 !server/tests/fixtures/replay/*.jsonl
+
+# research harness
+.venv-research/
+research/out/
+.hypothesis/

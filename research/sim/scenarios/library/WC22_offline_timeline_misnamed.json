@@ -1,0 +1,140 @@
+{
+ "id": "WC22_offline_timeline_misnamed",
+ "title": "Offline timeline name does not match the regex: no conform % ever",
+ "category": "conform",
+ "severity": [
+  "lost_data"
+ ],
+ "stage": "conform",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "Editorial names its reference 'EDIT_LOCK_0412'. Nothing matches OFFLINE_MATCH, so offline_target_sec is null.",
+ "signals": "offline_target_sec null throughout; duration grows 0 -> 40",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_conform",
+      "timeline": "EDIT_LOCK_0412"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ],
+    [
+     "new_timeline",
+     {
+      "name": "R1_conform",
+      "open": true
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "ops": [
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050"
+      ]
+     }
+    ],
+    [
+     "conform",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 120,
+   "ops": [
+    [
+     "add",
+     {
+      "shots": [
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ],
+    [
+     "conform",
+     {
+      "shots": [
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 180,
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "conform": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100"
+   ]
+  }
+ },
+ "expect": {
+  "S0": {
+   "polls": 0
+  }
+ },
+ "hosts": {
+  "conform-01": {
+   "stage": "conform"
+  }
+ }
+}

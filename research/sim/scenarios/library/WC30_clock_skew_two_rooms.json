@@ -1,0 +1,175 @@
+{
+ "id": "WC30_clock_skew_two_rooms",
+ "title": "One room's clock is 8 minutes slow; PMS orders by observed_at",
+ "category": "outage",
+ "severity": [
+  "stale_value"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "project_name": "BrandX TVC",
+ "story": "grade-02's clock drifted 8 minutes behind (no NTP). Both rooms push the same job/stage. PMS shows the row with the latest observed_at, so grade-02's newer values look older than grade-01's.",
+ "signals": "grade-01 R1 10/10 at t=60 ; grade-02 R2 values with ts 8 min behind",
+ "status": "active",
+ "steps": [
+  {
+   "t": 0,
+   "host": "grade-01",
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade_R1",
+      "timeline": "R1_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 0,
+   "host": "grade-02",
+   "ops": [
+    [
+     "open",
+     {
+      "project": "BrandX_TVC_grade_R2",
+      "timeline": "R2_online"
+     }
+    ],
+    [
+     "add",
+     {
+      "shots": [
+       "R2_010",
+       "R2_020",
+       "R2_030",
+       "R2_040",
+       "R2_050",
+       "R2_060",
+       "R2_070",
+       "R2_080"
+      ]
+     }
+    ],
+    [
+     "skew",
+     {
+      "sec": -480
+     }
+    ]
+   ]
+  },
+  {
+   "t": 60,
+   "host": "grade-01",
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R1_010",
+       "R1_020",
+       "R1_030",
+       "R1_040",
+       "R1_050",
+       "R1_060",
+       "R1_070",
+       "R1_080",
+       "R1_090",
+       "R1_100"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 62,
+   "host": "grade-02",
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R2_010",
+       "R2_020",
+       "R2_030",
+       "R2_040"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 64,
+   "host": "grade-02",
+   "ops": [
+    [
+     "grade",
+     {
+      "shots": [
+       "R2_050",
+       "R2_060",
+       "R2_070",
+       "R2_080"
+      ]
+     }
+    ]
+   ]
+  },
+  {
+   "t": 120,
+   "poll": "all",
+   "ops": []
+  }
+ ],
+ "truth": {
+  "KPP-2026-0101": {
+   "color": [
+    "R1_010",
+    "R1_020",
+    "R1_030",
+    "R1_040",
+    "R1_050",
+    "R1_060",
+    "R1_070",
+    "R1_080",
+    "R1_090",
+    "R1_100",
+    "R2_010",
+    "R2_020",
+    "R2_030",
+    "R2_040",
+    "R2_050",
+    "R2_060",
+    "R2_070",
+    "R2_080"
+   ]
+  }
+ },
+ "expect": {},
+ "hosts": {
+  "grade-01": {
+   "stage": "color"
+  },
+  "grade-02": {
+   "stage": "color"
+  }
+ }
+}

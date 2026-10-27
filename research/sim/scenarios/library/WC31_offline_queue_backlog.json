@@ -1,0 +1,398 @@
+{
+ "id": "WC31_offline_queue_backlog",
+ "title": "Server down 30 min: queued records arrive after the current one",
+ "category": "outage",
+ "severity": [
+  "stale_value",
+  "false_completion"
+ ],
+ "stage": "color",
+ "job": "KPP-2026-0101",
+ "story": "The editortrack server restarts for 30 minutes. Agents queue records (runner.py offline queue). On recovery runner.post() sends the CURRENT record first and then flushes the backlog, so the server sees t=41 before t=10..40. During the outage two shots were added (10 -> 12 clips).",
+ "signals": "arrival order: t0, t5, t41 (12 clips), then backlog t10..t40 (10 clips until t35), then t46...",
+ "status": "active",
+ "observations": [
+  {
+   "t": 0,
+   "ts": "2026-11-02T02:00:00+00:00",
+   "host": "grade-01",
+   "stage": "color",
+   "ok": true,
+   "project": "BrandX_TVC_grade",
+   "timeline": "R1_online",
+   "video_clips": 10,
+   "graded_clips": 2,
+   "duration_sec": 40.0,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-1",
+    "project_no": "KPP-2026-0101",
+    "project_name": "BrandX TVC",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 480
+   },
+   "true_job": "KPP-2026-0101",
+   "truth": {
+    "pct": 20,
+    "done": false,
+    "scope": 12
+   }
+  },
+  {
+   "t": 5,
+   "ts": "2026-11-02T02:05:00+00:00",
+   "host": "grade-01",
+   "stage": "color",
+   "ok": true,
+   "project": "BrandX_TVC_grade",
+   "timeline": "R1_online",
+   "video_clips": 10,
+   "graded_clips": 3,
+   "duration_sec": 40.0,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-1",
+    "project_no": "KPP-2026-0101",
+    "project_name": "BrandX TVC",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 480
+   },
+   "true_job": "KPP-2026-0101",
+   "truth": {
+    "pct": 30,
+    "done": false,
+    "scope": 12
+   }
+  },
+  {
+   "t": 41,
+   "ts": "2026-11-02T02:41:00+00:00",
+   "host": "grade-01",
+   "stage": "color",
+   "ok": true,
+   "project": "BrandX_TVC_grade",
+   "timeline": "R1_online",
+   "video_clips": 12,
+   "graded_clips": 10,
+   "duration_sec": 40.0,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-1",
+    "project_no": "KPP-2026-0101",
+    "project_name": "BrandX TVC",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 480
+   },
+   "true_job": "KPP-2026-0101",
+   "truth": {
+    "pct": 83.33,
+    "done": false,
+    "scope": 12
+   }
+  },
+  {
+   "t": 41.01,
+   "ts": "2026-11-02T02:10:00+00:00",
+   "host": "grade-01",
+   "stage": "color",
+   "ok": true,
+   "project": "BrandX_TVC_grade",
+   "timeline": "R1_online",
+   "video_clips": 10,
+   "graded_clips": 4,
+   "duration_sec": 40.0,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-1",
+    "project_no": "KPP-2026-0101",
+    "project_name": "BrandX TVC",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 480
+   },
+   "true_job": "KPP-2026-0101",
+   "truth": {
+    "pct": 33.33,
+    "done": false,
+    "scope": 12
+   }
+  },
+  {
+   "t": 41.02,
+   "ts": "2026-11-02T02:15:00+00:00",
+   "host": "grade-01",
+   "stage": "color",
+   "ok": true,
+   "project": "BrandX_TVC_grade",
+   "timeline": "R1_online",
+   "video_clips": 10,
+   "graded_clips": 5,
+   "duration_sec": 40.0,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-1",
+    "project_no": "KPP-2026-0101",
+    "project_name": "BrandX TVC",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 480
+   },
+   "true_job": "KPP-2026-0101",
+   "truth": {
+    "pct": 41.67,
+    "done": false,
+    "scope": 12
+   }
+  },
+  {
+   "t": 41.03,
+   "ts": "2026-11-02T02:20:00+00:00",
+   "host": "grade-01",
+   "stage": "color",
+   "ok": true,
+   "project": "BrandX_TVC_grade",
+   "timeline": "R1_online",
+   "video_clips": 10,
+   "graded_clips": 6,
+   "duration_sec": 40.0,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-1",
+    "project_no": "KPP-2026-0101",
+    "project_name": "BrandX TVC",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 480
+   },
+   "true_job": "KPP-2026-0101",
+   "truth": {
+    "pct": 50.0,
+    "done": false,
+    "scope": 12
+   }
+  },
+  {
+   "t": 41.04,
+   "ts": "2026-11-02T02:25:00+00:00",
+   "host": "grade-01",
+   "stage": "color",
+   "ok": true,
+   "project": "BrandX_TVC_grade",
+   "timeline": "R1_online",
+   "video_clips": 10,
+   "graded_clips": 7,
+   "duration_sec": 40.0,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-1",
+    "project_no": "KPP-2026-0101",
+    "project_name": "BrandX TVC",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 480
+   },
+   "true_job": "KPP-2026-0101",
+   "truth": {
+    "pct": 58.33,
+    "done": false,
+    "scope": 12
+   }
+  },
+  {
+   "t": 41.05,
+   "ts": "2026-11-02T02:30:00+00:00",
+   "host": "grade-01",
+   "stage": "color",
+   "ok": true,
+   "project": "BrandX_TVC_grade",
+   "timeline": "R1_online",
+   "video_clips": 10,
+   "graded_clips": 8,
+   "duration_sec": 40.0,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-1",
+    "project_no": "KPP-2026-0101",
+    "project_name": "BrandX TVC",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 480
+   },
+   "true_job": "KPP-2026-0101",
+   "truth": {
+    "pct": 66.67,
+    "done": false,
+    "scope": 12
+   }
+  },
+  {
+   "t": 41.06,
+   "ts": "2026-11-02T02:35:00+00:00",
+   "host": "grade-01",
+   "stage": "color",
+   "ok": true,
+   "project": "BrandX_TVC_grade",
+   "timeline": "R1_online",
+   "video_clips": 12,
+   "graded_clips": 9,
+   "duration_sec": 40.0,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-1",
+    "project_no": "KPP-2026-0101",
+    "project_name": "BrandX TVC",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 480
+   },
+   "true_job": "KPP-2026-0101",
+   "truth": {
+    "pct": 75.0,
+    "done": false,
+    "scope": 12
+   }
+  },
+  {
+   "t": 41.07,
+   "ts": "2026-11-02T02:40:00+00:00",
+   "host": "grade-01",
+   "stage": "color",
+   "ok": true,
+   "project": "BrandX_TVC_grade",
+   "timeline": "R1_online",
+   "video_clips": 12,
+   "graded_clips": 10,
+   "duration_sec": 40.0,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-1",
+    "project_no": "KPP-2026-0101",
+    "project_name": "BrandX TVC",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 480
+   },
+   "true_job": "KPP-2026-0101",
+   "truth": {
+    "pct": 83.33,
+    "done": false,
+    "scope": 12
+   }
+  },
+  {
+   "t": 46,
+   "ts": "2026-11-02T02:46:00+00:00",
+   "host": "grade-01",
+   "stage": "color",
+   "ok": true,
+   "project": "BrandX_TVC_grade",
+   "timeline": "R1_online",
+   "video_clips": 12,
+   "graded_clips": 11,
+   "duration_sec": 40.0,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-1",
+    "project_no": "KPP-2026-0101",
+    "project_name": "BrandX TVC",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 480
+   },
+   "true_job": "KPP-2026-0101",
+   "truth": {
+    "pct": 91.67,
+    "done": false,
+    "scope": 12
+   }
+  },
+  {
+   "t": 51,
+   "ts": "2026-11-02T02:51:00+00:00",
+   "host": "grade-01",
+   "stage": "color",
+   "ok": true,
+   "project": "BrandX_TVC_grade",
+   "timeline": "R1_online",
+   "video_clips": 12,
+   "graded_clips": 12,
+   "duration_sec": 40.0,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-1",
+    "project_no": "KPP-2026-0101",
+    "project_name": "BrandX TVC",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 480
+   },
+   "true_job": "KPP-2026-0101",
+   "truth": {
+    "pct": 100.0,
+    "done": true,
+    "scope": 12
+   }
+  },
+  {
+   "t": 90,
+   "ts": "2026-11-02T03:30:00+00:00",
+   "host": "grade-01",
+   "stage": "color",
+   "ok": true,
+   "project": "BrandX_TVC_grade",
+   "timeline": "R1_online",
+   "video_clips": 12,
+   "graded_clips": 12,
+   "duration_sec": 40.0,
+   "offline_target_sec": null,
+   "markers": 0,
+   "shots": [],
+   "booking": {
+    "booking_id": "B-1",
+    "project_no": "KPP-2026-0101",
+    "project_name": "BrandX TVC",
+    "activity": "Grading",
+    "start_t": 0,
+    "end_t": 480
+   },
+   "true_job": "KPP-2026-0101",
+   "truth": {
+    "pct": 100.0,
+    "done": true,
+    "scope": 12
+   }
+  }
+ ],
+ "expect": {
+  "C3": {
+   "false_completion": false
+  }
+ }
+}
