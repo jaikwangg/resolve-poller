@@ -16,16 +16,17 @@ FIX = HERE / "fixtures" / "replay"
 os.environ["TZ"] = "Asia/Bangkok"
 time.tzset()
 os.environ.setdefault("EDITORTRACK_STORE", tempfile.mkdtemp())
-os.environ["EDITORTRACK_TOKEN"] = "t"
 for k in [k for k in os.environ if k.startswith("ERP_")]:
     del os.environ[k]                             # never call a real PMS from a test
 sys.path.insert(0, str(HERE.parent))
+from tests import authfix   # noqa: E402
+authfix.install(hosts=("conform-01",))
 
 import dashboard_api as api      # noqa: E402
 import explain as ex             # noqa: E402
 import pms_sync                  # noqa: E402
 
-H = {"Authorization": "Bearer t"}
+H = authfix.machine("conform-01")              # every record posted here is the conform-01 fixture
 NAIVE = "2026-10-14T10:05:00"
 ROUTES = ["/api/health", "/api/jobs", "/api/shots", "/api/dashboard", "/api/inbox", "/api/inbox?host=bad-01",
           "/api/pms", "/api/report", "/api/report?host=bad-01", "/api/projects", "/health"]
@@ -63,7 +64,7 @@ class Base(unittest.TestCase):
         self.tmp = pathlib.Path(tempfile.mkdtemp())
         self._store = api.STORE
         api.STORE = self.tmp
-        self.c = TestClient(api.app, raise_server_exceptions=False)
+        self.c = TestClient(api.app, raise_server_exceptions=False, headers=authfix.reader())   # read routes need auth
         self.now = datetime.datetime.now(datetime.timezone.utc)
 
     def tearDown(self):

@@ -12,16 +12,16 @@ no Resolve call: `resolve_guard.py` and the API allowlist test are unchanged and
 |---|---|---|
 | 2xx | delivered | next record; clears the send backoff and the refusal streak |
 | **400 with our refusal marker** | `explain.record_problem` refused this record (bad host, ts or type). Marker: the `X-Editortrack-Reject: <reason>` header, which `/ingest` sets from this branch on, or the body `{"detail": "record ใช้ไม่ได้ (…"}` that the F3 server already sends | **final**: dropped, counted, logged, after every URL has been tried |
-| 400 without the marker | a proxy, a wrong port ("plain HTTP sent to HTTPS port") or a foreign host behind a backup URL | keep, next URL, back off |
+| 400 without the marker | a proxy, a wrong port ("plain HTTP sent to HTTPS port"), a foreign host behind a backup URL, or a body that is not JSON (`/ingest` answers 400 "body ต้องเป็น JSON" without the marker since the security-min merge; the agent always sends JSON) | keep, next URL, back off |
 | 413, 422 | only a proxy or a foreign server can send these (`/ingest` reads the raw body and has no size limit) | keep, next URL, back off |
-| 401, 403 | token or proxy authorisation (token rotation, wrong env) | keep, back off |
+| 401, 403 | token or proxy authorisation (token rotation, wrong env; 403 = the per-machine token belongs to a different `host` than the record, docs/SECURITY.md) | keep, back off |
 | 404, 405, 410 | wrong URL, old server, proxy route | keep, back off. As final it would drop **every** record |
 | 408, 425 | timeout or too early: transient | keep, back off |
 | 409 | conflict: server state, not record content (our server never sends it) | keep, back off |
 | 429 | rate limited | keep, back off, honour `Retry-After` up to the cap |
 | any other 4xx | unknown: in our setup it can only come from a proxy or config | keep, back off (fail closed means keep the data) |
 | 3xx | redirect (http to https, proxy) | **not followed** (urllib would resend the POST as a GET, without the body, carrying the Authorization header); keep, back off |
-| 5xx (bad JSON is a 500 too), timeout, refused, DNS | server down or failing | keep, back off |
+| 5xx, timeout, refused, DNS | server down or failing | keep, back off |
 
 A record is final only when **our** server says so about **this** record (`runner._refusal`). Any answer that could
 describe the server, a proxy or the configuration is retried, because a "final" reading would silently empty the queue.

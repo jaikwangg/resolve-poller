@@ -1,0 +1,11 @@
+# editortrack retention — PREPARED, not installed. Daily at 03:40 local time.
+[Unit]
+Description=editortrack retention, daily
+
+[Timer]
+OnCalendar=*-*-* 03:40:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

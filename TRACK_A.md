@@ -540,7 +540,7 @@ async def ingest(req: Request, authorization: str = Header(default="")):
     return {"ok": True}
 ```
 ```bash
-EDITORTRACK_TOKEN=xxx uvicorn server:app --host 0.0.0.0 --port 8000
+EDITORTRACK_TOKEN=xxx uvicorn server:app --host 0.0.0.0 --port 8000   # (เอกสารออกแบบเดิม — ปัจจุบันใช้ token ต่อเครื่อง: docs/SECURITY.md)
 ```
 
 ---

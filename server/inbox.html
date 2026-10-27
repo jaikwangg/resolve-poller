@@ -195,7 +195,7 @@ function renderHosts(d){
       <div class="hn"><span class="${h.online?"live":"off"}"></span>${esc(h.host)}
         <span class="chip">${esc(h.stage||"?")}</span></div>
       <div class="hm">${h.online?"ส่งล่าสุด":"เงียบมาแล้ว"} ${ago(h.age_sec)}${h.online?"ที่แล้ว":""} · IP ${esc(h.ip||"?")}<br>
-        วันนี้ ${h.today} record${h.late?` · ย้อนหลัง ${h.late}`:""} · user ${esc(h.user||"?")}</div>
+        วันนี้ ${h.today} record${h.late?` · ย้อนหลัง ${h.late}`:""}</div>
     </button>`).join("") : `<div class="empty">ยังไม่มีเครื่องไหนส่งข้อมูลเข้ามาใน 2 วันล่าสุด</div>`;
   document.querySelectorAll(".host").forEach(b => b.onclick = () => { HOST = HOST===b.dataset.h ? "" : b.dataset.h; load(); });
 }

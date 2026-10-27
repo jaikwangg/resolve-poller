@@ -12,10 +12,11 @@ TMP = tempfile.mkdtemp(prefix="et-health-")
 import atexit, shutil                                  # noqa: E402
 atexit.register(shutil.rmtree, TMP, True)
 os.environ["EDITORTRACK_STORE"] = TMP
-os.environ["EDITORTRACK_TOKEN"] = "t"
 for k in [k for k in os.environ if k.startswith("ERP_")]:
     del os.environ[k]
 sys.path.insert(0, str(HERE.parent))
+from tests import authfix          # noqa: E402
+authfix.install(hosts=("x", "e2e"))
 
 import agent_health as ah          # noqa: E402
 import health_alert                # noqa: E402
@@ -55,7 +56,7 @@ class Control(unittest.TestCase):
         cl = TestClient(dashboard_api.app)
         self.assertEqual(cl.get("/agent/control?host=x&v=" + V).status_code, 401)
         write_ctrl({"allowed_versions": [V], "hosts": {"x": {"enabled": True, "allow_resolve": True}}})
-        r = cl.get("/agent/control?host=x&v=" + V, headers={"Authorization": "Bearer t"})
+        r = cl.get("/agent/control?host=x&v=" + V, headers=authfix.machine("x"))
         self.assertEqual(r.json()["enabled"], True)
 
 
@@ -134,7 +135,10 @@ class EndToEnd(unittest.TestCase):
             mr = load("mock_resolve")
             World, loader = mr.World, mr.loader
             write_ctrl({"allowed_versions": [V], "hosts": {"e2e": {"enabled": True, "allow_resolve": True}}})
-            env = dict(EDITORTRACK_SERVER="http://127.0.0.1:%d/ingest" % port, EDITORTRACK_TOKEN="t",
+            env = dict(EDITORTRACK_SERVER="http://127.0.0.1:%d/ingest" % port, EDITORTRACK_TOKEN=authfix.machine_token("e2e"),
+                       # agent_env clears EDITORTRACK_*; the in-process server needs its auth files back
+                       EDITORTRACK_TOKEN_MAP=os.environ["EDITORTRACK_TOKEN_MAP"],
+                       EDITORTRACK_READ_USERS=os.environ["EDITORTRACK_READ_USERS"],
                        EDITORTRACK_REQUIRE_LEASE=None)
             with agent_env(**env) as (m, sd):
                 m["runner"].socket.gethostname = lambda: "e2e"
@@ -146,8 +150,10 @@ class EndToEnd(unittest.TestCase):
                 # ET-5 against the real /ingest: a queued record the server refuses (400) is dropped and the
                 # record behind it is delivered; the next heartbeat carries the count to /api/health
                 ts = datetime.datetime.now(datetime.timezone.utc).isoformat()
+                # (per-host tokens: the deliverable record carries this machine's host; the refused one keeps a
+                # foreign host on purpose - record_problem runs before the host check, so it is a final 400, not a 403)
                 m["runner"]._enqueue([json.dumps({"host": "e2e-q", "ts": ts, "agent": "not a dict"}),
-                                      json.dumps({"host": "e2e-q", "ts": ts, "n": 2})])
+                                      json.dumps({"host": "e2e", "ts": ts, "n": 2})])
                 self.assertEqual(m["runner"].main(), 200)
                 self.assertFalse((sd / "queue.jsonl").exists())
                 st = json.loads((sd / "rejected.json").read_text())
@@ -161,7 +167,8 @@ class EndToEnd(unittest.TestCase):
                 self.assertEqual(w2.calls, [])
             recs = [json.loads(l) for f in pathlib.Path(TMP).glob("*.jsonl") for l in f.read_text().splitlines()]
             self.assertEqual(ah.health(recs)["e2e"]["version"], V)
-            self.assertEqual([r.get("n") for r in recs if r["host"] == "e2e-q"], [2])
+            self.assertEqual([r.get("n") for r in recs if "n" in r], [2])
+            self.assertFalse([r for r in recs if r["host"] == "e2e-q"])
             self.assertEqual(ah.health(recs)["e2e"]["rejected"], 1)
         finally:
             srv.should_exit = True

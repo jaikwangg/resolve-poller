@@ -52,7 +52,7 @@ def build_projects(recs, interval_min, eff_job):
         c = _counts(r)
         if c is None:
             continue
-        p["rooms"][(stage, host)] = {"stage": stage, "host": host, "user": r.get("user"), "ts": r.get("ts"),
+        p["rooms"][(stage, host)] = {"stage": stage, "host": host, "ts": r.get("ts"),
                                      "at": _local(r.get("ts")), "pct": (r.get("progress") or {}).get("pct"), **c}
         for s in (r.get("source") or {}).get("shots") or []:
             if s.get("code"):

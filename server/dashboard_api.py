@@ -3,14 +3,19 @@
 stage: data → conform → color → subtitle → master
 job_id/stage หลัก = ERP booking (room+time) · fallback = agent-side (record.job / record.stage)
 """
-import os, json, glob, datetime, collections, pathlib
+import os, json, glob, datetime, collections, logging, pathlib
 from fastapi import FastAPI, Request, Header, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
 
-app = FastAPI()
-STORE = pathlib.Path(os.environ.get("EDITORTRACK_STORE", "data"))
-STORE.mkdir(parents=True, exist_ok=True)
-TOKEN = os.environ.get("EDITORTRACK_TOKEN", "")
+import auth
+import privacy
+
+log = logging.getLogger("editortrack")
+# no auto-generated /docs /redoc /openapi.json (they would list every route to anyone)
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+# data dir from env; default outside any git checkout (docs/SECURITY.md has the migration command)
+STORE = pathlib.Path(os.environ.get("EDITORTRACK_STORE") or "/srv/editortrack")
+STORE.mkdir(mode=0o700, parents=True, exist_ok=True)
 INTERVAL_MIN = int(os.environ.get("EDITORTRACK_INTERVAL_MIN", "1"))   # นาทีที่ 1 record แทน = cadence ของ agent (ปรับให้ตรง StartInterval/OnUnitActiveSec)
 HERE = pathlib.Path(__file__).parent
 STAGES = ["data", "conform", "color", "subtitle", "master"]
@@ -27,13 +32,55 @@ import projects as _proj
 import pms_sync
 import agent_health
 
+# ---------------- auth (server/auth.py, docs/SECURITY.md) ----------------
+MACHINE_PATHS = {"/ingest", "/agent/control"}     # per-host machine token, checked in the route
+OPEN_PATHS = {"/livez"}                           # liveness only, no data
+
+
+@app.middleware("http")
+async def _read_auth(request: Request, call_next):
+    """every route except the machine and liveness paths needs read credentials (fail closed)."""
+    path = request.url.path
+    if path in MACHINE_PATHS or path in OPEN_PATHS:
+        return await call_next(request)
+    if not auth.read_ok(request.headers.get("authorization", "")):
+        return JSONResponse({"detail": "unauthorized"}, status_code=401,
+                            headers={"WWW-Authenticate": 'Basic realm="editortrack", charset="UTF-8"'})
+    return await call_next(request)
+
+
+@app.on_event("startup")
+def _auth_startup_check():
+    st = STORE.stat().st_mode & 0o077
+    if st:
+        log.warning("store %s is accessible by group/other (chmod 700 recommended)", STORE)
+    for w in auth.startup_warnings():
+        log.warning(w)
+
+
+@app.get("/livez")
+def livez():
+    return {"ok": True}
+
+
+def _append_record(rec):
+    """append one record to today's file, created with mode 600."""
+    day = datetime.date.today().isoformat()
+    fd = os.open(str(STORE / f"{day}.jsonl"), os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+    with os.fdopen(fd, "a", encoding="utf-8") as f:
+        f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
 
 # ---------------- ingest ----------------
 @app.post("/ingest")
 async def ingest(req: Request, authorization: str = Header(default="")):
-    if not TOKEN or authorization != f"Bearer {TOKEN}":
+    host = auth.machine_host(authorization)         # token ต่อเครื่อง (token map ฝั่ง server) — ไม่รู้จัก = 401
+    if host is None:
         raise HTTPException(status_code=401, detail="unauthorized")
-    rec = await req.json()
+    try:
+        rec = await req.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="body ต้องเป็น JSON")
     # record ที่ไม่มี host/ts ใช้นับอะไรไม่ได้ (เทส 8 ต.ค. มี {"host":"selftest"} หลุดเข้ามาปน) → ไม่เก็บ
     # ts ต้องมี timezone (agent ส่ง UTC "+00:00"): ts ไม่มี offset ทำให้ทุก /api/* 500 และ pms_sync หยุด → 400 ไม่เดาโซน
     rec = _ex.finite(rec)                           # NaN/Infinity -> null (cannot be served back as JSON)
@@ -43,12 +90,15 @@ async def ingest(req: Request, authorization: str = Header(default="")):
         # (a 400 without it, e.g. from a proxy, is retried) · AGENT_SEND_POLICY.md
         raise HTTPException(status_code=400, detail=f"record ใช้ไม่ได้ ({why}): ต้องมี host และ ts (ISO มี timezone)",
                             headers={"X-Editortrack-Reject": why})
+    # checked after record_problem: a record without a usable host gets the final 400 above, never this 403
+    # (a 403 is retried by the agent, so a malformed record must not end up here and block the queue)
+    if rec.get("host") != host:                     # token ของเครื่องหนึ่งส่งในนามเครื่องอื่นไม่ได้
+        raise HTTPException(status_code=403, detail="token นี้ไม่ใช่ของ host นี้")
+    privacy.scrub(rec)                              # agent รุ่นเก่ายังส่ง user/ชื่อแอปหน้าสุด → ตัดก่อนเขียนลง disk
     # เวลา/IP ฝั่ง server — ใช้ดูว่ามาสดหรือมาจาก offline queue
     rec["_rx"] = {"at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                   "ip": req.client.host if req.client else None}
-    day = datetime.date.today().isoformat()
-    with open(STORE / f"{day}.jsonl", "a", encoding="utf-8") as f:
-        f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+    _append_record(rec)
     # push progress → PMS (contract v2, pms_sync.progress_on_ingest + progress_v2): provisional ≤ 99 until the scope is
     # confirmed and stable, holds while unsure, only ERP-bound project_no · best-effort, no-op until ERP_PROGRESS_PATH
     pushed = pms_sync.progress_on_ingest(rec, _eff_job, erp, STORE) if erp else False
@@ -59,8 +109,11 @@ async def ingest(req: Request, authorization: str = Header(default="")):
 @app.get("/agent/control")
 def agent_control(host: str = "", v: str = "", authorization: str = Header(default="")):
     """lease ที่ agent ต้องได้ก่อนแตะ Resolve — ไม่มีไฟล์/ไม่รู้จัก/เวอร์ชันไม่อนุญาต = ปิด (fail closed)"""
-    if not TOKEN or authorization != f"Bearer {TOKEN}":
+    who = auth.machine_host(authorization)
+    if who is None:
         raise HTTPException(status_code=401, detail="unauthorized")
+    if host != who:
+        raise HTTPException(status_code=403, detail="token นี้ไม่ใช่ของ host นี้")
     return agent_health.control_for(STORE, host, v)
 
 
@@ -169,7 +222,7 @@ def build_jobs(days=7):
             prog = r.get("progress") or {}
             act = r.get("activity") or {}
             pct = prog.get("pct")
-            tracks[stage] = {"pct": pct, "worker": r.get("user"), "host": r.get("host"),
+            tracks[stage] = {"pct": pct, "worker": r.get("host"), "host": r.get("host"),
                              "page": r.get("page"), "active": _ex.is_active(r),
                              "last_seen": r.get("ts"), "detail": prog.get("detail")}
             if pct is not None:
@@ -220,14 +273,14 @@ def build_dashboard(days=7):
     labels_days = [(datetime.date.today() - datetime.timedelta(days=days - 1 - i)).isoformat() for i in range(days)]
     labels = [_daylabel(d) for d in labels_days]
 
-    phase_time = collections.defaultdict(lambda: collections.Counter())   # worker -> page/stage -> min
+    phase_time = collections.defaultdict(lambda: collections.Counter())   # room (host) -> page/stage -> min
     ai = collections.defaultdict(lambda: {d: {"active": 0.0, "idle": 0.0} for d in labels_days})
     byjobday = collections.defaultdict(lambda: collections.defaultdict(dict))   # job -> day -> stage -> pct
     workers, active_recent = set(), set()
     now = datetime.datetime.now(datetime.timezone.utc)
 
     for r in sorted(recs, key=lambda x: x.get("ts", "")):
-        user = r.get("user", "?")
+        user = r.get("host", "?")       # ต่อห้อง/เครื่อง ไม่ใช่ต่อคน (ไม่เก็บชื่อ login แล้ว)
         workers.add(user)
         act = r.get("activity") or {}
         day = _day(r.get("ts", ""))
@@ -312,7 +365,7 @@ def build_inbox(limit=50, host=None, days=2):
             age = (now - datetime.datetime.fromisoformat(last["ts"].replace("Z", "+00:00"))).total_seconds()
         except Exception:
             age = None
-        summary.append({**d, "stage": last.get("stage"), "user": last.get("user"),
+        summary.append({**d, "stage": last.get("stage"),
                         "ip": (last.get("_rx") or {}).get("ip"), "last_ts": last.get("ts"),
                         "age_sec": age, "online": age is not None and age < _ex.STALE_SEC})
     summary.sort(key=lambda x: x["host"])

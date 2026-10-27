@@ -168,7 +168,7 @@
     <div class="card-head">
       <div><h2>เวลาไปไหน (ต่อ stage / page)</h2><p class="cap">รวมนาทีที่ active แต่ละ stage/page</p></div>
     </div>
-    <div class="seg" id="workerSel" role="group" aria-label="เลือกคน"></div>
+    <div class="seg" id="workerSel" role="group" aria-label="เลือกห้อง/เครื่อง"></div>
     <div id="chartTime" style="margin-top:12px"></div>
   </div>
 
@@ -279,7 +279,7 @@ function renderTiles(){
     ["โปรเจคที่ติดตาม", s.projects, ""],
     ["ความคืบหน้าเฉลี่ย", s.avg_progress+"%", "ถ่วงน้ำหนักเฉพาะเฟสที่วัดได้"],
     ["Active วันนี้ (ทีม)", s.active_hours_today+"ชม", "", "good"],
-    ["กำลังทำงาน", s.workers_active+"/"+s.workers_total, "คน"],
+    ["กำลังทำงาน", s.workers_active+"/"+s.workers_total, "ห้อง/เครื่อง"],
   ];
   $("#tiles").innerHTML = t.map(([l,n,sub,cls]) =>
     `<div class="tile"><div class="l">${l}</div><div class="n ${cls||""}">${n}</div>${sub?`<div class="sub">${sub}</div>`:""}</div>`

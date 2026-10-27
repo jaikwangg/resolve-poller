@@ -69,11 +69,12 @@ EDITORTRACK_SERVER=http://<server>:8000/ingest EDITORTRACK_TOKEN=xxx python runn
 
 ## Stage 2 — Ingest (server)
 
-**`dashboard_api.py` → `POST /ingest`**: verify Bearer token → append `data/YYYY-MM-DD.jsonl`
+**`dashboard_api.py` → `POST /ingest`**: verify per-host Bearer token (token map, docs/SECURITY.md) → drop personal fields → append `$EDITORTRACK_STORE/YYYY-MM-DD.jsonl` (default `/srv/editortrack`, mode 600)
 
 ```bash
 cd server && pip install -r requirements.txt     # โค้ด server อยู่ในโฟลเดอร์ server/
-EDITORTRACK_TOKEN=xxx uvicorn dashboard_api:app --host 0.0.0.0 --port 8000
+EDITORTRACK_TOKEN_MAP=~/.editortrack/tokens.json EDITORTRACK_READ_USERS=~/.editortrack/readers.json \
+  uvicorn dashboard_api:app --host 0.0.0.0 --port 8000
 ```
 
 ---
@@ -114,8 +115,8 @@ curl -s "http://<erp>:8010/api/schedule?start_dt=2026-09-30T00:00:00Z&end_dt=202
 
 **คำสั่ง — เทส endpoints:**
 ```bash
-curl -s localhost:8000/api/jobs | python3 -m json.tool
-curl -s localhost:8000/api/shots | python3 -m json.tool
+curl -s -u director localhost:8000/api/jobs | python3 -m json.tool     # read pages + /api/* need a login (docs/SECURITY.md)
+curl -s -u director localhost:8000/api/shots | python3 -m json.tool
 ```
 
 **/api/jobs (ย่อ):**
@@ -153,8 +154,10 @@ EDITORTRACK_TOKEN=<token>
 
 **Server:**
 ```
-EDITORTRACK_TOKEN=<token>        # ต้องตรงกับ agent
-EDITORTRACK_STORE=data           # dir เก็บ JSONL
+EDITORTRACK_TOKEN_MAP=~/.editortrack/tokens.json    # token ต่อเครื่อง (hash, 600) — server/tokens.py host-add <host>
+EDITORTRACK_READ_USERS=~/.editortrack/readers.json  # login หน้าอ่าน + /api/* (hash, 600) — tokens.py reader-add <name>
+EDITORTRACK_STORE=/srv/editortrack                  # dir เก็บ JSONL (default; นอก git checkout)
+EDITORTRACK_RETENTION_DAYS=90                       # server/retention.py ลบไฟล์เก่ากว่านี้
 EDITORTRACK_INTERVAL_MIN=10      # 1 sample ≈ กี่นาที (ให้ตรง poll)
 # ERP (creds — อย่า commit)
 ERP_BASE_URL=http://<erp>:8010

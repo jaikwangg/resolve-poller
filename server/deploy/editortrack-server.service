@@ -1,0 +1,25 @@
+# editortrack server — PREPARED, not installed. Target state after the token rotation
+# (docs/SECURITY.md §3). Install: copy to ~/.config/systemd/user/ (replacing the old unit),
+# systemctl --user daemon-reload && systemctl --user restart editortrack-server.service
+# No secret in this file: tokens live in hashed form in ~/.editortrack/tokens.json and readers.json (600).
+[Unit]
+Description=editortrack server (FastAPI ingest + dashboard)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/github/editortrack/server
+Environment=EDITORTRACK_STORE=/srv/editortrack
+Environment=EDITORTRACK_TOKEN_MAP=%h/.editortrack/tokens.json
+Environment=EDITORTRACK_READ_USERS=%h/.editortrack/readers.json
+Environment=EDITORTRACK_READ_AUTH=required
+Environment=EDITORTRACK_RETENTION_DAYS=90
+Environment=EDITORTRACK_INTERVAL_MIN=1
+EnvironmentFile=-%h/.editortrack/server.env
+UMask=0077
+ExecStart=%h/.editortrack-venv/bin/uvicorn dashboard_api:app --host 0.0.0.0 --port 8000 --log-level warning
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target

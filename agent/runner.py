@@ -2,7 +2,7 @@
 """A3 — poll (collector ตาม stage) → resolve job → POST (หลาย URL สำรองได้ + offline queue). record schema 3.
 stage จาก EDITORTRACK_STAGE (หรือ EDITORTRACK_ROLE เดิม): data/conform/color/subtitle/master
 """
-import json, os, sys, time, socket, getpass, datetime, platform, urllib.request, urllib.error, pathlib
+import json, os, sys, time, socket, datetime, platform, urllib.request, urllib.error, pathlib
 import safety
 from activity_sampler import sample
 from collect import collect, canon
@@ -49,6 +49,23 @@ REJECT_HOLD_STREAK = max(1, _envnum("EDITORTRACK_REJECT_HOLD_STREAK", 10))
 REJECT_LOG_MAX_LINES = _envnum("EDITORTRACK_REJECT_LOG_MAX_LINES", 200)
 REJECT_LOG_MAX_BYTES = _envnum("EDITORTRACK_REJECT_LOG_MAX_BYTES", 256 * 1024)
 REJECT_LOG_KEEP_RECORD = 8 * 1024            # bytes; a bigger record is logged by length + sha256 only
+
+
+# data minimisation (docs/DATA_SHEET.md): activity keeps only these keys. No login name, no
+# frontmost app name/bundle id (only "is Resolve in front", plus "screen locked" as a bool).
+ACTIVITY_KEYS = ("idle_sec", "resolve_frontmost", "platform", "unavailable", "error")
+LOCK_SCREEN_APPS = ("loginwindow",)
+
+
+def minimise_activity(act, idle_threshold=None):
+    act = act or {}
+    out = {k: act[k] for k in ACTIVITY_KEYS if k in act}
+    if (act.get("frontmost_name") or "") in LOCK_SCREEN_APPS:
+        out["locked"] = True
+    idle = act.get("idle_sec")
+    thr = IDLE_THRESHOLD if idle_threshold is None else idle_threshold
+    out["active"] = bool(idle is not None and idle < thr)
+    return out
 
 
 def _queue():
@@ -102,15 +119,13 @@ def build_record(prio=None, t0=None):
     t0 = t0 or time.time()
     act = sample()
     col = _collect_safely(act)
-    idle = act.get("idle_sec")
     raw = col.get("raw") or {}
     rec = {
         "schema": 3,
         "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "host": socket.gethostname(),
-        "user": getpass.getuser(),
         "stage": STAGE,
-        "activity": {**act, "active": bool(idle is not None and idle < IDLE_THRESHOLD)},
+        "activity": minimise_activity(act),
         "source": raw if col.get("ok") else {"ok": False, "reason": col.get("reason"), "detail": col.get("detail"),
                                               "skipped": bool(col.get("skipped") or raw.get("skipped"))},
     }

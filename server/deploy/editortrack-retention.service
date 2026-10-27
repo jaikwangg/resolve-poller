@@ -1,0 +1,13 @@
+# editortrack retention — PREPARED, not installed (docs/SECURITY.md §5).
+# Deletes <store>/YYYY-MM-DD.jsonl older than EDITORTRACK_RETENTION_DAYS (default 90). Nothing else.
+[Unit]
+Description=editortrack retention (delete records older than N days)
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/github/editortrack/server
+Environment=EDITORTRACK_STORE=/srv/editortrack
+Environment=EDITORTRACK_RETENTION_DAYS=90
+UMask=0077
+Nice=10
+ExecStart=/usr/bin/python3 %h/github/editortrack/server/retention.py
