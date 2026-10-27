@@ -35,11 +35,14 @@ async def ingest(req: Request, authorization: str = Header(default="")):
         raise HTTPException(status_code=401, detail="unauthorized")
     rec = await req.json()
     # record ที่ไม่มี host/ts ใช้นับอะไรไม่ได้ (เทส 8 ต.ค. มี {"host":"selftest"} หลุดเข้ามาปน) → ไม่เก็บ
-    if not isinstance(rec, dict) or not rec.get("host") or _ex._dt(rec.get("ts")) is None:
-        raise HTTPException(status_code=400, detail="record ต้องมี host และ ts (ISO มี timezone)")
-    if isinstance(rec, dict):                       # เวลา/IP ฝั่ง server — ใช้ดูว่ามาสดหรือมาจาก offline queue
-        rec["_rx"] = {"at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                      "ip": req.client.host if req.client else None}
+    # ts ต้องมี timezone (agent ส่ง UTC "+00:00"): ts ไม่มี offset ทำให้ทุก /api/* 500 และ pms_sync หยุด → 400 ไม่เดาโซน
+    rec = _ex.finite(rec)                           # NaN/Infinity -> null (cannot be served back as JSON)
+    why = _ex.record_problem(rec)
+    if why:
+        raise HTTPException(status_code=400, detail=f"record ใช้ไม่ได้ ({why}): ต้องมี host และ ts (ISO มี timezone)")
+    # เวลา/IP ฝั่ง server — ใช้ดูว่ามาสดหรือมาจาก offline queue
+    rec["_rx"] = {"at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                  "ip": req.client.host if req.client else None}
     day = datetime.date.today().isoformat()
     with open(STORE / f"{day}.jsonl", "a", encoding="utf-8") as f:
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
@@ -62,7 +65,7 @@ def agent_control(host: str = "", v: str = "", authorization: str = Header(defau
 def api_health(days: int = 2):
     rows = agent_health.health(_load_recent(days), control=agent_health.load_control(STORE))
     return JSONResponse({"hosts": sorted(rows.values(), key=lambda r: r["host"]),
-                         "control": agent_health.load_control(STORE)})
+                         "control": agent_health.load_control(STORE), "skipped": load_skipped.get(days)})
 
 
 @app.get("/health")
@@ -84,9 +87,14 @@ def health_page():
 
 
 # ---------------- load / helpers ----------------
+# what the last load of each `days` window had to skip (bad JSON line, bad record already on disk), keyed by
+# days so the pms_sync thread or /api/projects cannot overwrite what /api/health and /api/inbox show
+load_skipped = {}
+
+
 def _load_recent(days):
     cutoff = datetime.date.today() - datetime.timedelta(days=days - 1)
-    recs = []
+    recs, bad_json = [], 0
     for fp in sorted(glob.glob(str(STORE / "*.jsonl"))):
         try:
             d = datetime.date.fromisoformat(pathlib.Path(fp).stem)
@@ -96,11 +104,17 @@ def _load_recent(days):
             continue
         with open(fp, encoding="utf-8") as f:
             for ln in f:
+                if not ln.strip():
+                    continue
                 try:
-                    recs.append(json.loads(ln))
+                    recs.append(_ex.finite(json.loads(ln)))
                 except Exception:
-                    pass
-    return _ex.dedupe(recs)
+                    bad_json += 1
+    reasons = {}
+    out = _ex.dedupe(recs, reasons)
+    load_skipped[days] = {"days": days, "at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                          "bad_json": bad_json, "bad_record": sum(reasons.values()), "reasons": reasons}
+    return out
 
 
 def _day(ts):
@@ -304,9 +318,13 @@ def build_inbox(limit=50, host=None, days=2):
     rows.sort(key=lambda r: (r.get("_rx") or {}).get("at") or r.get("ts", ""), reverse=True)
     out = []
     for r in rows[:max(1, min(limit, 500))]:
-        out.append({"explain": _ex.explain(r, _eff_job(r), room_map), "delay_sec": _ex.delay_sec(r), "record": r})
+        try:                                        # last line of defence: one odd record never 500s the inbox
+            ex = _ex.explain(r, _eff_job(r), room_map)
+        except Exception as e:
+            ex = {"summary": f"อธิบาย record นี้ไม่ได้ ({type(e).__name__})", "lines": [], "warnings": [], "fields": []}
+        out.append({"explain": ex, "delay_sec": _ex.delay_sec(r), "record": r})
     return {"generated_at": now.astimezone().isoformat(), "stale_sec": _ex.STALE_SEC,
-            "hosts": summary, "total": len(rows), "records": out}
+            "hosts": summary, "total": len(rows), "records": out, "skipped": load_skipped.get(days)}
 
 
 @app.get("/api/inbox")

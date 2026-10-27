@@ -22,6 +22,8 @@ ENV (ตั้งค่าจริงที่ server — อย่า commit �
 """
 import os, re, json, datetime, urllib.request, urllib.error
 
+import progress_v2 as _pv
+
 ERP_BASE = os.environ.get("ERP_BASE_URL", "")
 ERP_LOGIN_PATH = os.environ.get("ERP_LOGIN_PATH", "/api/auth/login")
 ERP_USER = os.environ.get("ERP_USERNAME", "")
@@ -172,10 +174,6 @@ def _room_map():
         return {}
 
 
-def _norm(x):
-    return re.sub(r"[^0-9a-z]+", "", str(x or "").lower())
-
-
 def pick_booking(cands, project):
     """เลือก booking เดียวจากหลายตัวที่ห้อง+เวลาตรง (PMS 15 ต.ค.: ห้องรับหลายงานพร้อมกันได้)
     1 ตัว → ตัวนั้น · หลายตัว → ตัวที่ project_no หรือชื่อ project ตรงกับ project ที่เปิดใน Resolve
@@ -184,12 +182,13 @@ def pick_booking(cands, project):
         return None, "no_booking"
     if len(cands) == 1:
         return cands[0], None
-    p = _norm(project)
-    if p:
-        hit = [b for b in cands if _norm(b.get(F["job"])) and _norm(b.get(F["job"])) in p]
+    # same Thai-safe, bounded rules as the progress job guard (progress_v2.code_in / name_in): never on digits
+    # alone ("โฆษณา ธนาคาร 2026" must not pick "BrandX 2026 TVC"), KPP-1 is not in KPP-10 · no unique match →
+    # ambiguous_booking: nothing is sent for the window (D5 default)
+    if project is not None and str(project).strip():
+        hit = [b for b in cands if b.get(F["job"]) and _pv.code_in(b.get(F["job"]), project)]
         if len(hit) != 1:
-            hit = [b for b in cands if _norm(b.get(F["title"])) and
-                   (_norm(b.get(F["title"])) in p or p in _norm(b.get(F["title"])))]
+            hit = [b for b in cands if b.get(F["title"]) and _pv.name_in(b.get(F["title"]), project)]
         if len(hit) == 1:
             return hit[0], None
     return None, "ambiguous_booking"

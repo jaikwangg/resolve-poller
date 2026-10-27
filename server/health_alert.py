@@ -13,6 +13,7 @@ import glob, json, os, pathlib, sys, urllib.request, datetime
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 import agent_health   # noqa: E402
+import explain        # noqa: E402
 
 
 def load_records(store, days=2):
@@ -29,7 +30,7 @@ def load_records(store, days=2):
                 recs.append(json.loads(ln))
             except Exception:
                 pass
-    return recs
+    return explain.dedupe(recs)        # same record check as the server: a bad stored line is skipped
 
 
 def transitions(prev, rows):
