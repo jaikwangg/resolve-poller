@@ -641,10 +641,74 @@ class Q1QuickFix(Strategy):
                     reasons=reasons)
 
 
+def _load_server_progress():
+    """server/progress_v2.py, loaded by path (server/ is not put on sys.path: its module names would
+    shadow others). The strategies below run the code that ships, not a model of it."""
+    import importlib.util
+    import pathlib
+    import sys
+    name = "editortrack_server_progress_v2"
+    if name not in sys.modules:
+        path = pathlib.Path(__file__).resolve().parents[2] / "server" / "progress_v2.py"
+        spec = importlib.util.spec_from_file_location(name, path)
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[name] = mod
+        spec.loader.exec_module(mod)
+    return sys.modules[name]
+
+
+class SVShipped(Strategy):
+    """The shipped server path (server/progress_v2.py, C3 rollout steps 1-2) with the default owner
+    decisions: no confirmed scope source (D1 = none), so it is Q1 plus the contract v2 fields."""
+    name, label = "SV", "shipped server/progress_v2.py, default decisions (D1 none: provisional, cap 99, holds)"
+    needs = ("same as Q1",)
+    cost = "shipped (night/progress-v2)"
+    config = {}
+
+    def __init__(self):
+        super().__init__()
+        pv = _load_server_progress()
+        self.eng = pv.Engine(pv.Config(**self.config))
+
+    items = False            # today's poller sends no per-item data: the counts path
+
+    def step(self, obs):
+        if not self.items and ("items" in obs or "offline_shots" in obs):
+            obs = {k: v for k, v in obs.items() if k not in ("items", "offline_shots")}
+        o = self.eng.step(obs)
+        self.last[o["key"]] = o
+        return o
+
+
+class SVLShipped(SVShipped):
+    name, label = "SVL", "shipped server/progress_v2.py with D1 = lock (a human-set shot count confirms the scope)"
+    needs = ("same as Q1 + a scope lock (count) per project_no/stage",)
+    human = "someone locks the shot count per job and stage (scope_locks.json)"
+    config = {"scope_source": ("lock",), "lock_counts": True}   # the counts lock needs a second opt-in
+
+
+class SVIShipped(SVShipped):
+    """Step 3: the same server code fed per-item identity (a poller change not made yet: needs owner
+    sign-off for real workstations). D1 none: still never done."""
+    name, label = "SVI", "shipped server/progress_v2.py + per-clip identity ledger (step 3), D1 none"
+    needs = ("items (ext: poller change pending)", "offline_shots (ext)", "booking project_no/name")
+    cost = "server shipped; poller change pending"
+    items = True
+
+
+class SVILShipped(SVIShipped):
+    name, label = "SVIL", "shipped server/progress_v2.py + identity ledger + D1 = lock (shot list or count)"
+    needs = SVIShipped.needs + ("scope lock",)
+    human = "someone locks the shot list/count per job and stage"
+    config = {"scope_source": ("lock",)}
+
+
 ALL = [S0Current, S1HighWater, S2Confirmed, S3ShotState, S4Stable, S5WorkDone, S6BookingTime,
-       C1HighWaterStable, C2ShotStable, C3Recommended, C4AutoScope, Q1QuickFix]
+       C1HighWaterStable, C2ShotStable, C3Recommended, C4AutoScope, Q1QuickFix, SVShipped, SVLShipped,
+       SVIShipped, SVILShipped]
 BY_NAME = {c.name: c for c in ALL}
 RECOMMENDED = "C3"
+SHIPPED = ("SV", "SVL", "SVI", "SVIL")      # the server code path; held to the same invariants as RECOMMENDED
 
 
 def run(strategy_cls, observations):

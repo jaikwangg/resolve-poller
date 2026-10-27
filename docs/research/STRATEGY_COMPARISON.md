@@ -32,22 +32,26 @@ added late in real jobs, so this is a structural problem, not a one-off.
 ## Results
 
 <!-- BEGIN GENERATED:aggregate -->
-Over 44 library scenarios. FC = scenarios with a false completion (done or 100% while not done); FR = scenarios with a false regression without reason code (with reason code in brackets); missed = truth done at the end but never claimed; err = max |reported - truth| per scenario (median / worst); uncorr = error episodes still open at the end; ttc = longest wrong episode (min); inv = invariant violations.
+Over 45 library scenarios. FC = scenarios with a false completion (done or 100% while not done); FR = scenarios with a false regression without reason code (with reason code in brackets); missed = truth done at the end but never claimed; err = max |reported - truth| per scenario (median / worst); uncorr = error episodes still open at the end; ttc = longest wrong episode (min); inv = invariant violations.
 
 | strategy | FC | FC polls | FR (expl.) | missed | wrong job | silent | err med/worst | uncorr | ttc | PMS stale | inv |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| S0 | 20 | 43 | 17 (0) | 4 | 3 | 2 | 25.8/100.0 | 4 | 1320 | 7 | 173 |
-| S1 | 18 | 40 | 12 (5) | 12 | 3 | 2 | 25.8/100.0 | 12 | 1320 | 3 | 149 |
-| S2 | 3 | 9 | 15 (0) | 35 | 3 | 2 | 25.3/100.0 | 4 | 1320 | 1 | 21 |
-| S3 | 14 | 33 | 1 (9) | 4 | 3 | 1 | 14.3/100.0 | 4 | 1320 | 2 | 146 |
-| S4 | 13 | 28 | 2 (0) | 8 | 3 | 2 | 24.9/100.0 | 4 | 1380 | 0 | 87 |
-| S5 | 20 | 43 | 16 (0) | 4 | 3 | 2 | 25.8/100.0 | 4 | 1320 | 1 | 171 |
-| S6 | 3 | 3 | 0 (0) | 37 | 3 | 1 | 68.8/100.0 | 38 | 4380 | 2 | 20 |
-| C1 | 12 | 26 | 4 (0) | 14 | 3 | 2 | 24.9/100.0 | 9 | 1380 | 0 | 79 |
-| C2 | 11 | 24 | 4 (0) | 7 | 3 | 1 | 20.0/100.0 | 4 | 1380 | 2 | 89 |
-| C3 | 0 | 0 | 0 (7) | 35 | 0 | 3 | 1.0/90.0 | 5 | 1320 | 2 | 0 |
-| C4 | 1 | 1 | 0 (6) | 33 | 0 | 3 | 1.0/90.0 | 5 | 1320 | 2 | 0 |
-| Q1 | 0 | 0 | 0 (14) | 38 | 0 | 4 | 22.6/99.0 | 4 | 1320 | 1 | 0 |
+| S0 | 20 | 43 | 18 (0) | 4 | 3 | 2 | 25.0/100.0 | 5 | 1320 | 7 | 175 |
+| S1 | 18 | 40 | 13 (5) | 12 | 3 | 2 | 25.0/100.0 | 13 | 1320 | 3 | 151 |
+| S2 | 3 | 9 | 16 (0) | 35 | 3 | 2 | 24.0/100.0 | 5 | 1320 | 1 | 23 |
+| S3 | 14 | 33 | 1 (10) | 4 | 3 | 1 | 15.5/100.0 | 5 | 1320 | 2 | 146 |
+| S4 | 13 | 28 | 2 (0) | 8 | 3 | 2 | 23.1/100.0 | 5 | 1380 | 0 | 87 |
+| S5 | 20 | 43 | 17 (0) | 4 | 3 | 2 | 25.0/100.0 | 5 | 1320 | 1 | 173 |
+| S6 | 3 | 3 | 0 (0) | 37 | 3 | 1 | 68.1/100.0 | 38 | 4380 | 2 | 20 |
+| C1 | 12 | 26 | 4 (0) | 14 | 3 | 2 | 23.1/100.0 | 10 | 1380 | 0 | 79 |
+| C2 | 11 | 24 | 4 (0) | 7 | 3 | 1 | 18.3/100.0 | 5 | 1380 | 2 | 89 |
+| C3 | 0 | 0 | 0 (8) | 35 | 0 | 3 | 1.0/90.0 | 6 | 1320 | 2 | 0 |
+| C4 | 1 | 1 | 0 (7) | 33 | 0 | 3 | 1.0/90.0 | 6 | 1320 | 2 | 0 |
+| Q1 | 0 | 0 | 0 (15) | 38 | 0 | 4 | 22.1/99.0 | 5 | 1320 | 1 | 1 |
+| SV | 0 | 0 | 0 (15) | 38 | 0 | 4 | 22.1/99.0 | 5 | 1320 | 1 | 0 |
+| SVL | 0 | 0 | 0 (14) | 38 | 0 | 4 | 22.1/99.0 | 5 | 1320 | 1 | 0 |
+| SVI | 0 | 0 | 0 (9) | 39 | 0 | 3 | 2.2/90.0 | 6 | 1320 | 2 | 0 |
+| SVIL | 0 | 0 | 0 (8) | 39 | 0 | 3 | 1.0/90.0 | 6 | 1320 | 2 | 0 |
 <!-- END GENERATED:aggregate -->
 
 What the numbers say:
@@ -84,13 +88,17 @@ Same library, but every scenario gets an authoritative shot list for its main jo
 
 | strategy | FC | FR (expl.) | missed | err med/worst | uncorr |
 |---|---|---|---|---|---|
-| S0 | 20 | 17 (0) | 4 | 25.8/100.0 | 4 |
+| S0 | 20 | 18 (0) | 4 | 25.0/100.0 | 5 |
 | S2 | 3 | 1 (1) | 5 | 0.0/100.0 | 5 |
 | C3 | 0 | 0 (1) | 7 | 1.0/100.0 | 6 |
 | C4 | 0 | 0 (1) | 7 | 1.0/100.0 | 6 |
+| SVL | 0 | 0 (10) | 38 | 16.7/99.0 | 11 |
+| SVIL | 0 | 0 (1) | 39 | 1.0/100.0 | 6 |
 
 C3 false completions with a confirmed list: none.
 C3 still never done with a confirmed list: WC13_copy_grade_to_scene, WC14_invisible_grade_group_or_nr, WC15b_duplicated_timeline_no_names, WC24_compound_nesting, WC26_stills_graphics, WC27_reused_source_and_blade, WC28_marker_codes_missing_dup_renamed.
+SVL (shipped server path, D1 = lock) false completions with a confirmed list: none.
+SVIL (shipped server path, D1 = lock) false completions with a confirmed list: none.
 <!-- END GENERATED:confirmed -->
 
 ### Strategies, the data they need, and whether that data exists today
@@ -116,6 +124,10 @@ Checked on 2026-10-26 against `agent/resolve_poller.py`, `agent/grade_detect.py`
 | C3 | S2+S3+S4+S5 + job guard: confirmed scope, shot ledger, stable done, work counter | as S3 + confirmed scope + booking name + grade.pending + PMS task status | partly: grade.pending yes; items need poller change; scope needs PMS field or EDL import; task status not in /schedule | scope confirmation per job (shot list/count) - or owner accepts the offline timeline as scope (C4) | L (poller items + server ledger + PMS fields) |
 | C4 | C3, but the offline/editorial timeline's shot list counts as confirmed scope (no human input) | as S3 + offline timeline item list | partly: offline timeline is read today for duration only | none (trusts the offline timeline found by name) | L (poller items + server ledger + PMS fields) |
 | Q1 | quick fix: S0 capped at 99 + holds (pending, reference timeline, job mismatch, late) + count reasons | same as S0 + grade.pending (sent today) + booking project_no/name | yes | none | S (server only, this week) |
+| SV | shipped server/progress_v2.py, default decisions (D1 none: provisional, cap 99, holds) | same as Q1 (counts + grade.pending + booking project_no/name) | yes (shipped on night/progress-v2) | none | shipped (night/progress-v2) |
+| SVL | shipped server/progress_v2.py with D1 = lock (a human-set shot count confirms the scope) | as SV + a human scope lock (shot count) per project_no/stage | yes (scope_locks.json; off by default) | someone locks the shot count per job and stage (scope_locks.json) | shipped (night/progress-v2) |
+| SVI | shipped server/progress_v2.py + per-clip identity ledger (step 3), D1 none | as SV + per-item identity from the poller (items, offline_shots) | server yes; poller NO (change pending owner sign-off) | none | server shipped; poller change pending |
+| SVIL | shipped server/progress_v2.py + identity ledger + D1 = lock (shot list or count) | as SVI + a scope lock | server yes; poller NO; lock file yes | someone locks the shot list/count per job and stage | server shipped; poller change pending |
 <!-- END GENERATED:strategies -->
 
 ### Every scenario x strategy
@@ -124,52 +136,53 @@ Cell: F false completion, R unexplained false regression, r labelled drop, M nev
 though finished, W value lands on the wrong project, L nothing sent; number = max error (points).
 
 <!-- BEGIN GENERATED:matrix -->
-| scenario | S0 | S1 | S2 | S3 | S4 | S5 | S6 | C1 | C2 | C3 | C4 | Q1 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| WC01_replay_2026_10_14_TEST | FR 25 | Fr 25 | R 24 | Fr 25 | R 36 | FR 25 | ok 53 | R 36 | R 36 | r 24 | r 24 | r 24 |
-| WC02_vfx_late_no_placeholder | FR 17 | Fr 17 | RM 16 | Fr 17 | F 17 | FR 17 | F 58 | F 17 | F 17 | rM 16 | rM 16 | rM 16 |
-| WC02b_vfx_late_confirmed_list | FR 17 | Fr 17 | ok 0 | Fr 17 | F 17 | FR 17 | F 58 | F 17 | F 17 | ok 1 | ok 1 | rM 16 |
-| WC03_vfx_placeholder_slug | ok 0 | ok 0 | M 1 | ok 0 | ok 1 | ok 0 | F 71 | ok 1 | ok 1 | M 1 | M 1 | M 1 |
-| WC04_reels_as_timelines | FR 56 | FRM 56 | RM 56 | Fr 44 | ok 43 | FR 56 | M 43 | M 43 | R 43 | rM 43 | rM 43 | rM 56 |
-| WC05_shots_cut_ungraded | ok 13 | M 17 | M 13 | ok 13 | ok 13 | ok 13 | M 68 | M 17 | ok 13 | M 13 | M 13 | M 13 |
-| WC06_shots_cut_graded | R 3 | RM 17 | RM 3 | r 3 | ok 3 | R 3 | M 68 | M 17 | ok 3 | rM 3 | rM 3 | rM 3 |
-| WC07_vfx_new_version_grade_kept | F 10 | F 10 | M 9 | ok 0 | F 10 | F 10 | M 88 | F 10 | FR 10 | M 1 | M 1 | M 9 |
-| WC08_reconform_new_timeline | ok 70 | ok 70 | M 70 | ok 0 | F 30 | ok 70 | M 88 | F 30 | F 30 | M 1 | M 1 | M 70 |
-| WC09_node_reset_start_over | ok 0 | ok 0 | M 1 | ok 0 | F 30 | ok 0 | M 88 | F 30 | F 30 | M 1 | M 1 | M 1 |
-| WC10_client_notes_rework | F 40 | F 40 | F 40 | F 40 | F 40 | F 40 | M 88 | F 40 | F 40 | ok 39 | ok 39 | M 39 |
-| WC11_revision_days_after_delivery | F 20 | F 20 | F 20 | F 20 | F 20 | F 20 | M 88 | F 20 | F 20 | ok 19 | ok 19 | M 19 |
-| WC12_look_lut_on_all_clips | F 100 | F 100 | F 100 | F 100 | F 100 | F 100 | M 50 | F 100 | F 100 | ok 1 | ok 1 | M 99 |
-| WC13_copy_grade_to_scene | ok 0 | ok 0 | ok 0 | ok 0 | ok 1 | ok 0 | M 94 | ok 1 | ok 1 | M 90 | M 90 | M 1 |
-| WC14_invisible_grade_group_or_nr | M 80 | M 80 | M 80 | M 80 | M 80 | M 80 | M 75 | M 80 | M 80 | M 80 | M 80 | M 80 |
-| WC15_duplicated_timeline_v2 | R 40 | R 40 | RM 40 | ok 0 | ok 1 | R 40 | M 69 | ok 1 | ok 1 | M 1 | M 1 | rM 40 |
-| WC15b_duplicated_timeline_no_names | ok 0 | ok 0 | M 1 | M 20 | ok 1 | ok 0 | M 69 | ok 1 | M 20 | M 20 | M 20 | M 1 |
-| WC16_project_saved_as_final | R 30 | R 30 | RM 30 | ok 0 | ok 1 | R 30 | M 69 | ok 1 | ok 1 | M 1 | M 1 | rM 30 |
-| WC17_offline_ref_and_trailer_timelines | FR 17 | RM 50 | RM 16 | rM 25 | F 17 | FR 17 | M 58 | RM 50 | M 25 | rM 25 | M 29 | rM 16 |
-| WC18_two_rooms_one_job | FR 44 | FRM 44 | RM 43 | ok 0 | M 43 | FR 44 | M 65 | M 43 | M 1 | M 1 | M 1 | rM 43 |
-| WC19_handover_between_rooms | R 40 | R 40 | RM 40 | ok 0 | M 1 | R 40 | M 62 | M 1 | ok 1 | M 1 | M 1 | rM 40 |
-| WC20_offline_changes_after_conform | F 17 | F 17 | M 16 | F 58 | F 17 | F 17 | M 58 | F 17 | F 57 | M 16 | FM 17 | M 16 |
-| WC21_xml_import_instant_full_duration | F 100 | F 100 | M 99 | ok 0 | F 99 | F 100 | M 62 | F 99 | ok 1 | M 1 | ok 1 | M 99 |
-| WC22_offline_timeline_misnamed | L 0 | L 0 | L 0 | F 50 | L 0 | L 0 | M 75 | L 0 | ok 49 | M 49 | M 49 | L 0 |
-| WC22b_wrong_timeline_matches_regex | F 50 | F 50 | M 49 | F 50 | ok 49 | F 50 | M 75 | ok 49 | ok 49 | M 49 | M 49 | M 49 |
-| WC23_slate_and_audio_inflate_duration | F 100 | F 100 | M 99 | F 50 | ok 99 | F 100 | M 75 | ok 99 | ok 49 | M 1 | ok 1 | M 99 |
-| WC24_compound_nesting | ok 41 | M 45 | M 41 | ok 41 | ok 41 | ok 41 | M 62 | M 45 | ok 41 | M 41 | M 41 | M 41 |
-| WC25_titles_generators_adjustment | M 27 | M 27 | M 27 | ok 0 | M 27 | M 27 | M 75 | M 27 | ok 1 | M 1 | M 1 | M 27 |
-| WC26_stills_graphics | M 23 | M 23 | M 23 | M 23 | M 23 | M 23 | M 88 | M 23 | M 23 | M 23 | M 23 | M 23 |
-| WC26b_disabled_alt_takes | M 29 | M 29 | M 29 | ok 0 | M 29 | M 29 | M 88 | M 29 | ok 1 | M 1 | M 1 | M 29 |
-| WC27_reused_source_and_blade | ok 0 | ok 0 | M 1 | ok 0 | ok 1 | ok 0 | M 88 | ok 1 | ok 1 | M 1 | M 1 | M 1 |
-| WC28_marker_codes_missing_dup_renamed | ok 0 | ok 0 | M 1 | ok 4 | ok 1 | ok 0 | M 62 | ok 1 | ok 4 | M 4 | M 4 | M 1 |
-| WC29_crash_and_sleep_gaps | ok 0 | ok 0 | M 1 | ok 0 | ok 30 | ok 0 | M 48 | ok 30 | ok 30 | M 1 | M 1 | M 1 |
-| WC30_clock_skew_two_rooms | FR 44 | FRM 44 | RM 43 | ok 0 | M 43 | FR 44 | M 87 | M 43 | M 1 | M 1 | M 1 | rM 43 |
-| WC31_offline_queue_backlog | R 13 | ok 0 | M 1 | ok 0 | ok 1 | ok 0 | M 89 | ok 1 | ok 1 | M 1 | M 1 | M 1 |
-| WC32_two_jobs_one_project | FW 50 | RW 10 | MW 49 | W 14 | W 49 | FW 50 | MW 62 | W 1 | W 14 | L 0 | L 0 | L 0 |
-| WC32b_ambiguous_bookings_unbound | L 0 | L 0 | L 0 | L 0 | L 0 | L 0 | L 0 | L 0 | L 0 | L 0 | L 0 | L 0 |
-| WC33_one_job_many_projects | FR 67 | FR 67 | RM 67 | Fr 67 | ok 66 | FR 67 | M 38 | ok 66 | ok 66 | rM 66 | rM 66 | rM 67 |
-| WC34_room_swap_booking_mismatch | W 0 | W 0 | MW 0 | W 0 | W 0 | W 0 | MW 0 | W 0 | W 0 | L 0 | L 0 | L 0 |
-| WC34b_overtime_outside_booking | ok 0 | ok 0 | ok 0 | ok 0 | ok 0 | ok 0 | ok 35 | ok 0 | ok 0 | ok 0 | ok 0 | ok 0 |
-| WC35_tv_vs_cinema_versions | FR 23 | Fr 23 | RM 22 | Fr 23 | F 23 | FR 23 | M 64 | F 23 | F 23 | rM 22 | rM 22 | rM 22 |
-| WC36_color_starts_before_conform_done | FR 44 | Fr 44 | RM 43 | Fr 44 | F 44 | FR 44 | M 62 | F 44 | F 44 | M 1 | M 1 | rM 43 |
-| WC37_detector_warmup_reopen | R 100 | R 100 | RM 100 | R 100 | RM 73 | R 100 | ok 100 | RM 73 | RM 73 | M 1 | M 1 | M 1 |
-| WC43_other_project_opened_briefly | FRW 70 | FRMW 82 | RMW 69 | W 59 | W 69 | FRW 70 | MW 71 | RMW 82 | W 59 | M 1 | M 1 | M 1 |
+| scenario | S0 | S1 | S2 | S3 | S4 | S5 | S6 | C1 | C2 | C3 | C4 | Q1 | SV | SVL | SVI | SVIL |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| WC01_replay_2026_10_14_TEST | FR 25 | Fr 25 | R 24 | Fr 25 | R 36 | FR 25 | ok 53 | R 36 | R 36 | r 24 | r 24 | r 24 | r 24 | r 24 | r 24 | r 24 |
+| WC02_vfx_late_no_placeholder | FR 17 | Fr 17 | RM 16 | Fr 17 | F 17 | FR 17 | F 58 | F 17 | F 17 | rM 16 | rM 16 | rM 16 | rM 16 | rM 16 | rM 16 | rM 16 |
+| WC02b_vfx_late_confirmed_list | FR 17 | Fr 17 | ok 0 | Fr 17 | F 17 | FR 17 | F 58 | F 17 | F 17 | ok 1 | ok 1 | rM 16 | rM 16 | M 1 | rM 16 | M 1 |
+| WC03_vfx_placeholder_slug | ok 0 | ok 0 | M 1 | ok 0 | ok 1 | ok 0 | F 71 | ok 1 | ok 1 | M 1 | M 1 | M 1 | M 1 | M 1 | M 1 | M 1 |
+| WC04_reels_as_timelines | FR 56 | FRM 56 | RM 56 | Fr 44 | ok 43 | FR 56 | M 43 | M 43 | R 43 | rM 43 | rM 43 | rM 56 | rM 56 | rM 56 | rM 43 | rM 43 |
+| WC05_shots_cut_ungraded | ok 13 | M 17 | M 13 | ok 13 | ok 13 | ok 13 | M 68 | M 17 | ok 13 | M 13 | M 13 | M 13 | M 13 | M 13 | M 13 | M 13 |
+| WC06_shots_cut_graded | R 3 | RM 17 | RM 3 | r 3 | ok 3 | R 3 | M 68 | M 17 | ok 3 | rM 3 | rM 3 | rM 3 | rM 3 | rM 3 | rM 3 | rM 3 |
+| WC07_vfx_new_version_grade_kept | F 10 | F 10 | M 9 | ok 0 | F 10 | F 10 | M 88 | F 10 | FR 10 | M 1 | M 1 | M 9 | M 9 | M 9 | M 1 | M 1 |
+| WC08_reconform_new_timeline | ok 70 | ok 70 | M 70 | ok 0 | F 30 | ok 70 | M 88 | F 30 | F 30 | M 1 | M 1 | M 70 | M 70 | M 70 | M 1 | M 1 |
+| WC09_node_reset_start_over | ok 0 | ok 0 | M 1 | ok 0 | F 30 | ok 0 | M 88 | F 30 | F 30 | M 1 | M 1 | M 1 | M 1 | M 1 | M 1 | M 1 |
+| WC10_client_notes_rework | F 40 | F 40 | F 40 | F 40 | F 40 | F 40 | M 88 | F 40 | F 40 | ok 39 | ok 39 | M 39 | M 39 | M 39 | M 39 | M 39 |
+| WC11_revision_days_after_delivery | F 20 | F 20 | F 20 | F 20 | F 20 | F 20 | M 88 | F 20 | F 20 | ok 19 | ok 19 | M 19 | M 19 | M 19 | M 19 | M 19 |
+| WC12_look_lut_on_all_clips | F 100 | F 100 | F 100 | F 100 | F 100 | F 100 | M 50 | F 100 | F 100 | ok 1 | ok 1 | M 99 | M 99 | M 99 | M 1 | M 1 |
+| WC13_copy_grade_to_scene | ok 0 | ok 0 | ok 0 | ok 0 | ok 1 | ok 0 | M 94 | ok 1 | ok 1 | M 90 | M 90 | M 1 | M 1 | M 1 | M 90 | M 90 |
+| WC14_invisible_grade_group_or_nr | M 80 | M 80 | M 80 | M 80 | M 80 | M 80 | M 75 | M 80 | M 80 | M 80 | M 80 | M 80 | M 80 | M 80 | M 80 | M 80 |
+| WC15_duplicated_timeline_v2 | R 40 | R 40 | RM 40 | ok 0 | ok 1 | R 40 | M 69 | ok 1 | ok 1 | M 1 | M 1 | rM 40 | rM 40 | rM 40 | M 1 | M 1 |
+| WC15b_duplicated_timeline_no_names | ok 0 | ok 0 | M 1 | M 20 | ok 1 | ok 0 | M 69 | ok 1 | M 20 | M 20 | M 20 | M 1 | M 1 | M 1 | M 20 | M 20 |
+| WC16_project_saved_as_final | R 30 | R 30 | RM 30 | ok 0 | ok 1 | R 30 | M 69 | ok 1 | ok 1 | M 1 | M 1 | rM 30 | rM 30 | rM 30 | M 1 | M 1 |
+| WC17_offline_ref_and_trailer_timelines | FR 17 | RM 50 | RM 16 | rM 25 | F 17 | FR 17 | M 58 | RM 50 | M 25 | rM 25 | M 29 | rM 16 | rM 16 | rM 16 | rM 25 | rM 25 |
+| WC18_two_rooms_one_job | FR 44 | FRM 44 | RM 43 | ok 0 | M 43 | FR 44 | M 65 | M 43 | M 1 | M 1 | M 1 | rM 43 | rM 43 | rM 43 | M 1 | M 1 |
+| WC19_handover_between_rooms | R 40 | R 40 | RM 40 | ok 0 | M 1 | R 40 | M 62 | M 1 | ok 1 | M 1 | M 1 | rM 40 | rM 40 | rM 40 | M 1 | M 1 |
+| WC20_offline_changes_after_conform | F 17 | F 17 | M 16 | F 58 | F 17 | F 17 | M 58 | F 17 | F 57 | M 16 | FM 17 | M 16 | M 16 | M 16 | M 16 | M 16 |
+| WC21_xml_import_instant_full_duration | F 100 | F 100 | M 99 | ok 0 | F 99 | F 100 | M 62 | F 99 | ok 1 | M 1 | ok 1 | M 99 | M 99 | M 99 | M 1 | M 1 |
+| WC22_offline_timeline_misnamed | L 0 | L 0 | L 0 | F 50 | L 0 | L 0 | M 75 | L 0 | ok 49 | M 49 | M 49 | L 0 | L 0 | L 0 | M 49 | M 49 |
+| WC22b_wrong_timeline_matches_regex | F 50 | F 50 | M 49 | F 50 | ok 49 | F 50 | M 75 | ok 49 | ok 49 | M 49 | M 49 | M 49 | M 49 | M 49 | M 49 | M 49 |
+| WC23_slate_and_audio_inflate_duration | F 100 | F 100 | M 99 | F 50 | ok 99 | F 100 | M 75 | ok 99 | ok 49 | M 1 | ok 1 | M 99 | M 99 | M 99 | M 1 | M 1 |
+| WC24_compound_nesting | ok 41 | M 45 | M 41 | ok 41 | ok 41 | ok 41 | M 62 | M 45 | ok 41 | M 41 | M 41 | M 41 | M 41 | M 41 | M 41 | M 41 |
+| WC25_titles_generators_adjustment | M 27 | M 27 | M 27 | ok 0 | M 27 | M 27 | M 75 | M 27 | ok 1 | M 1 | M 1 | M 27 | M 27 | M 27 | M 1 | M 1 |
+| WC26_stills_graphics | M 23 | M 23 | M 23 | M 23 | M 23 | M 23 | M 88 | M 23 | M 23 | M 23 | M 23 | M 23 | M 23 | M 23 | M 23 | M 23 |
+| WC26b_disabled_alt_takes | M 29 | M 29 | M 29 | ok 0 | M 29 | M 29 | M 88 | M 29 | ok 1 | M 1 | M 1 | M 29 | M 29 | M 29 | M 1 | M 1 |
+| WC27_reused_source_and_blade | ok 0 | ok 0 | M 1 | ok 0 | ok 1 | ok 0 | M 88 | ok 1 | ok 1 | M 1 | M 1 | M 1 | M 1 | M 1 | M 1 | M 1 |
+| WC28_marker_codes_missing_dup_renamed | ok 0 | ok 0 | M 1 | ok 4 | ok 1 | ok 0 | M 62 | ok 1 | ok 4 | M 4 | M 4 | M 1 | M 1 | M 1 | M 4 | M 4 |
+| WC29_crash_and_sleep_gaps | ok 0 | ok 0 | M 1 | ok 0 | ok 30 | ok 0 | M 48 | ok 30 | ok 30 | M 1 | M 1 | M 1 | M 1 | M 1 | M 1 | M 1 |
+| WC30_clock_skew_two_rooms | FR 44 | FRM 44 | RM 43 | ok 0 | M 43 | FR 44 | M 87 | M 43 | M 1 | M 1 | M 1 | rM 43 | rM 43 | rM 43 | M 1 | M 1 |
+| WC31_offline_queue_backlog | R 13 | ok 0 | M 1 | ok 0 | ok 1 | ok 0 | M 89 | ok 1 | ok 1 | M 1 | M 1 | M 1 | M 1 | M 1 | M 1 | M 1 |
+| WC32_two_jobs_one_project | FW 50 | RW 10 | MW 49 | W 14 | W 49 | FW 50 | MW 62 | W 1 | W 14 | L 0 | L 0 | L 0 | L 0 | L 0 | L 0 | L 0 |
+| WC32b_ambiguous_bookings_unbound | L 0 | L 0 | L 0 | L 0 | L 0 | L 0 | L 0 | L 0 | L 0 | L 0 | L 0 | L 0 | L 0 | L 0 | L 0 | L 0 |
+| WC33_one_job_many_projects | FR 67 | FR 67 | RM 67 | Fr 67 | ok 66 | FR 67 | M 38 | ok 66 | ok 66 | rM 66 | rM 66 | rM 67 | rM 67 | rM 67 | rM 66 | rM 66 |
+| WC34_room_swap_booking_mismatch | W 0 | W 0 | MW 0 | W 0 | W 0 | W 0 | MW 0 | W 0 | W 0 | L 0 | L 0 | L 0 | L 0 | L 0 | L 0 | L 0 |
+| WC34b_overtime_outside_booking | ok 0 | ok 0 | ok 0 | ok 0 | ok 0 | ok 0 | ok 35 | ok 0 | ok 0 | ok 0 | ok 0 | ok 0 | ok 0 | ok 0 | ok 0 | ok 0 |
+| WC35_tv_vs_cinema_versions | FR 23 | Fr 23 | RM 22 | Fr 23 | F 23 | FR 23 | M 64 | F 23 | F 23 | rM 22 | rM 22 | rM 22 | rM 22 | rM 22 | rM 22 | rM 22 |
+| WC36_color_starts_before_conform_done | FR 44 | Fr 44 | RM 43 | Fr 44 | F 44 | FR 44 | M 62 | F 44 | F 44 | M 1 | M 1 | rM 43 | rM 43 | rM 43 | M 1 | M 1 |
+| WC37_detector_warmup_reopen | R 100 | R 100 | RM 100 | R 100 | RM 73 | R 100 | ok 100 | RM 73 | RM 73 | M 1 | M 1 | M 1 | M 1 | M 1 | M 1 | M 1 |
+| WC43_other_project_opened_briefly | FRW 70 | FRMW 82 | RMW 69 | W 59 | W 69 | FRW 70 | MW 71 | RMW 82 | W 59 | M 1 | M 1 | M 1 | M 1 | M 1 | M 1 | M 1 |
+| WC44_two_rooms_cut_then_add_counts | R 17 | R 17 | R 17 | r 17 | ok 17 | R 17 | ok 15 | ok 17 | ok 17 | r 17 | r 17 | r 17 | r 17 | r 17 | r 17 | r 17 |
 <!-- END GENERATED:matrix -->
 
 ### Replay of the stored real records (fixture)
@@ -191,6 +204,10 @@ Replay of 263 real records from server/tests/fixtures/replay
 | C3 | 0 | 2 | 0 | 1 | 0 | 236 |
 | C4 | 0 | 2 | 0 | 1 | 0 | 236 |
 | Q1 | 0 | 2 | 0 | 1 | 0 | 236 |
+| SV | 0 | 2 | 0 | 1 | 0 | 236 |
+| SVL | 0 | 2 | 0 | 1 | 0 | 236 |
+| SVI | 0 | 2 | 0 | 1 | 0 | 236 |
+| SVIL | 0 | 2 | 0 | 1 | 0 | 236 |
 <!-- END GENERATED:replay -->
 
 ## Recommendation

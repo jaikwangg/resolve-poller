@@ -111,3 +111,135 @@ def start(load_recent, interval_min, eff_job, erp):
             sync_once(load_recent, interval_min, eff_job, erp)
             ev.wait(EVERY_SEC)
     threading.Thread(target=loop, name="pms-sync", daemon=True).start()
+
+
+# ---------------- progress % (PMS contract v2, POST /api/integrations/editortrack/progress) ----------------
+# ค่า % ที่ส่ง PMS คำนวณที่ server ด้วย progress_v2.Engine (ขั้น 1–2 ของ C3 ในการศึกษา worst-case):
+# ไม่ส่ง 100/done จนกว่าขอบเขตจะยืนยันและนิ่ง · ก่อนนั้น provisional ไม่เกิน cap (99) · พักค่าเดิมตอน
+# detector ยังไม่เสร็จ / เปิด timeline offline / project ใน Resolve ไม่ตรง booking · record ค้างจาก queue ไม่ขยับค่า
+# ฟิลด์ตามสัญญา v2 ของ PMS (9e67f60, docs/integrations/editortrack.md §3.1) ชื่อ/ชนิดตรงตัว — ไม่ผ่าน ERP_PF_*
+# ยังปิดอยู่จนกว่าจะตั้ง ERP_PROGRESS_PATH (+ ERP_BASE_URL) · best-effort: พังแล้ว ingest ยังรับ record ตามปกติ
+import json as _json
+import os as _os
+
+import progress_v2 as _pv
+
+PROGRESS_STATE_FILE = "progress_v2_state.json"     # ใน STORE: state ของ engine + ค่าที่ส่งสำเร็จล่าสุด (กัน restart แล้ว work_done ถอย)
+SCOPE_LOCKS_FILE = "scope_locks.json"               # ใน STORE: ขอบเขตที่คนยืนยัน (D1 = lock) — python3 progress_v2.py lock ...
+progress_status = {"enabled": False, "config": None, "sent": 0, "rejected": 0, "refused_locally": 0, "errors": 0,
+                   "withheld": {}, "last_error": None, "last": {}}
+_pg = {"engine": None, "pushed": {}, "store": None}
+_pg_lock = threading.Lock()
+
+
+def _progress_enabled(erp):
+    return bool(erp and getattr(erp, "ERP_PROGRESS_PATH", "") and getattr(erp, "ERP_BASE", ""))
+
+
+def _load_progress_state(store):
+    """the persisted engine state; a corrupt or wrongly shaped file is moved aside (kept for a look) and the
+    engine starts fresh: values stay provisional, only work_done may restart lower (said in last_error)"""
+    path = _os.path.join(str(store), PROGRESS_STATE_FILE)
+    try:
+        with open(path, encoding="utf-8") as f:
+            st = _json.load(f)
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError):
+        st = None
+    if _pv.valid_state(st) and isinstance(st.get("pushed", {}), dict):
+        return st
+    try:
+        _os.replace(path, path + ".corrupt-" + datetime.datetime.now().strftime("%Y%m%d%H%M%S"))
+    except OSError:
+        pass
+    progress_status["last_error"] = "progress state file unreadable: moved aside, engine restarted"
+    return {}
+
+
+def _save_progress_state(store, engine, pushed):
+    path = _os.path.join(str(store), PROGRESS_STATE_FILE)
+    tmp = path + ".tmp"
+    fd = _os.open(tmp, _os.O_WRONLY | _os.O_CREAT | _os.O_TRUNC, 0o600)
+    with _os.fdopen(fd, "w", encoding="utf-8") as f:
+        _json.dump({**engine.state(), "pushed": pushed}, f, ensure_ascii=False)
+        f.flush()
+        _os.fsync(f.fileno())                    # a power cut must not leave an empty file behind os.replace
+    _os.replace(tmp, path)
+
+
+def _engine(store):
+    if _pg["engine"] is None or _pg["store"] != str(store):
+        st = _load_progress_state(store)
+        cfg = _pv.Config.from_env()
+        _pg["engine"], _pg["pushed"], _pg["store"] = _pv.Engine(cfg, st), dict(st.get("pushed") or {}), str(store)
+        progress_status["config"] = cfg.describe()
+    return _pg["engine"]
+
+
+def progress_on_ingest(rec, eff_job, erp, store):
+    """เรียกจาก /ingest หลังเขียน record ลง disk แล้ว → True เมื่อส่ง PMS สำเร็จ. ไม่ raise (best-effort)."""
+    progress_status["enabled"] = _progress_enabled(erp)
+    if not progress_status["enabled"]:
+        return False
+    try:
+        with _pg_lock:
+            return _progress_step(rec, eff_job, erp, store)
+    except Exception as e:                       # ไม่ให้ปัญหาฝั่ง PMS/คำนวณ ทำให้ ingest ล้ม
+        progress_status["errors"] += 1
+        progress_status["last_error"] = f"{type(e).__name__}: {e}"
+        return False
+
+
+def _progress_step(rec, eff_job, erp, store):
+    eng = _engine(store)
+    eff = eff_job(rec)
+    stage = eff.get("stage")
+    key = f"{eff.get('job_id')}|{stage}"
+    scope = None
+    if "lock" in eng.cfg.scope_source:
+        scope = _pv.lock_for(_pv.load_scope_locks(_os.path.join(str(store), SCOPE_LOCKS_FILE)), key, rec.get("ts"))
+    o = eng.step(_pv.obs_from_record(rec, eff, scope))
+    pushed = False
+    if not o["send"]:
+        why = next((r for r in _pv.HOLDS if r in o["reasons"]),
+                   "unbound" if eff.get("source") != "erp" else "unsendable")
+        progress_status["withheld"][why] = progress_status["withheld"].get(why, 0) + 1
+    else:
+        body = _pv.payload(o, eff["job_id"], stage, rec.get("ts"), rec.get("host"))
+        sig = _sig(body)
+        problem = _pv.pms_check(body)
+        if problem:                              # ไม่ส่งสิ่งที่ PMS จะตอบ 422 หรือผิดกติกา zero-incident ของเราเอง
+            progress_status["refused_locally"] += 1
+            progress_status["last_error"] = f"refused locally: {problem}"
+        elif _pg["pushed"].get(key) != sig:
+            pushed = _post_progress(erp, body)
+            if pushed:
+                _pg["pushed"][key] = sig
+                progress_status["sent"] += 1
+                progress_status["last"][key] = body
+    _save_progress_state(store, eng, _pg["pushed"])
+    return pushed
+
+
+def _sig(body):
+    """what makes a new PMS row worth sending: the value and its counts. Reasons alone do not: a drop's reason
+    rides on the row that drops, and a resend of the same % with fewer reasons would hide it (PMS explains the
+    latest row against the one before it)."""
+    return _json.dumps({k: v for k, v in body.items() if k not in ("observed_at", "host", "reasons")}, sort_keys=True)
+
+
+def _post_progress(erp, body):
+    """POST ตรงตามสัญญา (ไม่ผ่าน erp.push_progress ที่แมปชื่อฟิลด์ด้วย ERP_PF_*) — 422 = PMS ไม่รับ ไม่ส่งซ้ำค่าเดิม"""
+    import urllib.error
+    try:
+        erp._post_auth(f"{erp.ERP_BASE}{erp.ERP_PROGRESS_PATH}", body, getattr(erp, "ERP_PROGRESS_METHOD", "POST"))
+        return True
+    except urllib.error.HTTPError as e:
+        if e.code == 422:
+            progress_status["rejected"] += 1
+            progress_status["last_error"] = f"PMS 422 for {body.get('project_no')}|{body.get('stage')}"
+            key = f"{body.get('project_no')}|{body.get('stage')}"
+            _pg["pushed"][key] = _sig(body)
+            return False
+        raise

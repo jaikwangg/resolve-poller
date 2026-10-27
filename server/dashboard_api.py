@@ -27,8 +27,6 @@ import projects as _proj
 import pms_sync
 import agent_health
 
-_last_pushed = {}          # (job_id, stage) -> % ล่าสุดที่ส่ง PMS สำเร็จ
-
 
 # ---------------- ingest ----------------
 @app.post("/ingest")
@@ -45,22 +43,9 @@ async def ingest(req: Request, authorization: str = Header(default="")):
     day = datetime.date.today().isoformat()
     with open(STORE / f"{day}.jsonl", "a", encoding="utf-8") as f:
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
-    # push progress → ERP (best-effort; no-op ถ้ายังไม่ตั้ง ERP_PROGRESS_PATH) — นี่คือ "หน้าที่หลัก" ของระบบ
-    # ส่งเฉพาะ job ที่ได้จาก ERP (project_no จริง — ชื่อ project ของ Resolve PMS ตอบ 422) และเฉพาะตอน % เปลี่ยน
-    pushed = False
-    if erp:
-        try:
-            eff = _eff_job(rec)
-            prog = rec.get("progress") or {}
-            pct = prog.get("pct")
-            k = (eff.get("job_id"), eff.get("stage"))
-            if eff.get("source") == "erp" and all(k) and pct is not None and _last_pushed.get(k) != pct:
-                pushed = erp.push_progress(k[0], k[1], round(float(pct), 2),
-                                           {"observed_at": rec.get("ts"), "host": rec.get("host")})
-                if pushed:
-                    _last_pushed[k] = pct
-        except Exception:
-            pass
+    # push progress → PMS (contract v2, pms_sync.progress_on_ingest + progress_v2): provisional ≤ 99 until the scope is
+    # confirmed and stable, holds while unsure, only ERP-bound project_no · best-effort, no-op until ERP_PROGRESS_PATH
+    pushed = pms_sync.progress_on_ingest(rec, _eff_job, erp, STORE) if erp else False
     return {"ok": True, "pushed": pushed}
 
 
@@ -345,7 +330,7 @@ def _start_pms_sync():
 def api_pms():
     return JSONResponse({**pms_sync.status, "window_min": pms_sync.WINDOW_MIN,
                          "progress_enabled": bool(erp and erp.ERP_PROGRESS_PATH and erp.ERP_BASE),
-                         "last_pushed": [{"job": k[0], "stage": k[1], "pct": v} for k, v in _last_pushed.items()]})
+                         "progress": pms_sync.progress_status})
 
 
 # ---------------- /api/report : สรุปรายวันต่อเครื่อง ----------------
