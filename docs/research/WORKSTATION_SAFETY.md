@@ -262,6 +262,9 @@ rotating cursor), or counts only for large timelines.
 
 ## 7. Real-machine verification protocol (extends NEXT_STEPS phase 3)
 
+Test-day kit for this protocol: printable checklist `docs/testday/CHECKLIST.md` (Thai + English), dummy project
+`docs/testday/DUMMY_PROJECT.md`, results `docs/testday/RESULTS_TEMPLATE.md`, tools in `testday/`.
+
 **Setup.** One **Mac conform** and one **Linux grade** workstation, each running the
 production Resolve version, with **dummy projects only** (no client media, no client project
 open in any library on that machine during the test, or a separate project library). Agent
