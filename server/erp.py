@@ -33,6 +33,9 @@ ERP_RECORDS_PATH = os.environ.get("ERP_RECORDS_PATH", "data.bookings")
 ERP_TOKEN_STATIC = os.environ.get("ERP_TOKEN", "")
 ERP_MOCK = os.environ.get("ERP_MOCK")
 CACHE_TTL = int(os.environ.get("ERP_CACHE_TTL", "300"))
+# a failed fetch is not retried for FAIL_TTL s (negative cache, ported from audit-fixes 10a0e1f): without it every
+# lookup during a PMS outage waited for the 10 s timeout again (per record in /api/*, and inside /ingest)
+FAIL_TTL = int(os.environ.get("ERP_FAIL_TTL", "60"))
 LOOKBACK_DAYS = int(os.environ.get("ERP_LOOKBACK_DAYS", "8"))
 STATUS_DENY = set(s.strip().upper() for s in os.environ.get("ERP_STATUS_DENY", "CANCELLED,CANCELED,DELETED,TENTATIVE").split(",") if s.strip())
 
@@ -64,7 +67,7 @@ PF = {"job":   os.environ.get("ERP_PF_JOB", "project_no"),
       "pct":   os.environ.get("ERP_PF_PCT", "progress_pct")}
 
 _tok = {"token": None, "exp": None}
-_cache = {"at": None, "rows": []}
+_cache = {"at": None, "rows": [], "failed_at": None}
 
 
 def _dig(obj, dotted):
@@ -151,12 +154,14 @@ def _fetch():
 def _bookings():
     now = datetime.datetime.now(datetime.timezone.utc)
     age = (now - _cache["at"]).total_seconds() if _cache["at"] else 1e9
-    if age > CACHE_TTL:
+    failed = (now - _cache["failed_at"]).total_seconds() if _cache.get("failed_at") else 1e9
+    if age > CACHE_TTL and failed > FAIL_TTL:
         try:
             _cache["rows"] = _fetch()
             _cache["at"] = now
+            _cache["failed_at"] = None
         except Exception:
-            pass          # ดึงใหม่ไม่ได้ → ใช้ cache เดิม (degrade gracefully)
+            _cache["failed_at"] = now   # ดึงใหม่ไม่ได้ → ใช้ cache เดิม (degrade gracefully), ไม่ลองใหม่ภายใน FAIL_TTL
     return _cache["rows"] or []
 
 

@@ -128,6 +128,27 @@ class Kit(unittest.TestCase):
         self.assertRegex(me, r'ask TOKEN "[^"]*" ""')
         self.assertNotIn("192.168.", me)
 
+    def test_make_env_writes_600_and_masks_token(self):
+        # ported from audit-fixes 3b33833/c4b8c86: an env.sh copied from stations/*.sh is 644; the per-machine
+        # token written into it must end up readable by the owner only, and the token is never printed
+        tmp = pathlib.Path(tempfile.mkdtemp(prefix="et-mkenv-"))
+        self.addCleanup(shutil.rmtree, tmp, True)
+        (tmp / "deploy").mkdir()
+        shutil.copy(DEPLOY / "make-env.sh", tmp / "deploy" / "make-env.sh")
+        shutil.copy(AGENT / "safety.py", tmp / "safety.py")
+        out = tmp / "deploy" / "env.sh"
+        out.write_text("# copied from a station template\n")
+        os.chmod(out, 0o644)
+        secret = "per-host-test-token-0123456789abcdef"
+        env = dict(os.environ, STAGE="color", DETECT_GRADE="1", SERVER="http://server.invalid:8000/ingest",
+                   TOKEN=secret, VERIFIED="")
+        r = subprocess.run(["sh", str(tmp / "deploy" / "make-env.sh")], env=env, capture_output=True, text=True,
+                           stdin=subprocess.DEVNULL, timeout=60)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertEqual(stat.S_IMODE(out.stat().st_mode), 0o600)
+        self.assertIn("export EDITORTRACK_TOKEN=" + secret, out.read_text())
+        self.assertNotIn(secret, r.stdout + r.stderr)
+
     def test_station_templates_keep_gates(self):
         for f in list((DEPLOY / "stations").glob("*.sh")) + [DEPLOY / "env.example"]:
             s = f.read_text()

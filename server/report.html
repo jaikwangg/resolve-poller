@@ -56,7 +56,7 @@
 </div>
 <script>
 const $ = s => document.querySelector(s);
-const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const q = new URLSearchParams(location.search);
 const today = new Date(Date.now() - new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);
 $("#day").value = q.get("day") || today;
@@ -66,12 +66,12 @@ function hostCard(h){
   const pct = v => v==null ? "–" : v+"%";
   return `<section class="host">
     <h2>${esc(h.host)}</h2>
-    <div class="meta">stage ${esc(h.stage)} · record ${s.records} ตัว (${s.first}–${s.last})</div>
+    <div class="meta">stage ${esc(h.stage)} · record ${esc(s.records)} ตัว (${esc(s.first)}–${esc(s.last)})</div>
     <div class="tiles">
       <div class="tile"><div class="l">เวลาทำงาน</div><div class="n">${esc(s.active_text)}</div></div>
-      <div class="tile"><div class="l">เริ่ม – เลิก (active)</div><div class="n">${s.first_active ? s.first_active+"–"+s.last_active : "–"}</div></div>
-      <div class="tile"><div class="l">ข้อมูลขาดช่วง</div><div class="n">${s.gap_count} ครั้ง</div></div>
-      <div class="tile"><div class="l">รวมเวลาที่ขาด</div><div class="n">${s.gap_min} นาที</div></div>
+      <div class="tile"><div class="l">เริ่ม – เลิก (active)</div><div class="n">${s.first_active ? esc(s.first_active+"–"+s.last_active) : "–"}</div></div>
+      <div class="tile"><div class="l">ข้อมูลขาดช่วง</div><div class="n">${esc(s.gap_count)} ครั้ง</div></div>
+      <div class="tile"><div class="l">รวมเวลาที่ขาด</div><div class="n">${esc(s.gap_min)} นาที</div></div>
     </div>
     ${h.warnings.length ? `<h3>ข้อสังเกต</h3><div class="warnbox"><ul class="w">${h.warnings.map(w=>`<li>${esc(w)}</li>`).join("")}</ul></div>` : ""}
     <div class="two">
@@ -80,16 +80,16 @@ function hostCard(h){
     </div>
     <h3>ความคืบหน้าที่เปลี่ยน</h3>
     <table><tr><th>เวลา</th><th>job</th><th>stage</th><th>%</th><th>รายละเอียด</th></tr>
-      ${h.progress.map(p=>`<tr><td class="num">${p.at}</td><td>${esc(p.job)}</td><td>${esc(p.stage)}</td>
-        <td class="num ${p.jump?"jump":""}">${pct(p.from)} → ${pct(p.to)}${p.jump?" ⚠":""}</td><td>${esc(p.detail||"")}</td></tr>`).join("") || "<tr><td colspan=5>–</td></tr>"}
+      ${h.progress.map(p=>`<tr><td class="num">${esc(p.at)}</td><td>${esc(p.job)}</td><td>${esc(p.stage)}</td>
+        <td class="num ${p.jump?"jump":""}">${esc(pct(p.from))} → ${esc(pct(p.to))}${p.jump?" ⚠":""}</td><td>${esc(p.detail||"")}</td></tr>`).join("") || "<tr><td colspan=5>–</td></tr>"}
     </table>
     <h3>ไทม์ไลน์</h3>
     <table><tr><th>ช่วงเวลา</th><th>record</th><th>กำลังทำ</th><th>แอปหน้าสุด</th></tr>
-      ${h.segments.map(g=>`<tr><td class="num"><span class="dot ${g.active?"on":""}"></span>${g.start}${g.end!==g.start?"–"+g.end:""}</td>
-        <td class="num">${g.n}</td><td>${esc(g.what)}</td><td>${esc(g.front)}</td></tr>`).join("")}
+      ${h.segments.map(g=>`<tr><td class="num"><span class="dot ${g.active?"on":""}"></span>${esc(g.start)}${g.end!==g.start?"–"+esc(g.end):""}</td>
+        <td class="num">${esc(g.n)}</td><td>${esc(g.what)}</td><td>${esc(g.front)}</td></tr>`).join("")}
     </table>
     ${h.gaps.length ? `<h3>ช่วงที่ไม่มีข้อมูล</h3><table><tr><th>ช่วง</th><th>นาที</th><th>สาเหตุที่เป็นไปได้</th></tr>
-      ${h.gaps.map(g=>`<tr><td class="num">${g.from}–${g.to}</td><td class="num">${g.minutes}</td><td>${esc(g.why)}</td></tr>`).join("")}</table>` : ""}
+      ${h.gaps.map(g=>`<tr><td class="num">${esc(g.from)}–${esc(g.to)}</td><td class="num">${esc(g.minutes)}</td><td>${esc(g.why)}</td></tr>`).join("")}</table>` : ""}
   </section>`;
 }
 

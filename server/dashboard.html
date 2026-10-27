@@ -257,7 +257,7 @@ let DATA = SAMPLE, JOBS = null, curProj = 0, curWorker = "__team__";
 
 /* ---------- helpers ---------- */
 const $ = s => document.querySelector(s);
-const esc = s => String(s).replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));  // ต้อง escape " และ ' ด้วย: ค่าถูกใส่ใน attribute (data-rows, data-w ...) — ค่ามาจาก agent
 const mins = m => m>=60 ? `${Math.floor(m/60)}ชม ${m%60}น` : `${m}น`;
 const PHASE_TH = {edit:"Edit",color:"Color",audio:"Audio",deliver:"Deliver",fusion:"Fusion",fairlight:"Fairlight",cut:"Cut"};
 
@@ -282,7 +282,7 @@ function renderTiles(){
     ["กำลังทำงาน", s.workers_active+"/"+s.workers_total, "ห้อง/เครื่อง"],
   ];
   $("#tiles").innerHTML = t.map(([l,n,sub,cls]) =>
-    `<div class="tile"><div class="l">${l}</div><div class="n ${cls||""}">${n}</div>${sub?`<div class="sub">${sub}</div>`:""}</div>`
+    `<div class="tile"><div class="l">${l}</div><div class="n ${cls||""}">${esc(n)}</div>${sub?`<div class="sub">${sub}</div>`:""}</div>`
   ).join("");
 }
 
@@ -308,7 +308,7 @@ function renderProgress(){
   });
   // hover columns
   labels.forEach((lb,i)=>{
-    const rows = names.map((nm,si)=>`<div class="tr"><span><span style="color:${SERIES_COLORS[si%3]}">●</span> ${esc(nm)}</span><span class="v">${ps.series[nm][i]}%</span></div>`).join("");
+    const rows = names.map((nm,si)=>`<div class="tr"><span><span style="color:${SERIES_COLORS[si%3]}">●</span> ${esc(nm)}</span><span class="v">${esc(ps.series[nm][i])}%</span></div>`).join("");
     const bx = x(i)-(W-L-R)/(2*(n-1||1));
     hot += `<rect x="${Math.max(L,bx)}" y="${T}" width="${(W-L-R)/(n-1||1)}" height="${H-T-B}" fill="transparent" `
         + `data-th="${esc(lb)}" data-rows="${esc(rows)}" data-cx="${x(i)}"></rect>`;
@@ -322,7 +322,7 @@ function renderProgress(){
   const cross = c.querySelector("#cross");
   c.querySelectorAll("rect[data-rows]").forEach(r=>{
     r.addEventListener("mousemove",e=>{ cross.setAttribute("x1",r.dataset.cx); cross.setAttribute("x2",r.dataset.cx); cross.setAttribute("opacity",".6");
-      showTip(`<div class="th">${r.dataset.th}</div>${r.dataset.rows}`, e.clientX, e.clientY); });
+      showTip(`<div class="th">${esc(r.dataset.th)}</div>${r.dataset.rows}`, e.clientX, e.clientY); });
     r.addEventListener("mouseleave",()=>{ cross.setAttribute("opacity","0"); hideTip(); });
   });
   $("#legProgress").innerHTML = names.map((nm,si)=>`<span class="k"><span class="sw" style="background:${SERIES_COLORS[si%3]}"></span>${esc(nm)}</span>`).join("");
@@ -340,13 +340,13 @@ function renderPhases(){
   order.forEach((ph,i)=>{
     const y = padT + i*rowH + rowH/2, by = y-8;
     const val = p.phases[ph], measured = val!==null && val!==undefined;
-    body += `<text class="rowlabel" x="${L-10}" y="${y+4}" text-anchor="end">${PHASE_TH[ph]}</text>`;
+    body += `<text class="rowlabel" x="${L-10}" y="${y+4}" text-anchor="end">${esc(PHASE_TH[ph])}</text>`;
     body += `<rect x="${L}" y="${by}" width="${barMax}" height="16" rx="4" fill="var(--surface-2)"/>`;
     if(measured){
       const w = Math.max(2, barMax*val/100);
       body += `<rect x="${L}" y="${by}" width="${w}" height="16" rx="4" fill="var(--s1)" `
-           + `data-th="${PHASE_TH[ph]}" data-rows="<div class='tr'><span>ความคืบหน้า</span><span class='v'>${val}%</span></div>"></rect>`;
-      body += `<text class="vlabel" x="${L+barMax+8}" y="${y+4}">${val}%</text>`;
+           + `data-th="${esc(PHASE_TH[ph])}" data-rows="${esc(`<div class='tr'><span>ความคืบหน้า</span><span class='v'>${esc(val)}%</span></div>`)}"></rect>`;
+      body += `<text class="vlabel" x="${L+barMax+8}" y="${y+4}">${esc(val)}%</text>`;
     } else {
       body += `<rect x="${L}" y="${by}" width="${barMax}" height="16" rx="4" fill="url(#hatch)" opacity=".7"/>`;
       body += `<text class="muted-txt" x="${L+8}" y="${y+4}">ยังไม่วัด (ปิดใน probe)</text>`;
@@ -372,11 +372,11 @@ function renderTime(){
   rows.forEach(([ph,v],i)=>{
     const y=padT+i*rowH+rowH/2, by=y-7, w=Math.max(2,barMax*v/max);
     const top = i===0;
-    body += `<text class="rowlabel" x="${L-10}" y="${y+4}" text-anchor="end">${PHASE_TH[ph]||ph}</text>`;
+    body += `<text class="rowlabel" x="${L-10}" y="${y+4}" text-anchor="end">${esc(PHASE_TH[ph]||ph)}</text>`;
     body += `<rect x="${L}" y="${by}" width="${barMax}" height="14" rx="4" fill="var(--surface-2)"/>`;
     body += `<rect x="${L}" y="${by}" width="${w}" height="14" rx="4" fill="${top?'var(--s1)':'color-mix(in srgb,var(--s1) 62%,var(--surface))'}" `
-         + `data-th="${PHASE_TH[ph]||ph}" data-rows="<div class='tr'><span>เวลา</span><span class='v'>${mins(v)}</span></div>"></rect>`;
-    body += `<text class="vlabel" x="${L+barMax+8}" y="${y+4}">${mins(v)}</text>`;
+         + `data-th="${esc(PHASE_TH[ph]||ph)}" data-rows="${esc(`<div class='tr'><span>เวลา</span><span class='v'>${esc(mins(v))}</span></div>`)}"></rect>`;
+    body += `<text class="vlabel" x="${L+barMax+8}" y="${y+4}">${esc(mins(v))}</text>`;
   });
   const c=$("#chartTime"); c.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="เวลาต่อหน้า Resolve">${body}</svg>`;
   attachBarTips(c);
@@ -401,7 +401,7 @@ function renderActive(){
     bars += `<rect x="${cx-bw/2}" y="${ay}" width="${bw}" height="${Math.max(0,ah)}" rx="3" fill="var(--s1)"/>`;
     bars += `<rect x="${cx-bw/2}" y="${iy}" width="${bw}" height="${Math.max(0,ih-2)}" rx="3" fill="var(--idle)"/>`;
     bars += `<rect x="${cx-bw/2-3}" y="${T}" width="${bw+6}" height="${H-T-B}" fill="transparent" `
-         + `data-th="${esc(lb)}" data-rows="<div class='tr'><span><span style='color:var(--s1)'>●</span> Active</span><span class='v'>${a}ชม</span></div><div class='tr'><span><span style='color:var(--idle)'>●</span> Idle</span><span class='v'>${id}ชม</span></div>"></rect>`;
+         + `data-th="${esc(lb)}" data-rows="${esc(`<div class='tr'><span><span style='color:var(--s1)'>●</span> Active</span><span class='v'>${esc(a)}ชม</span></div><div class='tr'><span><span style='color:var(--idle)'>●</span> Idle</span><span class='v'>${esc(id)}ชม</span></div>`)}"></rect>`;
     bars += `<text class="tick" x="${cx}" y="${H-B+18}" text-anchor="middle">${esc(lb)}</text>`;
   });
   const c=$("#chartActive");
@@ -416,7 +416,7 @@ function niceStep(max){ const raw=max/4, p=Math.pow(10,Math.floor(Math.log10(raw
 function attachBarTips(container){
   container.querySelectorAll("rect[data-rows]").forEach(r=>{
     r.style.cursor="default";
-    r.addEventListener("mousemove",e=>showTip(`<div class="th">${r.dataset.th}</div>${r.dataset.rows}`,e.clientX,e.clientY));
+    r.addEventListener("mousemove",e=>showTip(`<div class="th">${esc(r.dataset.th)}</div>${r.dataset.rows}`,e.clientX,e.clientY));
     r.addEventListener("mouseleave",hideTip);
   });
 }
@@ -438,17 +438,17 @@ const STAGE_COLOR = {data:"var(--s2)", conform:"var(--s1)", color:"var(--s3)", s
 
 function trackBar(stage, t){
   const label = STAGE_LABEL[stage] || stage, col = STAGE_COLOR[stage] || "var(--s1)";
-  if(!t) return `<div class="trk empty"><span class="trk-l">${label}</span><span class="trk-none">ยังไม่เริ่ม</span></div>`;
+  if(!t) return `<div class="trk empty"><span class="trk-l">${esc(label)}</span><span class="trk-none">ยังไม่เริ่ม</span></div>`;
   const pct = (t.pct===null||t.pct===undefined) ? null : t.pct;
   const dot = t.active ? '<span class="live" title="กำลังทำอยู่"></span>' : '';
-  const w = pct===null ? 0 : Math.max(2, pct);
+  const w = pct===null ? 0 : Math.max(2, Math.min(100, Number(pct) || 0));   // ตัวเลขเท่านั้น (อยู่ใน style)
   const val = pct===null ? 'ยังไม่วัด' : pct+'%';
   const style = `width:${w}%;background:${col}` + (pct===null ? ';opacity:.3' : '');
   return `<div class="trk">
-    <div class="trk-top"><span class="trk-l">${label}${dot}</span>
+    <div class="trk-top"><span class="trk-l">${esc(label)}${dot}</span>
       <span class="trk-meta">${esc(t.worker||'—')}${t.page?' · '+esc(t.page):''}</span>
-      <span class="trk-v">${val}</span></div>
-    <div class="bar"><div class="fill" style="${style}"></div></div>
+      <span class="trk-v">${esc(val)}</span></div>
+    <div class="bar"><div class="fill" style="${esc(style)}"></div></div>
   </div>`;
 }
 
@@ -464,7 +464,7 @@ function renderJobs(){
     return `<div class="job">
       <div class="job-head">
         <div><div class="job-title">${esc(j.title||j.job_id)}</div><div class="job-id">${esc(j.job_id)}</div></div>
-        <div class="job-ov"><div class="job-ov-n">${ov}</div><div class="job-ov-l">overall</div></div>
+        <div class="job-ov"><div class="job-ov-n">${esc(ov)}</div><div class="job-ov-l">overall</div></div>
       </div>
       <div class="chips">${src}${flags}</div>
       ${bars}

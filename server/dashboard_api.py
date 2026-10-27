@@ -6,6 +6,7 @@ job_id/stage หลัก = ERP booking (room+time) · fallback = agent-side (re
 import os, json, glob, datetime, collections, logging, pathlib
 from fastapi import FastAPI, Request, Header, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
+from starlette.concurrency import run_in_threadpool
 
 import auth
 import privacy
@@ -101,7 +102,9 @@ async def ingest(req: Request, authorization: str = Header(default="")):
     _append_record(rec)
     # push progress → PMS (contract v2, pms_sync.progress_on_ingest + progress_v2): provisional ≤ 99 until the scope is
     # confirmed and stable, holds while unsure, only ERP-bound project_no · best-effort, no-op until ERP_PROGRESS_PATH
-    pushed = pms_sync.progress_on_ingest(rec, _eff_job, erp, STORE) if erp else False
+    # run in the threadpool: progress_on_ingest may call PMS (urllib, 10 s timeout) and ingest is async, so a slow
+    # PMS would otherwise stall the event loop and every other request (all agents, all pages) with it
+    pushed = (await run_in_threadpool(pms_sync.progress_on_ingest, rec, _eff_job, erp, STORE)) if erp else False
     return {"ok": True, "pushed": pushed}
 
 
@@ -119,6 +122,7 @@ def agent_control(host: str = "", v: str = "", authorization: str = Header(defau
 
 @app.get("/api/health")
 def api_health(days: int = 2):
+    days = _days(days)
     rows = agent_health.health(_load_recent(days), control=agent_health.load_control(STORE))
     return JSONResponse({"hosts": sorted(rows.values(), key=lambda r: r["host"]),
                          "control": agent_health.load_control(STORE), "skipped": load_skipped.get(days)})
@@ -146,6 +150,17 @@ def health_page():
 # what the last load of each `days` window had to skip (bad JSON line, bad record already on disk), keyed by
 # days so the pms_sync thread or /api/projects cannot overwrite what /api/health and /api/inbox show
 load_skipped = {}
+
+
+MAX_DAYS = int(os.environ.get("EDITORTRACK_MAX_DAYS", "366"))   # cap for ?days= (ported from audit-fixes 66176b8)
+
+
+def _days(days):
+    """?days= must be 1..MAX_DAYS, else 400 (unbounded: days=10**9 overflowed timedelta -> 500, and a huge
+    range made build_dashboard allocate one bucket per day)."""
+    if days < 1 or days > MAX_DAYS:
+        raise HTTPException(status_code=400, detail=f"days ต้องอยู่ระหว่าง 1–{MAX_DAYS}")
+    return days
 
 
 def _load_recent(days):
@@ -238,7 +253,7 @@ def build_jobs(days=7):
 
 @app.get("/api/jobs")
 def api_jobs(days: int = 7):
-    return JSONResponse(build_jobs(days))
+    return JSONResponse(build_jobs(_days(days)))
 
 
 # ---------------- /api/shots : reconcile ราย shot (conform vs color) ----------------
@@ -264,7 +279,7 @@ def build_shots(days=7):
 
 @app.get("/api/shots")
 def api_shots(days: int = 7):
-    return JSONResponse(build_shots(days))
+    return JSONResponse(build_shots(_days(days)))
 
 
 # ---------------- /api/dashboard : tiles + progress-over-time + phase-time + active/idle ----------------
@@ -334,7 +349,7 @@ def build_dashboard(days=7):
 
 @app.get("/api/dashboard")
 def api_dashboard(days: int = 7):
-    return JSONResponse(build_dashboard(days))
+    return JSONResponse(build_dashboard(_days(days)))
 
 
 # ---------------- /api/inbox : record ที่รับมา + คำอธิบาย ----------------
@@ -385,7 +400,7 @@ def build_inbox(limit=50, host=None, days=2):
 
 @app.get("/api/inbox")
 def api_inbox(limit: int = 50, host: str = "", days: int = 2):
-    return JSONResponse(build_inbox(limit, host or None, days))
+    return JSONResponse(build_inbox(limit, host or None, _days(days)))
 
 
 @app.get("/inbox")
@@ -416,6 +431,8 @@ def api_report(day: str = "", host: str = ""):
     except ValueError:
         raise HTTPException(status_code=400, detail="day ต้องเป็น YYYY-MM-DD")
     days = (datetime.date.today() - d).days + 2         # +1 วันเผื่อ record ข้ามเที่ยงคืน (ไฟล์ตั้งชื่อตามวันที่ server รับ)
+    if days > MAX_DAYS + 2:
+        raise HTTPException(status_code=400, detail=f"day ย้อนหลังได้ไม่เกิน {MAX_DAYS} วัน")
     return JSONResponse(_rep.build_report(_load_recent(max(days, 2)), day, INTERVAL_MIN, _eff_job, host or None))
 
 
@@ -427,7 +444,7 @@ def report():
 # ---------------- /api/projects : ตัวเลขนับรายโปรเจค (คลิป / เกรด / shot) ----------------
 @app.get("/api/projects")
 def api_projects(days: int = 30):
-    return JSONResponse(_proj.build_projects(_load_recent(max(1, min(days, 3650))), INTERVAL_MIN, _eff_job))
+    return JSONResponse(_proj.build_projects(_load_recent(max(1, min(days, MAX_DAYS))), INTERVAL_MIN, _eff_job))
 
 
 @app.get("/projects")
