@@ -60,12 +60,28 @@ def control_for(store, host, version):
 
 # ---------- host-name mismatch (token issued for one name, agent reports another) ----------
 HOST_REFUSED_FILE = "host_refused.json"     # in the store: {token_host: {sent, route, count, first_at, last_at}}
+REFUSED_KEEP_SEC = 7 * 86400                # an entry with no new refusal for this long is dropped
 _refused_lock = threading.Lock()
+
+
+def _write_refused(p, cur):
+    if not cur:
+        try:
+            p.unlink()
+        except FileNotFoundError:
+            pass
+        return
+    tmp = p.with_name(p.name + ".tmp")
+    fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        json.dump(cur, f, ensure_ascii=False)
+    os.replace(tmp, p)
 
 
 def note_host_refused(store, token_host, sent, route):
     """remember a request refused because the record's host does not name the token's host. Shown on
-    /api/health and /health until the host delivers a record again. Bounded: one entry per token host.
+    /api/health and /health until the host is accepted under its own name again (clear_host_refused) or for
+    REFUSED_KEEP_SEC after the last refusal. Bounded: one entry per token host.
     Never raises (a failure here must not change the answer the agent gets)."""
     try:
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -76,21 +92,43 @@ def note_host_refused(store, token_host, sent, route):
             n = e.get("count") if isinstance(e.get("count"), int) else 0
             cur[token_host] = {"sent": str(sent)[:100], "route": route, "count": n + 1,
                                "first_at": e.get("first_at") or now, "last_at": now}
-            tmp = p.with_name(p.name + ".tmp")
-            fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(cur, f, ensure_ascii=False)
-            os.replace(tmp, p)
+            _write_refused(p, cur)
     except Exception:
         pass
 
 
-def load_host_refused(store):
+def clear_host_refused(store, token_host):
+    """the host was accepted again (a record stored, or a lease answered under its own name): drop its entry.
+    Cheap when there is nothing to clear (one stat). Never raises."""
+    try:
+        p = pathlib.Path(store) / HOST_REFUSED_FILE
+        if not p.exists():
+            return
+        with _refused_lock:
+            cur = load_host_refused(store)
+            if token_host in cur:
+                del cur[token_host]
+                _write_refused(p, cur)
+    except Exception:
+        pass
+
+
+def load_host_refused(store, now=None):
+    """{token_host: entry}; entries whose last refusal (server time) is older than REFUSED_KEEP_SEC are left out
+    (and dropped from the file on its next write)."""
     try:
         d = json.loads((pathlib.Path(store) / HOST_REFUSED_FILE).read_text(encoding="utf-8"))
-        return d if isinstance(d, dict) else {}
     except Exception:
         return {}
+    if not isinstance(d, dict):
+        return {}
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    out = {}
+    for k, e in d.items():
+        last = _dt(e.get("last_at")) if isinstance(e, dict) else None
+        if last is not None and (now - last).total_seconds() <= REFUSED_KEEP_SEC:
+            out[k] = e
+    return out
 
 
 def _dt(ts):
@@ -114,6 +152,9 @@ def health(records, now=None, control=None, refused=None):
         row = hosts.setdefault(h, {"host": h, "records_24h": 0, "skips_24h": {}, "max_rss_mb": None,
                                    "max_turn_ms": None, "max_guard_ms": None, "last_ok_poll": None})
         row["last_seen"] = t.isoformat()
+        rx = _dt((r.get("_rx") or {}).get("at"))
+        if rx is not None and (row.get("_last_rx") is None or rx > row["_last_rx"]):
+            row["_last_rx"] = rx                        # server receive time (not the agent's clock)
         a = r.get("agent") or {}
         src = r.get("source") or {}
         rj = a.get("rejected")
@@ -144,15 +185,16 @@ def health(records, now=None, control=None, refused=None):
             continue
         last = _dt(e.get("last_at"))
         row = hosts.get(th)
-        seen = _dt(row.get("last_seen")) if row else None
-        if last is None or (seen is not None and seen > last):
-            continue                                   # a record taken after the last refusal arrived: resolved
+        got = row.get("_last_rx") if row else None     # both server times: a slow agent clock cannot keep the alert
+        if last is None or (got is not None and got > last):
+            continue                                   # a record received after the last refusal: resolved
         if row is None:
             row = hosts[th] = {"host": th, "records_24h": 0, "skips_24h": {}, "max_rss_mb": None,
                                "max_turn_ms": None, "max_guard_ms": None, "last_ok_poll": None,
                                "last_seen": None, "has_heartbeat": None}
         row["host_refused"] = {k: e.get(k) for k in ("sent", "route", "count", "first_at", "last_at")}
     for row in hosts.values():
+        row.pop("_last_rx", None)
         alerts, warns = [], []
         hr = row.get("host_refused")
         if hr:

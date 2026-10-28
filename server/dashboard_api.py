@@ -134,6 +134,7 @@ async def ingest(req: Request, authorization: str = Header(default="")):
         log.warning("ingest refused: token for %s, record host %r", host, str(rec.get("host"))[:100])
         raise HTTPException(status_code=403, detail="token นี้ไม่ใช่ของ host นี้",
                             headers={"X-Editortrack-Host-Mismatch": host})
+    agent_health.clear_host_refused(STORE, host)    # the name matches the token again: a mismatch alert is resolved
     rec["host"] = host                              # stored under the token's own name, never the spelling sent
     privacy.scrub(rec)                              # agent รุ่นเก่ายังส่ง user/ชื่อแอปหน้าสุด → ตัดก่อนเขียนลง disk
     # idempotent (M1): a record already stored (same host + rid, or + ts for agents < 0.9.2) is acknowledged and
@@ -163,6 +164,7 @@ def agent_control(host: str = "", v: str = "", authorization: str = Header(defau
         agent_health.note_host_refused(STORE, who, host, "agent/control")
         raise HTTPException(status_code=403, detail="token นี้ไม่ใช่ของ host นี้",
                             headers={"X-Editortrack-Host-Mismatch": who})
+    agent_health.clear_host_refused(STORE, who)
     return agent_health.control_for(STORE, who, v)    # the token's own name (control file keys = token map keys)
 
 

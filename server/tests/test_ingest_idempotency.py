@@ -236,6 +236,50 @@ class HostNames(Base):
         [row] = [x for x in self.c.get("/api/health", headers=authfix.reader()).json()["hosts"] if x["host"] == "grade-01"]
         self.assertNotIn("host_refused", row)
 
+    def test_refused_entry_cleared_when_accepted_again(self):
+        # review Low 5: host_refused.json entries are removed, not only hidden
+        import agent_health
+        f = STORE / agent_health.HOST_REFUSED_FILE
+        self.assertEqual(self.post(rec("grade-02")).status_code, 403)
+        self.assertTrue(f.exists())
+        self.assertEqual(self.post(rec("grade-01")).status_code, 200)
+        self.assertFalse(f.exists())                                       # removed by the accepted /ingest
+        self.assertEqual(self.post(rec("grade-02")).status_code, 403)
+        r = self.c.get("/agent/control?host=grade-01&v=x", headers=authfix.machine("grade-01"))
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(f.exists())                                       # ... or by an accepted lease request
+        self.assertEqual(self.post(rec("grade-02")).status_code, 403)
+        self.assertEqual(self.post(rec("conform-01", rid="c" * 32), host="conform-01").status_code, 200)
+        self.assertIn("grade-01", json.loads(f.read_text()))              # another host's success clears nothing
+
+    def test_refused_entry_expires_after_7_days(self):
+        import agent_health
+        f = STORE / agent_health.HOST_REFUSED_FILE
+        old = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=8)).isoformat()
+        f.write_text(json.dumps({"conform-01": {"sent": "x", "route": "ingest", "count": 4, "first_at": old,
+                                                "last_at": old}}))
+        self.assertEqual(agent_health.load_host_refused(STORE), {})
+        hl = self.c.get("/api/health", headers=authfix.reader()).json()["hosts"]
+        self.assertFalse([x for x in hl if x.get("host_refused")])
+        self.assertEqual(self.post(rec("grade-02")).status_code, 403)     # the next write drops the stale entry
+        self.assertEqual(set(json.loads(f.read_text())), {"grade-01"})
+
+    def test_resolved_by_server_receive_time_not_agent_clock(self):
+        import agent_health
+        now = datetime.datetime(2026, 10, 28, 12, 0, tzinfo=datetime.timezone.utc)
+        refused = {"grade-01": {"sent": "g", "route": "ingest", "count": 1, "first_at": "2026-10-28T11:00:00+00:00",
+                                "last_at": "2026-10-28T11:30:00+00:00"}}
+
+        def r(ts, rx):
+            return {"host": "grade-01", "ts": ts, "_rx": {"at": rx}, "agent": {"version": "v"}}
+        # slow agent clock: ts before the refusal, received after it -> resolved
+        rows = agent_health.health([r("2026-10-28T10:00:00+00:00", "2026-10-28T11:45:00+00:00")], now=now, refused=refused)
+        self.assertNotIn("host_refused", rows["grade-01"])
+        # fast agent clock: ts after the refusal, but received before it -> still an alert
+        rows = agent_health.health([r("2026-10-28T11:50:00+00:00", "2026-10-28T11:10:00+00:00")], now=now, refused=refused)
+        self.assertIn("host_refused", rows["grade-01"])
+        self.assertNotIn("_last_rx", rows["grade-01"])
+
 
 def _server():
     import uvicorn
