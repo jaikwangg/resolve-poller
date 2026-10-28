@@ -108,6 +108,29 @@ class NoForeignWrites(unittest.TestCase):
             left = [p for p in pathlib.Path(r["state"], "tmp").glob("et-grade-*")]
             self.assertEqual(left, [], "ExportLUT temp not cleaned")
 
+    def test_exportlut_temp_cleaned_when_scan_aborts(self):
+        # deadline abort mid-scan (ScanAborted): finish() never runs, the finally in resolve_poller must still clean up
+        r = run_turn("http://127.0.0.1:9", 3000, latency_us=1000, scan_only=True, EDITORTRACK_SCAN_BUDGET_MS=300,
+                     EDITORTRACK_ALLOW_EXPORT_LUT=1, EDITORTRACK_GRADE_METHOD="lut")
+        self.assertEqual(r["reason"], "scan_budget")
+        left = list(pathlib.Path(r["state"], "tmp").glob("et-grade-*"))
+        self.assertEqual(left, [], "ExportLUT temp left after an aborted scan")
+
+    def test_stale_exportlut_temp_swept(self):
+        # a process killed mid-scan (no finally) leaves et-grade-*; the next Detector removes ones older than 1 h only
+        with agent_env() as (m, sd):
+            gd = m["grade_detect"]
+            d = sd / "tmp"
+            old, new = d / "et-grade-old", d / "et-grade-new"
+            for p in (old, new):
+                p.mkdir(parents=True)
+                (p / "g.cube").write_text("x")
+            t = __import__("time").time() - gd.STALE_TMP_SEC - 60
+            os.utime(old, (t, t))
+            gd._sweep_stale(d)
+            self.assertFalse(old.exists())
+            self.assertTrue(new.exists())
+
 
 class QueueBounds(unittest.TestCase):
     def test_queue_capped_by_lines_and_bytes(self):

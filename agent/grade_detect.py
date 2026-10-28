@@ -12,7 +12,7 @@ ExportLUT เขียนไฟล์ temp อย่างเดียว ไม
 ~/.editortrack/grade_cache.json · เช็คซ้ำเมื่อ: เป็น clip ที่กำลังเปิดอยู่ (ทุกรอบ), node/label/LUT/version
 เปลี่ยน, หรือครบ RECHECK_SEC · จำกัด export ต่อรอบด้วย BUDGET_MS
 """
-import json, os, pathlib, tempfile, time
+import json, os, pathlib, shutil, tempfile, time
 from resolve_guard import ForbiddenCall, ScanAborted, GATED
 
 # lut ต้องเปิด gate EDITORTRACK_ALLOW_EXPORT_LUT=1 ด้วย (ExportLUT ไม่ใช่ getter ล้วน — ดู resolve_guard.GATED)
@@ -114,6 +114,22 @@ def _save_cache(c):
         pass
 
 
+STALE_TMP_SEC = 3600
+
+
+def _sweep_stale(d):
+    """temp ที่ค้างจาก process ที่ถูก kill กลางสแกน (finally ไม่ได้รัน) — agent เป็น process ใหม่ทุกนาที จึงลบที่เก่ากว่า 1 ชม."""
+    try:
+        for p in d.glob("et-grade-*"):
+            try:
+                if time.time() - p.stat().st_mtime > STALE_TMP_SEC:
+                    shutil.rmtree(p, ignore_errors=True)
+            except OSError:
+                pass
+    except OSError:
+        pass
+
+
 class Detector:
     """ใช้ 1 ตัวต่อ 1 poll: graded(item) ต่อ clip แล้ว finish() คืนสรุป"""
 
@@ -134,7 +150,14 @@ class Detector:
         if self.method == "lut":            # temp ของ ExportLUT อยู่ใน state dir ของ agent เท่านั้น (ไม่ใช่ /tmp ส่วนกลาง)
             d = _cache_path().parent / "tmp"
             d.mkdir(parents=True, exist_ok=True)
+            _sweep_stale(d)
             self.tmp = tempfile.mkdtemp(prefix="et-grade-", dir=str(d))
+
+    def close(self):
+        """ลบ temp ของ ExportLUT — เรียกได้ซ้ำ · resolve_poller เรียกใน finally (สแกนหยุดกลางทาง finish() ไม่ถูกเรียก)"""
+        if self.tmp:
+            shutil.rmtree(self.tmp, ignore_errors=True)
+            self.tmp = None
 
     def _nodes(self, n):
         return bool(n and n > 1)
@@ -171,10 +194,7 @@ class Detector:
             keep = dict(list(self.all.items())[-(MAX_TIMELINES - 1):]) if MAX_TIMELINES > 1 else {}
             keep[self.key] = self.cache                            # timeline ล่าสุดอยู่ท้าย
             _save_cache(keep)
-            try:
-                os.rmdir(self.tmp)
-            except OSError:
-                pass
+            self.close()
             if self.failed and not self.exported:
                 method = "nodes"                           # ExportLUT ใช้ไม่ได้ทั้งรอบ
         return {"method": method, "lut_gated": self.gated, "exported": self.exported, "pending": self.pending,

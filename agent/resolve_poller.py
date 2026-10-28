@@ -194,26 +194,30 @@ def _scan_timeline(resolve, proj, tl, pname, ctx, idle_fn=None, idle0=None, slee
     graded = 0
     ranges = []          # (start, end, graded) ต่อ clip — ใช้ match marker→shot (สแกนรอบเดียว)
     clips_detail = []    # เปิดด้วย EXTRACT_CLIP_META เท่านั้น (ดึง meta ลึกราย clip)
-    if per_clip:
-        n = 0
-        for i, items in tracks:
-            for it in items:
-                n += 1
-                if CHUNK_CLIPS and n % CHUNK_CLIPS == 0:
-                    sleep(YIELD_MS / 1000.0)          # ปล่อย main thread ของ Resolve เป็นช่วง ๆ
-                    now_idle = idle_fn() if idle_fn else None
-                    if now_idle is None or (idle0 is not None and now_idle < idle0):
-                        raise ScanAborted("user_returned")
-                g = det.graded(it) if det else None
-                if g:
-                    graded += 1
-                if EXTRACT_SHOTS:
-                    s, e = _safe(it, "GetStart"), _safe(it, "GetEnd")
-                    if s is not None and e is not None:
-                        ranges.append((s, e, g))
-                if EXTRACT_CLIP_META and (CLIP_META_MAX == 0 or len(clips_detail) < CLIP_META_MAX):
-                    clips_detail.append(_clip_detail(it, "V%d" % i))
-    grade_info = det.finish() if det else None
+    try:
+        if per_clip:
+            n = 0
+            for i, items in tracks:
+                for it in items:
+                    n += 1
+                    if CHUNK_CLIPS and n % CHUNK_CLIPS == 0:
+                        sleep(YIELD_MS / 1000.0)          # ปล่อย main thread ของ Resolve เป็นช่วง ๆ
+                        now_idle = idle_fn() if idle_fn else None
+                        if now_idle is None or (idle0 is not None and now_idle < idle0):
+                            raise ScanAborted("user_returned")
+                    g = det.graded(it) if det else None
+                    if g:
+                        graded += 1
+                    if EXTRACT_SHOTS:
+                        s, e = _safe(it, "GetStart"), _safe(it, "GetEnd")
+                        if s is not None and e is not None:
+                            ranges.append((s, e, g))
+                    if EXTRACT_CLIP_META and (CLIP_META_MAX == 0 or len(clips_detail) < CLIP_META_MAX):
+                        clips_detail.append(_clip_detail(it, "V%d" % i))
+        grade_info = det.finish() if det else None
+    finally:
+        if det:
+            det.close()                       # สแกนหยุดกลางทาง (ScanAborted ฯลฯ) → temp ไม่ค้าง
     scan_ms = int((time.time() - t0) * 1000)
     timeline = {
         "name": tl_name,
