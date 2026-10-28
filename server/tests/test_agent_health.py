@@ -97,6 +97,28 @@ class Health(unittest.TestCase):
         self.assertTrue(any("reject hold" in w for w in rows["e"]["warnings"]))
         self.assertEqual(rows["f"]["rejected_24h"], 1)                  # counter reset (reinstall)
 
+    def test_ongoing_condition_notifies_once_while_counts_change(self):
+        # review 2 Medium 1: refused every minute / PMS hanging -> one message at start, one at clear (5-min timer)
+        now = datetime.datetime.now(datetime.timezone.utc)
+        st, sent = {}, []
+        for i in range(4):
+            t = (now - datetime.timedelta(minutes=10 - i)).isoformat()
+            refused = {"a": {"sent": "a2", "route": "ingest", "count": 7 + 5 * i, "first_at": (now - datetime.timedelta(minutes=30)).isoformat(),
+                             "last_at": t}}
+            rows = ah.health([rec("a", 60 * (40 - i))], refused=refused, now=now)
+            rows[health_alert.SERVER_ROW] = {"status": "alert", "warnings": [], "alerts": [
+                "PMS progress: %d step(s) not sent since %s (still queued at shutdown (drain cap 10s), last %s)"
+                % (3 + i, now.isoformat(), t)]}
+            m, st = health_alert.transitions(st, rows)
+            sent += m
+        self.assertEqual(len(sent), 2, sent)                 # host "a" once, the server row once
+        self.assertTrue(any(s.startswith("🔴 editortrack server (PMS progress): alert") for s in sent), sent)
+        rows = ah.health([rec("a", 1)], now=now)
+        rows[health_alert.SERVER_ROW] = {"status": "ok", "alerts": [], "warnings": []}
+        m, st = health_alert.transitions(st, rows)
+        self.assertEqual(len(m), 2)                          # both clear
+        self.assertNotIn(health_alert.SERVER_ROW, " ".join(m))
+
     def test_alerts_only_on_transition(self):
         rows = ah.health([rec("a", 1, tripped="x")])
         m1, st = health_alert.transitions({}, rows)

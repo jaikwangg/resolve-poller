@@ -302,7 +302,7 @@ class PmsQueueVisible(Base):
         self.assertIn("queue full", q["alerts"][0])
         import health_alert
         msgs = health_alert.main(["--dry-run"])
-        self.assertTrue(any("editortrack server: alert" in m and "PMS progress" in m for m in msgs), msgs)
+        self.assertTrue(any("editortrack server (PMS progress): alert" in m and "PMS progress" in m for m in msgs), msgs)
         gate.set()
         self.assertTrue(pms_sync.progress_drain(5))
 

@@ -9,7 +9,7 @@ Channel: Telegram Bot API (same pattern as ~/github/server-temp-bot/telegram_api
 
 usage: python3 health_alert.py [--dry-run]
 """
-import glob, json, os, pathlib, sys, urllib.request, datetime
+import glob, json, os, pathlib, re, sys, urllib.request, datetime
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 import agent_health   # noqa: E402
@@ -42,14 +42,27 @@ def server_alerts(store):
         return ["cannot read PMS progress loss state: %s" % type(e).__name__]
 
 
+SERVER_ROW = "_server"          # not a valid host name (no "_" in host names), so it never collides with a workstation
+_TS = re.compile(r"\d{4}-\d{2}-\d{2}[T ][0-9:.]+(?:Z|[+-]\d{2}:?\d{2})?")
+_NUM = re.compile(r"\d+(?:\.\d+)?")
+
+
+def condition_key(text):
+    """an alert/warning line without the parts that change while the condition goes on (times, counts, minutes):
+    a host refused every minute, a PMS that keeps hanging or a growing "silent N min" is ONE condition, notified
+    once when it starts and once when it clears (the 5-min timer must not repeat it)."""
+    return _NUM.sub("#", _TS.sub("<t>", text))
+
+
 def transitions(prev, rows):
     msgs, state = [], {}
     for h, r in sorted(rows.items()):
-        key = r["status"] + "|" + ";".join(r["alerts"] + r["warnings"])
+        key = r["status"] + "|" + ";".join(condition_key(x) for x in r["alerts"] + r["warnings"])
         state[h] = key
         if prev.get(h) != key and (r["status"] != "ok" or (prev.get(h) or "ok").split("|")[0] != "ok"):
             icon = {"alert": "🔴", "warn": "🟡", "ok": "🟢"}[r["status"]]
-            msgs.append("%s editortrack %s: %s %s" % (icon, h, r["status"], "; ".join(r["alerts"] + r["warnings"])))
+            name = "server (PMS progress)" if h == SERVER_ROW else h
+            msgs.append("%s editortrack %s: %s %s" % (icon, name, r["status"], "; ".join(r["alerts"] + r["warnings"])))
     return msgs, state
 
 
@@ -75,7 +88,7 @@ def main(argv):
     rows = agent_health.health(load_records(store), control=agent_health.load_control(store),
                                refused=agent_health.load_host_refused(store))
     sa = server_alerts(store)
-    rows["server"] = {"status": "alert" if sa else "ok", "alerts": sa, "warnings": []}
+    rows[SERVER_ROW] = {"status": "alert" if sa else "ok", "alerts": sa, "warnings": []}
     msgs, state = transitions(prev, rows)
     for m in msgs:
         if "--dry-run" in argv:
