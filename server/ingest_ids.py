@@ -41,8 +41,10 @@ def _day(ts, now=None):
     """UTC day file for a record's key. A ts more than FUTURE_SEC ahead of the server clock is filed under the
     server's own UTC day, so retention (which deletes by day) still reaches it; without the clamp a record dated
     2099 would create a day file nobody ever deletes. The record itself is stored unchanged (/ingest never drops
-    it for its ts). Cost: a re-send of such a record on a LATER server day misses the key and is stored again;
-    both copies carry the same ts, so the readers' same-host dedupe (explain.dedupe) still counts it once."""
+    it for its ts). Index.seen also looks in the record's own day and the last CLAMP_LOOKBACK_DAYS server days
+    (_days_to_check), so a re-send after the ts has come within a day still finds the key filed earlier. Left: a
+    re-send more than CLAMP_LOOKBACK_DAYS server days after the first send is stored again; both copies carry the
+    same ts, so the readers' same-host dedupe (explain.dedupe) still counts it once."""
     try:
         d = datetime.datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
         if d.tzinfo is not None:
@@ -53,6 +55,33 @@ def _day(ts, now=None):
     except (ValueError, OverflowError):
         pass
     return "undated"
+
+
+def _real_day(ts):
+    """the record's own UTC day (no clamp), or None"""
+    try:
+        d = datetime.datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+        return d.astimezone(datetime.timezone.utc).date().isoformat() if d.tzinfo is not None else None
+    except (ValueError, OverflowError):
+        return None
+
+
+CLAMP_LOOKBACK_DAYS = 3
+
+
+def _days_to_check(ts, now=None):
+    """day files that may hold this record's key: where it would be filed now, its own day, and - for a ts from
+    yesterday on (it may have been sent earlier while > 1 day ahead, and filed under THAT server day) - the last
+    CLAMP_LOOKBACK_DAYS server days. Extra lookups can only find the same key, never a different record."""
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    days = [_day(ts, now)]
+    real = _real_day(ts)
+    if real is not None:
+        days.append(real)
+        today = now.date()
+        if real >= (today - datetime.timedelta(days=1)).isoformat():
+            days += [(today - datetime.timedelta(days=k)).isoformat() for k in range(CLAMP_LOOKBACK_DAYS + 1)]
+    return list(dict.fromkeys(days))
 
 
 class Index:
@@ -79,8 +108,9 @@ class Index:
         return s
 
     def seen(self, host, rec):
+        line = host + "\t" + key_of(rec)
         with self._lock:
-            return host + "\t" + key_of(rec) in self._load(_day(rec.get("ts")))
+            return any(line in self._load(d) for d in _days_to_check(rec.get("ts")))
 
     def add(self, host, rec):
         """remember a stored record (call AFTER the store write). Never raises: a failure here only

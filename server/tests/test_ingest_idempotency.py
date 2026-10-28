@@ -148,6 +148,27 @@ class Idempotent(Base):
         self.assertEqual(ingest_ids._day("2026-10-29T10:00:00+00:00", now), "2026-10-29")   # < 1 day ahead: own day
         self.assertEqual(ingest_ids._day("2026-10-30T10:00:00+00:00", now), "2026-10-28")   # > 1 day ahead: today
         self.assertEqual(ingest_ids._day("9999-12-31T23:59:59+14:00", now), "2026-10-28")
+        # a re-send 2 server days later, ts now < 1 day ahead: the day it was filed under is still looked at
+        later = now + datetime.timedelta(days=2)
+        self.assertIn("2026-10-28", ingest_ids._days_to_check("2026-10-31T10:00:00+00:00", later))
+        self.assertEqual(ingest_ids._days_to_check("2026-10-20T10:00:00+00:00", now), ["2026-10-20"])   # past: 1 file
+
+    def test_resend_after_ts_came_within_a_day_still_duplicate(self):
+        # review 2 Low 2: 1.1 days ahead -> filed under today; hours later (< 1 day ahead) the re-send looks in the
+        # record's own day too
+        ts = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=1, hours=3)).isoformat()
+        r = rec(ts=ts)
+        self.assertEqual(self.post(r).status_code, 200)
+        saved = ingest_ids.FUTURE_SEC
+        ingest_ids.FUTURE_SEC = 10 ** 9                # as if the server clock had moved on: no clamp any more
+        try:
+            self.assertNotIn(datetime.datetime.now(datetime.timezone.utc).date().isoformat(),
+                             [ingest_ids._day(ts)])     # the key is NOT in the day the record is filed under now
+            api._ids = ingest_ids.Index(STORE)          # and the server restarted (index from disk)
+            self.assertTrue(self.post(r).json().get("duplicate"))
+        finally:
+            ingest_ids.FUTURE_SEC = saved
+        self.assertEqual(len(stored()), 1)
 
     def test_bad_rid_is_a_final_400(self):
         for bad in (12345, "short", "x" * 65, "has space here", ""):
