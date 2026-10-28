@@ -310,7 +310,7 @@ def progress_drain(timeout=10.0):
 # that caused it), on /api/health + /health, and in health_alert.py's owner alerts for LOST_ALERT_SEC.
 import logging as _logging
 
-LOST_FILE = "pms_progress_lost.json"              # in STORE: {count, last_at, reason}
+LOST_FILE = "pms_progress_lost.json"              # in STORE: {count, first_at, last_at, reason} for the current episode
 LOST_ALERT_SEC = 24 * 3600
 SHUTDOWN_DRAIN_SEC = float(_os.environ.get("PMS_SHUTDOWN_DRAIN_SEC", "10"))   # cap: a hung PMS must not block a restart
 _lost_lock = threading.Lock()
@@ -318,15 +318,20 @@ _log = _logging.getLogger("editortrack")
 
 
 def note_lost(store, n, reason):
-    """add n lost PMS steps to <store>/pms_progress_lost.json. Never raises."""
+    """add n lost PMS steps to <store>/pms_progress_lost.json. The count is per episode, like the alert: when the
+    previous loss is older than LOST_ALERT_SEC (the alert has cleared), counting starts again from 0. Never raises."""
     if not n or store is None:
         return
     try:
         with _lost_lock:
+            now = datetime.datetime.now(datetime.timezone.utc)
             cur = load_lost(store) or {}
+            last = _aware(cur.get("last_at"))
+            if last is None or (now - last).total_seconds() > LOST_ALERT_SEC:
+                cur = {}                                   # a new episode
             c = cur.get("count") if isinstance(cur.get("count"), int) else 0
-            body = {"count": c + int(n), "last_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                    "reason": str(reason)[:200]}
+            body = {"count": c + int(n), "first_at": cur.get("first_at") or now.isoformat(),
+                    "last_at": now.isoformat(), "reason": str(reason)[:200]}
             path = _os.path.join(str(store), LOST_FILE)
             tmp = path + ".tmp"
             fd = _os.open(tmp, _os.O_WRONLY | _os.O_CREAT | _os.O_TRUNC, 0o600)
@@ -335,6 +340,14 @@ def note_lost(store, n, reason):
             _os.replace(tmp, path)
     except Exception:
         pass
+
+
+def _aware(s):
+    try:
+        d = datetime.datetime.fromisoformat(str(s))
+    except ValueError:
+        return None
+    return d if d.tzinfo is not None else None
 
 
 def load_lost(store):
@@ -359,18 +372,15 @@ def server_alerts(store, now=None):
     lost = load_lost(store)
     if not lost:
         return []
-    try:
-        last = datetime.datetime.fromisoformat(str(lost.get("last_at")))
-    except ValueError:
-        return []
-    if last.tzinfo is None:
+    last = _aware(lost.get("last_at"))
+    if last is None:
         return []
     now = now or datetime.datetime.now(datetime.timezone.utc)
     if (now - last).total_seconds() > LOST_ALERT_SEC:
         return []
-    return ["PMS progress: %s step(s) not sent (%s, last %s); the records are stored and the next record of each "
-            "job sends its latest value - check PMS / the server log" % (lost.get("count"), lost.get("reason"),
-                                                                        lost.get("last_at"))]
+    return ["PMS progress: %s step(s) not sent since %s (%s, last %s); the records are stored and the next record "
+            "of each job sends its latest value - check PMS / the server log"
+            % (lost.get("count"), lost.get("first_at") or "?", lost.get("reason"), lost.get("last_at"))]
 
 
 def progress_shutdown(store, cap=None):

@@ -274,6 +274,18 @@ class PmsQueueVisible(Base):
         self.assertFalse((STORE / pms_sync.LOST_FILE).exists())
         self.assertEqual(self.c.get("/api/health", headers=authfix.reader()).json()["server"]["alerts"], [])
 
+    def test_lost_count_is_per_episode(self):
+        # review 2 Low 4: a loss after the 24 h alert has cleared starts a new count
+        old = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=2)).isoformat()
+        (STORE / pms_sync.LOST_FILE).write_text(json.dumps({"count": 50, "first_at": old, "last_at": old, "reason": "x"}))
+        self.assertEqual(pms_sync.server_alerts(STORE), [])
+        pms_sync.note_lost(STORE, 2, "queue full")
+        pms_sync.note_lost(STORE, 1, "queue full")
+        d = pms_sync.load_lost(STORE)
+        self.assertEqual(d["count"], 3)
+        self.assertNotEqual(d["first_at"], old)
+        self.assertIn("3 step(s) not sent since %s" % d["first_at"], pms_sync.server_alerts(STORE)[0])
+
     def test_full_queue_drop_counted_and_alerted(self):
         gate, calls = self._hang()
         old_max = pms_sync._pq.maxsize
