@@ -34,12 +34,23 @@ def key_of(rec):
     return "ts:" + str(rec.get("ts"))
 
 
-def _day(ts):
+FUTURE_SEC = 86400            # a ts further ahead than this (bad workstation clock) is filed under today
+
+
+def _day(ts, now=None):
+    """UTC day file for a record's key. A ts more than FUTURE_SEC ahead of the server clock is filed under the
+    server's own UTC day, so retention (which deletes by day) still reaches it; without the clamp a record dated
+    2099 would create a day file nobody ever deletes. The record itself is stored unchanged (/ingest never drops
+    it for its ts). Cost: a re-send of such a record on a LATER server day misses the key and is stored again;
+    both copies carry the same ts, so the readers' same-host dedupe (explain.dedupe) still counts it once."""
     try:
         d = datetime.datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
         if d.tzinfo is not None:
+            now = now or datetime.datetime.now(datetime.timezone.utc)
+            if (d - now).total_seconds() > FUTURE_SEC:
+                d = now
             return d.astimezone(datetime.timezone.utc).date().isoformat()
-    except ValueError:
+    except (ValueError, OverflowError):
         pass
     return "undated"
 

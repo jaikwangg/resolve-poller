@@ -135,6 +135,20 @@ class Idempotent(Base):
             self.assertTrue(any(s.endswith(".jsonl") for s in synced), synced)
             self.assertIn(str(STORE.resolve()), [str(pathlib.Path(s).resolve()) for s in synced])
 
+    def test_far_future_ts_stored_and_key_filed_under_today(self):
+        # a bad workstation clock (2099) must not create an index day file retention never deletes (review Low 6),
+        # and the record is still stored (never dropped for its ts)
+        r = rec(ts="2099-01-01T00:00:00+00:00")
+        self.assertEqual(self.post(r).status_code, 200)
+        self.assertTrue(self.post(r).json()["duplicate"])
+        self.assertEqual(len(stored()), 1)
+        today = datetime.datetime.now(datetime.timezone.utc).date().isoformat()
+        self.assertEqual([f.name for f in (STORE / "ingest_ids").glob("*.txt")], [today + ".txt"])
+        now = datetime.datetime(2026, 10, 28, 20, 0, tzinfo=datetime.timezone.utc)
+        self.assertEqual(ingest_ids._day("2026-10-29T10:00:00+00:00", now), "2026-10-29")   # < 1 day ahead: own day
+        self.assertEqual(ingest_ids._day("2026-10-30T10:00:00+00:00", now), "2026-10-28")   # > 1 day ahead: today
+        self.assertEqual(ingest_ids._day("9999-12-31T23:59:59+14:00", now), "2026-10-28")
+
     def test_bad_rid_is_a_final_400(self):
         for bad in (12345, "short", "x" * 65, "has space here", ""):
             r = self.post(rec(rid=bad))
