@@ -104,8 +104,14 @@ async def ingest(req: Request, authorization: str = Header(default="")):
                             headers={"X-Editortrack-Reject": why})
     # checked after record_problem: a record without a usable host gets the final 400 above, never this 403
     # (a 403 is retried by the agent, so a malformed record must not end up here and block the queue)
-    if rec.get("host") != host:                     # token ของเครื่องหนึ่งส่งในนามเครื่องอื่นไม่ได้
-        raise HTTPException(status_code=403, detail="token นี้ไม่ใช่ของ host นี้")
+    # same host = same name up to case / domain suffix (auth.same_host); a real mismatch is a 403 (the agent keeps
+    # the record and retries) and is shown on /health until the host delivers again
+    if not auth.same_host(rec.get("host"), host):  # token ของเครื่องหนึ่งส่งในนามเครื่องอื่นไม่ได้
+        agent_health.note_host_refused(STORE, host, rec.get("host"), "ingest")
+        log.warning("ingest refused: token for %s, record host %r", host, str(rec.get("host"))[:100])
+        raise HTTPException(status_code=403, detail="token นี้ไม่ใช่ของ host นี้",
+                            headers={"X-Editortrack-Host-Mismatch": host})
+    rec["host"] = host                              # stored under the token's own name, never the spelling sent
     privacy.scrub(rec)                              # agent รุ่นเก่ายังส่ง user/ชื่อแอปหน้าสุด → ตัดก่อนเขียนลง disk
     # idempotent (M1): a record already stored (same host + rid, or + ts for agents < 0.9.2) is acknowledged and
     # not written again: an agent that timed out and re-sends it gets its 200 and drops it from its queue
@@ -130,15 +136,18 @@ def agent_control(host: str = "", v: str = "", authorization: str = Header(defau
     who = auth.machine_host(authorization)
     if who is None:
         raise HTTPException(status_code=401, detail="unauthorized")
-    if host != who:
-        raise HTTPException(status_code=403, detail="token นี้ไม่ใช่ของ host นี้")
-    return agent_health.control_for(STORE, host, v)
+    if not auth.same_host(host, who):
+        agent_health.note_host_refused(STORE, who, host, "agent/control")
+        raise HTTPException(status_code=403, detail="token นี้ไม่ใช่ของ host นี้",
+                            headers={"X-Editortrack-Host-Mismatch": who})
+    return agent_health.control_for(STORE, who, v)    # the token's own name (control file keys = token map keys)
 
 
 @app.get("/api/health")
 def api_health(days: int = 2):
     days = _days(days)
-    rows = agent_health.health(_load_recent(days), control=agent_health.load_control(STORE))
+    rows = agent_health.health(_load_recent(days), control=agent_health.load_control(STORE),
+                               refused=agent_health.load_host_refused(STORE))
     return JSONResponse({"hosts": sorted(rows.values(), key=lambda r: r["host"]),
                          "control": agent_health.load_control(STORE), "skipped": load_skipped.get(days)})
 
@@ -147,7 +156,8 @@ def api_health(days: int = 2):
 def health_page():
     from fastapi.responses import HTMLResponse
     import html
-    rows = agent_health.health(_load_recent(2), control=agent_health.load_control(STORE))
+    rows = agent_health.health(_load_recent(2), control=agent_health.load_control(STORE),
+                               refused=agent_health.load_host_refused(STORE))
     tr = "".join(
         "<tr class='%s'><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % tuple(
             html.escape(str(x)) for x in (r["status"], r["host"], r["status"], r.get("version"), r.get("last_seen"),

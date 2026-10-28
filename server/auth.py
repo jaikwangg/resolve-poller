@@ -127,6 +127,23 @@ def machine_host(authorization):
     return found
 
 
+def norm_host(name):
+    """the comparable form of a host name: case-insensitive, no trailing dot, no domain suffix.
+    "GRADE-01", "grade-01.local", "grade-01.corp.example." -> "grade-01". Not a string / empty -> None."""
+    if not isinstance(name, str):
+        return None
+    n = name.strip().rstrip(".").lower().split(".")[0]
+    return n or None
+
+
+def same_host(sent, token_host):
+    """True when `sent` (what the agent reports) names the host the token was issued for. Only the
+    spelling may differ (case, FQDN vs short name): the caller stores token_host, never `sent`, so a
+    token can only ever write records under its own map key."""
+    a, b = norm_host(sent), norm_host(token_host)
+    return a is not None and a == b
+
+
 def read_ok(authorization):
     """True if the request carries read credentials (Basic user/password or a read token)."""
     if read_auth_off():
