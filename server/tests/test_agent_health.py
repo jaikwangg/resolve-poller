@@ -119,6 +119,33 @@ class Health(unittest.TestCase):
         self.assertEqual(len(m), 2)                          # both clear
         self.assertNotIn(health_alert.SERVER_ROW, " ".join(m))
 
+    def test_new_events_still_notify(self):
+        # review 3: only known volatile parts are normalised; real new events change the key
+        k = health_alert.condition_key
+        self.assertNotEqual(k("UI-state event: {'forbidden_call': 1}"), k("UI-state event: {'forbidden_call': 2}"))
+        self.assertNotEqual(k("version 2.3.1 not allowed"), k("version 2.4.0 not allowed"))
+        self.assertNotEqual(k("breaker tripped: guard 2100 ms"), k("breaker tripped: guard 3100 ms"))
+        self.assertNotEqual(k("rss 160 MB"), k("rss 300 MB"))
+        t1, t2 = "2026-10-28T10:00:00.123456+00:00", "2026-10-28T10:05:00+00:00"
+        mm = ("host name mismatch: token is for grade-01, agent reports %r (%d request(s) refused, last %s). The "
+              "server refuses its lease too, so the agent RECORDS NOTHING once its current lease runs out (by %s at "
+              "the latest); records already queued are kept")
+        self.assertEqual(k(mm % ("GRADE-02", 3, t1, t2)), k(mm % ("GRADE-02", 40, t2, t2)))
+        self.assertNotEqual(k(mm % ("GRADE-01x", 3, t1, t2)), k(mm % ("GRADE-02", 3, t1, t2)))
+        self.assertEqual(k("silent 10 min"), k("silent 30 min"))
+        self.assertEqual(k("queue 1200"), k("queue 1500"))
+        self.assertEqual(k("backoff x3"), k("backoff x9"))
+        self.assertEqual(k("server refused 2 record(s) in 24 h (agent ~/.editortrack/rejected.log)"),
+                         k("server refused 5 record(s) in 24 h (agent ~/.editortrack/rejected.log)"))
+        pms = "PMS progress: %d step(s) not sent since %s (queue full, last %s); the records are stored"
+        self.assertEqual(k(pms % (1, t1, t1)), k(pms % (9, t1, t2)))
+        self.assertNotEqual(k(pms % (1, t1, t1)), k((pms % (1, t1, t1)).replace("queue full", "still queued")))
+        # through transitions: forbidden_call 1 -> 2 is a second message
+        base = {"status": "alert", "warnings": []}
+        m1, st = health_alert.transitions({}, {"a": dict(base, alerts=["UI-state event: {'forbidden_call': 1}"])})
+        m2, st = health_alert.transitions(st, {"a": dict(base, alerts=["UI-state event: {'forbidden_call': 2}"])})
+        self.assertEqual((len(m1), len(m2)), (1, 1))
+
     def test_alerts_only_on_transition(self):
         rows = ah.health([rec("a", 1, tripped="x")])
         m1, st = health_alert.transitions({}, rows)
