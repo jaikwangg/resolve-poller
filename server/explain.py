@@ -4,6 +4,7 @@ explain(rec, eff) -> {summary, lines[], warnings[], fields[]}
 """
 import datetime
 import math
+import re
 
 LATE_SEC = 120          # ts ของ agent ช้ากว่าเวลาที่ server รับเกินนี้ = มาจาก offline queue
 STALE_SEC = 300         # host เงียบเกินนี้ = ขาดการติดต่อ
@@ -61,6 +62,7 @@ GLOSSARY = {
     "progress.total": "ค่าดิบเป้าหมาย",
     "progress.detail.graded_clips": "ตัวเศษของ color %",
     "progress.detail.video_clips": "ตัวหารของ color %",
+    "rid": "id ของ record ที่ agent สุ่มตอนสร้าง (agent 0.9.2+) — ส่งซ้ำด้วย id เดิม server เก็บครั้งเดียว",
     "_rx.at": "เวลาที่ server ได้รับ record นี้ (UTC)",
     "_rx.ip": "IP ของเครื่องที่ส่งเข้ามา",
 }
@@ -91,6 +93,7 @@ DUP_SEC = 30            # record จาก host เดียวกันห่�
 # Record shape the readers rely on (/api/*, report, projects, health, pms_sync). One wrong type here made a
 # route raise (TypeError/AttributeError -> 500), so the same check runs at /ingest (400) and on every load
 # (skip + count). Only types are checked, never values: a field may always be missing or null.
+_RID = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
 _N = type(None)
 _STR = (str, _N)
 _NUM = (int, float, _N)
@@ -127,6 +130,9 @@ def record_problem(rec):
         return "no_ts"
     if _dt(rec["ts"]) is None:
         return "ts_without_offset" if _naive(rec["ts"]) else "bad_ts"
+    rid = rec.get("rid")
+    if rid is not None and not (isinstance(rid, str) and _RID.match(rid)):
+        return "bad_rid"                        # agent >= 0.9.2 idempotency id (ingest_ids.py): 8-64 [A-Za-z0-9_-]
     for path, types in SHAPE.items():
         cur = rec
         for k in path.split("."):

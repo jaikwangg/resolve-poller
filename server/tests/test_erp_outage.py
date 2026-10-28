@@ -2,7 +2,8 @@
 
 - erp._bookings: a failed fetch is remembered for ERP_FAIL_TTL; lookups in that window use the old rows
   without calling PMS again.
-- /ingest runs the PMS step in the threadpool, so a slow PMS does not block the event loop.
+- /ingest queues the PMS step for the pms-progress worker thread (pms_sync.progress_submit), so a slow PMS neither
+  blocks the event loop nor delays the answer (test_ingest_idempotency.SlowPms runs it).
 
 run:  cd server && ~/.editortrack-venv/bin/python -m unittest tests.test_erp_outage -v
 """
@@ -47,7 +48,7 @@ class NegativeCache(unittest.TestCase):
 class IngestOffLoop(unittest.TestCase):
     def test_ingest_uses_threadpool_for_pms(self):
         src = (HERE.parent / "dashboard_api.py").read_text(encoding="utf-8")
-        self.assertIn("await run_in_threadpool(pms_sync.progress_on_ingest", src)
+        self.assertIn("pms_sync.progress_submit(rec, _eff_job, erp, STORE)", src)   # M1: queued, out of the request
 
 
 if __name__ == "__main__":

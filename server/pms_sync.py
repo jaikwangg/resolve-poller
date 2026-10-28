@@ -243,3 +243,61 @@ def _post_progress(erp, body):
             _pg["pushed"][key] = _sig(body)
             return False
         raise
+
+
+# ---------------- progress push out of the /ingest request (M1: slow PMS must not make agents re-send) ----------------
+# /ingest acknowledges as soon as the record is in the store; the PMS progress step runs here, on one worker thread
+# (one thread keeps the engine's record order). A full queue drops the PMS step for that record only (counted in
+# progress_status["queue_dropped"]): the record itself is already stored, and the next record carries the latest value.
+import queue as _queue
+
+PROGRESS_QUEUE_MAX = int(_os.environ.get("PMS_PROGRESS_QUEUE_MAX", "2000"))
+_pq = _queue.Queue(maxsize=max(1, PROGRESS_QUEUE_MAX))
+_pq_worker = {"thread": None}
+_pq_start_lock = threading.Lock()
+progress_status.setdefault("queued", 0)
+progress_status.setdefault("queue_dropped", 0)
+
+
+def _progress_worker():
+    while True:
+        item = _pq.get()
+        try:
+            progress_on_ingest(*item)            # never raises (best-effort, counts its own errors)
+        except Exception as e:                   # belt and braces: the worker must survive anything
+            progress_status["errors"] += 1
+            progress_status["last_error"] = f"{type(e).__name__}: {e}"
+        finally:
+            _pq.task_done()
+
+
+def progress_submit(rec, eff_job, erp, store):
+    """queue the PMS progress step for a stored record; returns at once. -> True queued, False not (disabled or
+    queue full). Never raises, never blocks."""
+    if not _progress_enabled(erp):
+        progress_status["enabled"] = False
+        return False
+    with _pq_start_lock:
+        if _pq_worker["thread"] is None or not _pq_worker["thread"].is_alive():
+            t = threading.Thread(target=_progress_worker, name="pms-progress", daemon=True)
+            t.start()
+            _pq_worker["thread"] = t
+    try:
+        _pq.put_nowait((rec, eff_job, erp, store))
+    except _queue.Full:
+        progress_status["queue_dropped"] += 1
+        progress_status["last_error"] = "progress queue full: PMS step skipped for one record (record stored)"
+        return False
+    progress_status["queued"] += 1
+    return True
+
+
+def progress_drain(timeout=10.0):
+    """wait until the queued PMS steps are done (tests, shutdown). -> True when the queue is empty."""
+    import time as _t
+    end = _t.monotonic() + timeout
+    while _pq.unfinished_tasks:
+        if _t.monotonic() > end:
+            return False
+        _t.sleep(0.01)
+    return True

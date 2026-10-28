@@ -6,9 +6,9 @@ job_id/stage หลัก = ERP booking (room+time) · fallback = agent-side (re
 import os, json, glob, datetime, collections, logging, pathlib
 from fastapi import FastAPI, Request, Header, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
-from starlette.concurrency import run_in_threadpool
 
 import auth
+import ingest_ids
 import privacy
 
 log = logging.getLogger("editortrack")
@@ -48,6 +48,17 @@ async def _read_auth(request: Request, call_next):
         return JSONResponse({"detail": "unauthorized"}, status_code=401,
                             headers={"WWW-Authenticate": 'Basic realm="editortrack", charset="UTF-8"'})
     return await call_next(request)
+
+
+_ids = ingest_ids.Index(STORE)
+
+
+def _index():
+    """the idempotency index of the current STORE (tests point STORE elsewhere at run time)"""
+    global _ids
+    if _ids.store != pathlib.Path(STORE):
+        _ids = ingest_ids.Index(STORE)
+    return _ids
 
 
 @app.on_event("startup")
@@ -96,16 +107,20 @@ async def ingest(req: Request, authorization: str = Header(default="")):
     if rec.get("host") != host:                     # token ของเครื่องหนึ่งส่งในนามเครื่องอื่นไม่ได้
         raise HTTPException(status_code=403, detail="token นี้ไม่ใช่ของ host นี้")
     privacy.scrub(rec)                              # agent รุ่นเก่ายังส่ง user/ชื่อแอปหน้าสุด → ตัดก่อนเขียนลง disk
+    # idempotent (M1): a record already stored (same host + rid, or + ts for agents < 0.9.2) is acknowledged and
+    # not written again: an agent that timed out and re-sends it gets its 200 and drops it from its queue
+    if _index().seen(host, rec):
+        return {"ok": True, "duplicate": True, "pushed": False}
     # เวลา/IP ฝั่ง server — ใช้ดูว่ามาสดหรือมาจาก offline queue
     rec["_rx"] = {"at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                   "ip": req.client.host if req.client else None}
     _append_record(rec)
-    # push progress → PMS (contract v2, pms_sync.progress_on_ingest + progress_v2): provisional ≤ 99 until the scope is
-    # confirmed and stable, holds while unsure, only ERP-bound project_no · best-effort, no-op until ERP_PROGRESS_PATH
-    # run in the threadpool: progress_on_ingest may call PMS (urllib, 10 s timeout) and ingest is async, so a slow
-    # PMS would otherwise stall the event loop and every other request (all agents, all pages) with it
-    pushed = (await run_in_threadpool(pms_sync.progress_on_ingest, rec, _eff_job, erp, STORE)) if erp else False
-    return {"ok": True, "pushed": pushed}
+    _index().add(host, rec)                         # after the store write (ingest_ids.py: never a key without its record)
+    # push progress → PMS (contract v2, pms_sync.progress_on_ingest + progress_v2) OUT of the request: queued for the
+    # pms-progress worker thread, so a slow or hung PMS never delays the answer (before: the agent's 5 s timeout
+    # expired while PMS took up to 10 s, and the agent re-sent the record) · best-effort, no-op until ERP_PROGRESS_PATH
+    queued = pms_sync.progress_submit(rec, _eff_job, erp, STORE) if erp else False
+    return {"ok": True, "pushed": "queued" if queued else False}
 
 
 # ---------------- agent fleet control + health ----------------

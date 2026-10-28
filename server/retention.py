@@ -3,7 +3,8 @@
 
 Records live in one file per server-receive day: <store>/YYYY-MM-DD.jsonl. A file is deleted
 when its day is older than N days (strictly before today - N). Only files whose whole name is
-a valid date + .jsonl are ever touched; agent_control.json and anything else is left alone.
+a valid date + .jsonl are ever touched (plus the idempotency index ingest_ids/YYYY-MM-DD.txt,
+same cutoff); agent_control.json and anything else is left alone.
 
   python3 retention.py --dry-run            print what would be deleted, delete nothing
   python3 retention.py                      delete
@@ -87,12 +88,38 @@ def scrub_file(path, dry_run):
     return changed
 
 
+ID_FILE = re.compile(r"^(\d{4}-\d{2}-\d{2})\.txt$")
+
+
+def expired_ids(store, days, today=None):
+    """idempotency index day files (<store>/ingest_ids/YYYY-MM-DD.txt, ingest_ids.py) past the same cutoff"""
+    d = pathlib.Path(store) / "ingest_ids"
+    if not d.is_dir():
+        return []
+    cutoff = (today or datetime.date.today()) - datetime.timedelta(days=days)
+    out = []
+    for p in sorted(d.iterdir()):
+        m = ID_FILE.match(p.name)
+        if not m or not p.is_file() or p.is_symlink():
+            continue
+        try:
+            if datetime.date.fromisoformat(m.group(1)) < cutoff:
+                out.append(p)
+        except ValueError:
+            continue
+    return out
+
+
 def run(store, days, dry_run=False, scrub=False, today=None, echo=print, include_today=False):
     store = pathlib.Path(store)
     if not store.is_dir():
         raise SystemExit(f"store {store} is not a directory")
     gone = expired(store, days, today)
     for p in gone:
+        echo(("would delete " if dry_run else "delete ") + str(p))
+        if not dry_run:
+            p.unlink()
+    for p in expired_ids(store, days, today):
         echo(("would delete " if dry_run else "delete ") + str(p))
         if not dry_run:
             p.unlink()
