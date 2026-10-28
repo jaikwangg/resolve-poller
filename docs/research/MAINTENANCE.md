@@ -60,8 +60,12 @@ fleet kill switch with the real server).
    or `minisign` on the zip). `safety.AGENT_VERSION` must equal the tag (**TO BUILD:** a CI
    check).
 3. **The server pins versions.** `agent_control.json` → `"allowed_versions": ["0.9.0-safety"]`.
-   An agent whose version is not listed gets no lease and stays silent. Rolling out = adding
-   the new version for **one host**; rolling back = removing it.
+   An agent whose version is not listed gets no lease and stays silent (records nothing once its
+   current lease runs out). Rolling out = adding the new version for **one host**; rolling back =
+   removing it. **Order: server first → `allowed_versions` lists the old AND the new version →
+   then the agents** (agent/deploy/README.md "Rollout order"); `install.sh` runs
+   `deploy/preflight.py`, which refuses the install when the server would not grant this
+   version + host a lease.
 4. **Staged update.** New version → CI green → the spare machine (R1) for 2 days → one room for
    1 week → the rest one room at a time. Same evidence + owner sign-off as
    WORKSTATION_SAFETY.md §8.

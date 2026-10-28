@@ -175,5 +175,77 @@ class EndToEnd(unittest.TestCase):
             th.join(5)
 
 
+class RolloutPreflight(unittest.TestCase):
+    """review High 1: an agent upgraded before the server lists its version records nothing once its lease ends.
+    agent/deploy/preflight.py (run by install.sh) asks the REAL server exactly like the agent and refuses."""
+
+    @classmethod
+    def setUpClass(cls):
+        import uvicorn, dashboard_api
+        cls.srv = uvicorn.Server(uvicorn.Config(dashboard_api.app, host="127.0.0.1", port=0, log_level="error"))
+        cls.th = threading.Thread(target=cls.srv.run, daemon=True)
+        cls.th.start()
+        for _ in range(100):
+            if cls.srv.started:
+                break
+            time.sleep(0.05)
+        cls.port = cls.srv.servers[0].sockets[0].getsockname()[1]
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.srv.should_exit = True
+        cls.th.join(5)
+
+    def tearDown(self):
+        if CTRL.exists():
+            CTRL.unlink()
+
+    def run_preflight(self, host="e2e", token=None):
+        import subprocess
+        tok = token or authfix.machine_token("e2e")
+        env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": TMP,
+               "EDITORTRACK_SERVER": "http://127.0.0.1:%d/ingest" % self.port,
+               "EDITORTRACK_TOKEN": tok, "EDITORTRACK_HOST": host}
+        r = subprocess.run([sys.executable, "-B", str(HERE.parents[1] / "agent" / "deploy" / "preflight.py")],
+                           env=env, capture_output=True, text=True, timeout=30)
+        self.assertNotIn(tok, r.stdout + r.stderr)                 # the token is never printed
+        return r
+
+    def test_new_version_refused_until_allowed_versions_lists_it(self):
+        old = "0.9.1-safety"
+        self.assertNotEqual(V, old)
+        write_ctrl({"allowed_versions": [old], "hosts": {"e2e": {"enabled": True}}})     # server not updated yet
+        r = self.run_preflight()
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("PREFLIGHT FAILED", r.stderr)
+        self.assertIn("version_not_allowed", r.stderr)
+        self.assertIn(V, r.stderr)
+        write_ctrl({"allowed_versions": [old, V], "hosts": {"e2e": {"enabled": True}}})  # the documented order
+        r = self.run_preflight()
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("grants agent %s a lease" % V, r.stdout)
+
+    def test_every_other_refusal_fails_loudly(self):
+        write_ctrl({"allowed_versions": [V], "hosts": {"e2e": {"enabled": False}}})
+        self.assertIn("host_disabled", self.run_preflight().stderr)
+        CTRL.unlink()
+        self.assertIn("no_control_file", self.run_preflight().stderr)
+        write_ctrl({"allowed_versions": [V], "hosts": {"e2e": {"enabled": True}}})
+        r = self.run_preflight(host="editbay-7")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("EDITORTRACK_HOST=e2e", r.stderr)
+        r = self.run_preflight(token="not-a-real-token-0000000000000000")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("401", r.stderr)
+
+    def test_shipped_docs_state_the_order(self):
+        root = HERE.parents[1]
+        rd = (root / "agent" / "deploy" / "README.md").read_text(encoding="utf-8")
+        self.assertIn("Rollout order", rd)
+        self.assertIn('"allowed_versions": ["0.9.1-safety", "0.9.2-safety"]', rd)
+        self.assertIn("deploy/preflight.py", (root / "agent" / "deploy" / "install.sh").read_text(encoding="utf-8"))
+        self.assertIn("single worker", (root / "server" / "README.md").read_text(encoding="utf-8"))
+
+
 if __name__ == "__main__":
     unittest.main()

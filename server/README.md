@@ -74,6 +74,16 @@ EDITORTRACK_LOCK_COUNTS=0            # lock จากจำนวนคลิป
 ```
 EDITORTRACK_TOKEN=xxx uvicorn dashboard_api:app --host 0.0.0.0 --port 8000
 ```
+**ต้องเป็น uvicorn worker เดียว · single worker only** (ห้าม `--workers N`, ห้าม gunicorn หลาย worker, ห้ามรัน 2 instance บน store
+เดียวกัน): `/ingest` ตรวจ record ซ้ำ + เขียน + จำ key (`ingest_ids.py`) เป็นขั้นตอนเดียวเฉพาะใน event loop เดียว — หลาย process
+จะเก็บ re-send ซ้ำ และ PMS progress worker/สถานะต่าง ๆ แยกกันต่อ process · The dedupe check + append + key add is atomic only
+within one event loop; several workers would store re-sends twice.
+
+ปิด server: รอ PMS progress ที่ค้างคิวส่งให้จบไม่เกิน `PMS_SHUTDOWN_DRAIN_SEC` (default 10 วิ — PMS ค้างก็ไม่บล็อก restart นานกว่านี้)
+ที่เหลือนับเป็น "lost" แสดงใน `/health` + `/api/health` (`server`) และ alert ของ `health_alert.py` 24 ชม. (record เก็บครบแล้ว)
+
+**อัปเกรด agent:** server ก่อน → `agent_control.json` `allowed_versions` มีทั้งเวอร์ชันเก่าและใหม่ → แล้วค่อย agent
+(`../agent/deploy/README.md` "Rollout order")
 เปิด `http://<server>:8000/` → dashboard
 
 ## endpoints

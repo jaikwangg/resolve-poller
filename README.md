@@ -31,6 +31,7 @@ cd agent   &&  python probe.py  &&  python runner.py
 # server
 cd server  &&  pip install -r requirements.txt  &&  EDITORTRACK_STORE=/srv/editortrack EDITORTRACK_TOKEN_MAP=~/.editortrack/tokens.json EDITORTRACK_READ_USERS=~/.editortrack/readers.json uvicorn dashboard_api:app --host 0.0.0.0 --port 8000
 # token ต่อเครื่อง / login หน้าอ่าน / retention / หมุน token: docs/SECURITY.md · ข้อมูลที่เก็บ: docs/DATA_SHEET.md
+# single uvicorn worker only (no --workers N): server/README.md "run" · agent upgrade order: agent/deploy/README.md "Rollout order"
 ```
 
 ## สถานะ

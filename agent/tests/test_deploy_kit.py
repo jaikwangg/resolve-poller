@@ -149,6 +149,28 @@ class Kit(unittest.TestCase):
         self.assertIn("export EDITORTRACK_TOKEN=" + secret, out.read_text())
         self.assertNotIn(secret, r.stdout + r.stderr)
 
+    def test_install_refuses_when_preflight_fails(self):
+        # review High 1: no lease for this version/host -> install.sh stops BEFORE the test run and the scheduler
+        tmp = pathlib.Path(tempfile.mkdtemp(prefix="et-preflight-"))
+        self.addCleanup(shutil.rmtree, tmp, True)
+        env, home, log = stub_env(tmp)
+        a = tmp / "agent"
+        (a / "deploy").mkdir(parents=True)
+        for f in ("install.sh", "preflight.py", "run-agent.sh"):
+            shutil.copy(DEPLOY / f, a / "deploy" / f)
+        shutil.copy(AGENT / "safety.py", a / "safety.py")
+        marker = tmp / "runner-ran"
+        (a / "runner.py").write_text("open(%r, 'w').write('x')\n" % str(marker))
+        (a / "deploy" / "env.sh").write_text("export EDITORTRACK_SERVER=http://127.0.0.1:9/ingest\n"
+                                             "export EDITORTRACK_TOKEN=testtoken\nexport EDITORTRACK_HOST=grade-03\n")
+        env["PATH"] = env["PATH"] + ":" + os.path.dirname(sys.executable)
+        r = subprocess.run(["sh", str(a / "deploy" / "install.sh")], env=env, capture_output=True, text=True, timeout=60)
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn("PREFLIGHT FAILED", r.stderr)
+        self.assertFalse(marker.exists())                                     # no test run
+        self.assertNotIn("systemctl", log.read_text() if log.exists() else "")   # nothing installed
+        self.assertFalse(list(a.rglob("__pycache__")))                        # preflight writes no bytecode
+
     def test_station_templates_keep_gates(self):
         for f in list((DEPLOY / "stations").glob("*.sh")) + [DEPLOY / "env.example"]:
             s = f.read_text()

@@ -17,6 +17,9 @@ Environment=EDITORTRACK_RETENTION_DAYS=90
 Environment=EDITORTRACK_INTERVAL_MIN=1
 EnvironmentFile=-%h/.editortrack/server.env
 UMask=0077
+# ONE uvicorn worker only (no --workers N): /ingest dedupe check + append + key add is atomic only within one event
+# loop (server/README.md "run"). Shutdown drains the PMS progress queue for <= PMS_SHUTDOWN_DRAIN_SEC (10 s), well
+# inside systemd's default TimeoutStopSec (90 s).
 ExecStart=%h/.editortrack-venv/bin/uvicorn dashboard_api:app --host 0.0.0.0 --port 8000 --log-level warning
 Restart=always
 RestartSec=3

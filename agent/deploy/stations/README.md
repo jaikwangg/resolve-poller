@@ -17,6 +17,8 @@ cp deploy/stations/grade-03.sh deploy/env.sh
 nano deploy/env.sh                               # แก้ SERVER_IP + TOKEN
 sh deploy/install.sh                             # หลายกะ: sh deploy/install.sh --system
 ```
+`install.sh` ไม่ติดตั้งถ้า server ไม่ให้ lease กับเวอร์ชัน/ชื่อเครื่องนี้ (preflight) — server + `allowed_versions` ต้องมาก่อน
+agent เสมอ · ลำดับเต็ม: `../README.md` "Rollout order"
 
 ## ฝั่ง server (ครั้งเดียว)
 ก็อป `server/room_map.example.json` → `~/.editortrack/room_map.json` แล้วแก้ค่าขวา (`GRADE1`...)

@@ -24,6 +24,12 @@ if [ "$OS" = "Darwin" ]; then
     echo "⚠️  metric 02 (active/idle) ต้องมี pyobjc:  pip3 install pyobjc-framework-Quartz pyobjc-framework-Cocoa"
 fi
 
+# server must grant THIS agent version a lease before anything is installed (rollout order: server ->
+# allowed_versions with old AND new version -> agents · deploy/README.md "Rollout order"). Fails closed.
+echo "== preflight: server ให้ lease เวอร์ชันนี้ไหม · does the server grant this agent version a lease? =="
+( . "$DEPLOY/env.sh"; cd "$AGENT_DIR"; python3 -B deploy/preflight.py ) || {
+  echo "✗ ไม่ได้ติดตั้ง — แก้ฝั่ง server ก่อน (agent_control.json) · NOT installed: fix the server side first"; exit 1; }
+
 echo "== ทดสอบรัน 1 รอบก่อน (ไม่ขึ้น error ร้ายแรง = ผ่าน) =="
 ( . "$DEPLOY/env.sh"; cd "$AGENT_DIR"; python3 runner.py ) || { echo "✗ runner.py รันไม่ผ่าน — แก้ก่อนค่อย install"; exit 1; }
 

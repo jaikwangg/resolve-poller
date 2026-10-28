@@ -27,9 +27,26 @@ nano deploy/env.sh                               # แก้ SERVER_IP + TOKEN
 ```
 จากนั้นติดตั้ง:
 ```sh
-sh deploy/install.sh                             # ทดสอบ 1 รอบ → ติดตั้ง scheduler (per-user)
+sh deploy/install.sh                             # preflight lease → ทดสอบ 1 รอบ → ติดตั้ง scheduler (per-user)
 #   หลายกะ/หลาย user:  sh deploy/install.sh --system
 ```
+`install.sh` ถาม server ก่อนว่าให้ lease กับ **เวอร์ชันนี้ + ชื่อเครื่องนี้** ไหม (`deploy/preflight.py`, GET `/agent/control`
+แบบเดียวกับ agent) · ไม่ได้ `enabled: true` = **ไม่ติดตั้ง** พร้อมบอกเหตุผล (เวอร์ชันไม่อยู่ใน `allowed_versions`, host ยังไม่เปิด,
+token ผิด, ชื่อเครื่องไม่ตรง token, ติดต่อ server ไม่ได้) · ตรวจเองได้: `. deploy/env.sh && python3 -B deploy/preflight.py`
+
+### ⚠️ Rollout order — อัปเกรด agent เวอร์ชันใหม่ (เช่น 0.9.1-safety → 0.9.2-safety)
+agent ที่เวอร์ชัน **ไม่อยู่ใน `allowed_versions`** ของ `agent_control.json` บน server ไม่ได้ lease → พอ lease เดิมหมด
+(สูงสุด `lease_sec`, ปกติ 6 ชม.) **ไม่บันทึกอะไรเลย** · An agent whose version is not on `allowed_versions` gets no lease and
+records NOTHING once its current lease runs out. Order, every time:
+1. **server ก่อน · server first** — deploy the server that understands the new agent (for 0.9.2-safety: idempotent
+   `/ingest` with `rid`, host-name normalisation).
+2. **`allowed_versions` มีทั้งเก่าและใหม่ · list BOTH versions** — e.g.
+   `"allowed_versions": ["0.9.1-safety", "0.9.2-safety"]` (old agents keep their lease during the rollout).
+3. **แล้วค่อย agent ทีละเครื่อง · then agents, one host at a time** — `sh deploy/install.sh` (the preflight refuses the
+   install if step 2 was skipped). Check `/health`: the host shows the new version, status ok.
+4. **เมื่อทุกเครื่องอัปแล้ว · after the last host** — remove the old version from `allowed_versions`.
+
+Rollback: reinstall the old release on that host (its version is still listed), then remove the new version.
 
 ### ทดสอบเร็วบนเครื่องเดียว (ยังไม่มี server จริง)
 สร้าง env.sh ชี้ localhost + token ทดสอบ แล้วรัน server local ควบคู่ (ชั้น 5)
