@@ -15,6 +15,8 @@ export EDITORTRACK_DETECT_GRADE=0          # ห้อง edit/conform ไม่
 # ---- server (เหมือนกันทุกเครื่อง) ----
 export EDITORTRACK_SERVER=http://SERVER_IP:8000/ingest
 export EDITORTRACK_TOKEN=CHANGE_ME
+# ชื่อที่ token ออกให้ (python3 tokens.py host-add conform-01) — agent ส่งชื่อนี้แทนชื่อเครื่องจริง
+export EDITORTRACK_HOST=conform-01
 export EDITORTRACK_HTTP_TIMEOUT=5
 
 # ---- zero-incident gates (docs/research/WORKSTATION_SAFETY.md) ----

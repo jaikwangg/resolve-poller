@@ -36,6 +36,7 @@
 | field | ประเภท | ความหมาย |
 |---|---|---|
 | `schema` | เครื่อง | เวอร์ชันรูปแบบ record |
+| `rid` | เครื่อง | id สุ่มของ record (ไม่มีข้อมูลใด ๆ ในตัว) — ส่งซ้ำแล้ว server เก็บครั้งเดียว |
 | `ts` | เครื่อง | เวลาที่เก็บ (UTC) |
 | `host` | เครื่อง | ชื่อเครื่อง (ใช้ผูกกับห้องที่จอง) |
 | `stage` | เครื่อง | หน้าที่ของเครื่อง: data/conform/color/subtitle/master |
@@ -153,4 +154,4 @@ server เติมเอง 2 field ตอนรับ:
 `progress_v2_state.json` และ `scope_locks.json` (ความคืบหน้าและขอบเขตงานต่อ project_no/stage ที่ส่งให้ PMS) — เป็นข้อมูลงาน ไม่มีข้อมูลบุคคล อยู่ในโฟลเดอร์ข้อมูลเดียวกัน (สิทธิ์ 700) และไม่ถูกลบโดย retention เพราะเป็นสถานะปัจจุบัน ไม่ใช่ record รายวัน
 
 ## ไฟล์บนเครื่อง (workstation)
-ในโฟลเดอร์ state ของ agent: `queue.jsonl` (record ที่ยังส่งไม่ได้ สูงสุดตาม `EDITORTRACK_QUEUE_MAX`), `rejected.log` (record ที่ server ปฏิเสธ สูงสุด 200 บรรทัด / 256 KB; record ใหญ่กว่า 8 KB เก็บแค่ความยาว + sha256) และไฟล์สถานะ (`backoff.json`, `send_backoff.json`, `rejected.json`, `last_server`) — field ใน record เหมือนตารางข้างบน ไม่มีอะไรเพิ่ม
+ในโฟลเดอร์ state ของ agent: `queue.jsonl` (record ที่ยังส่งไม่ได้ สูงสุดตาม `EDITORTRACK_QUEUE_MAX`), `rejected.log` (record ที่ server ปฏิเสธ สูงสุด 200 บรรทัด / 256 KB; record ใหญ่กว่า 8 KB เก็บแค่ความยาว + sha256) และไฟล์สถานะ (`backoff.json`, `send_backoff.json`, `rejected.json`, `last_server`, `host_refused.json` / `lease_refused.json` = server ไม่รับชื่อเครื่องนี้กับ token นี้: ชื่อที่ส่ง ชื่อที่ token ออกให้ เวลา) — field ใน record เหมือนตารางข้างบน ไม่มีอะไรเพิ่ม

@@ -31,6 +31,8 @@ ask STAGE "stage (color/conform/subtitle/master/data)" "color"
 ask DETECT_GRADE "detect grade (1=color, 0=อื่น)" "$DG"
 ask SERVER "server ingest URL" ""
 ask TOKEN "token (ต่อเครื่อง — ไม่มีค่า default)" "" secret
+# ชื่อที่ token ออกให้ (server: tokens.py host-add <ชื่อ>) — agent ส่งชื่อนี้ ไม่ใช่ชื่อเครื่องจริง (กันชื่อไม่ตรงแล้วเวลาหาย)
+ask AGENT_HOST "host (ชื่อที่ token ออกให้)" "$(hostname -s 2>/dev/null || hostname)"
 ask VERIFIED "Resolve version ที่ผ่าน phase-3 แล้ว (เช่น 20.2) — ว่าง = agent ไม่สแกน" ""
 # zero-incident: ไม่มี token/server default ใน repo อีกต่อไป (token เดิมหลุดใน repo public)
 if [ -z "$SERVER" ] || [ -z "$TOKEN" ]; then
@@ -54,6 +56,7 @@ export EDITORTRACK_STAGE=$STAGE
 export EDITORTRACK_DETECT_GRADE=$DETECT_GRADE
 export EDITORTRACK_SERVER=$SERVER
 export EDITORTRACK_TOKEN=$TOKEN
+export EDITORTRACK_HOST=$AGENT_HOST
 export EDITORTRACK_HTTP_TIMEOUT=5
 export EDITORTRACK_RESOLVE_VERIFIED=$VERIFIED
 # platform pin: Python/OS ที่ตรวจตอนติดตั้ง — อัปเกรดแล้วไม่ตรง → agent ไม่แตะ Resolve จนกว่าจะตรวจใหม่

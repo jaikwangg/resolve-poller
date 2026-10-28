@@ -17,7 +17,7 @@ in particular never inside Resolve's project library / disk database / cache fol
 """
 import json, os, pathlib, sys, time, threading
 
-AGENT_VERSION = "0.9.1-safety"
+AGENT_VERSION = "0.9.2-safety"
 
 
 def _int(name, default):
@@ -265,16 +265,42 @@ def refresh_lease(servers, token, host, fetch=None, now=None):
                 body = json.loads(r.read().decode("utf-8"))
         else:
             body = fetch(url)
-    except Exception:
+    except Exception as e:
+        if getattr(e, "code", None) == 403:
+            _log_lease_refused(e, host, now)
         return None
     if not isinstance(body, dict):
         return None
+    try:
+        (state_dir() / "lease_refused.json").unlink()
+    except Exception:
+        pass
     enabled = body.get("enabled") is True
     lease = max(0, min(int(body.get("lease_sec") or 0), 7 * 86400))
     rec = {"enabled": enabled, "until": now + lease if enabled else 0, "at": now,
            "allow_resolve": body.get("allow_resolve", True) is True}
     _write("lease.json", rec)
     return rec
+
+
+def _log_lease_refused(e, host, now):
+    """403 on /agent/control = the server does not accept this host name for this token: no new lease (the old
+    one runs out, then the agent is idle). One line in the agent log (stderr) at most once an hour. Never raises."""
+    try:
+        st = _read("lease_refused.json")
+        st = st if isinstance(st, dict) and not st.get("_corrupt") else {}
+        try:
+            token_host = (e.headers.get("X-Editortrack-Host-Mismatch") or "").strip()[:100]
+        except Exception:
+            token_host = ""
+        last = float(st.get("logged_at") or 0) if isinstance(st.get("logged_at"), (int, float)) else 0
+        if st.get("host") != host or st.get("token_host") != token_host or not 0 <= now - last < 3600:
+            hint = " (token is for %r: set EDITORTRACK_HOST=%s in deploy/env.sh)" % (token_host, token_host) if token_host else ""
+            print("editortrack: server refused the lease for host %r with HTTP 403%s" % (host, hint), file=sys.stderr)
+            last = now
+        _write("lease_refused.json", {"at": now, "host": host, "token_host": token_host, "logged_at": last})
+    except Exception:
+        pass
 
 
 def lease_ok(now=None):

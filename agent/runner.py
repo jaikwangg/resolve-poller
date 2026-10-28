@@ -2,7 +2,7 @@
 """A3 — poll (collector ตาม stage) → resolve job → POST (หลาย URL สำรองได้ + offline queue). record schema 3.
 stage จาก EDITORTRACK_STAGE (หรือ EDITORTRACK_ROLE เดิม): data/conform/color/subtitle/master
 """
-import json, os, sys, time, socket, datetime, platform, urllib.request, urllib.error, pathlib
+import json, os, sys, time, socket, datetime, platform, urllib.request, urllib.error, pathlib, uuid
 import safety
 from activity_sampler import sample
 from collect import collect, canon
@@ -55,6 +55,13 @@ REJECT_LOG_KEEP_RECORD = 8 * 1024            # bytes; a bigger record is logged 
 # frontmost app name/bundle id (only "is Resolve in front", plus "screen locked" as a bool).
 ACTIVITY_KEYS = ("idle_sec", "resolve_frontmost", "platform", "unavailable", "error")
 LOCK_SCREEN_APPS = ("loginwindow",)
+
+
+def host_id():
+    """the name this agent reports: EDITORTRACK_HOST (the name its token was issued for, set by make-env.sh)
+    or, when unset, the live hostname. The server compares names case-insensitively and without a domain
+    suffix, so only a really different name is refused (403: records stay queued, logged, shown on /health)."""
+    return (os.environ.get("EDITORTRACK_HOST") or "").strip() or socket.gethostname()
 
 
 def minimise_activity(act, idle_threshold=None):
@@ -122,8 +129,11 @@ def build_record(prio=None, t0=None):
     raw = col.get("raw") or {}
     rec = {
         "schema": 3,
+        # idempotency id: set once here, kept in the queue line, so every re-send carries the same id and the
+        # server stores the record once (server/ingest_ids.py)
+        "rid": uuid.uuid4().hex,
         "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        "host": socket.gethostname(),
+        "host": host_id(),
         "stage": STAGE,
         "activity": minimise_activity(act),
         "source": raw if col.get("ok") else {"ok": False, "reason": col.get("reason"), "detail": col.get("detail"),
@@ -250,6 +260,8 @@ def _send(rec):
                 final = final or ("final", e.code, why)
                 continue                        # still try the other URLs
             last = ("retry", e.code, _retry_after(e))
+            if e.code == 403:
+                _note_host_refused(e, rec.get("host"), url)
             try:
                 e.close()
             except Exception:
@@ -268,6 +280,40 @@ def _send(rec):
                 pass
         return ("ok", status, None)
     return final or last
+
+
+HOST_REFUSED_LOG_EVERY_SEC = 3600
+
+
+def _note_host_refused(e, sent, url):
+    """403 from /ingest: the server does not accept this host name for this token. The record stays queued
+    (403 is never final). Leaves ~/.editortrack/host_refused.json and one line in the agent log (stderr ->
+    agent.log), at most once an hour or when something changes. Never raises."""
+    try:
+        token_host = ""
+        try:
+            token_host = (e.headers.get("X-Editortrack-Host-Mismatch") or "").strip()[:100] if e.headers else ""
+        except Exception:
+            pass
+        now = time.time()
+        old = safety._read("host_refused.json")
+        old = old if isinstance(old, dict) and not old.get("_corrupt") else {}
+        new = {"at": now, "sent": str(sent)[:100], "token_host": token_host, "url": url,
+               "count": _int0(old.get("count")) + 1, "logged_at": old.get("logged_at")}
+        try:
+            logged = float(old.get("logged_at") or 0)
+        except (TypeError, ValueError):
+            logged = 0
+        changed = (old.get("sent"), old.get("token_host")) != (new["sent"], new["token_host"])
+        if changed or now - logged >= HOST_REFUSED_LOG_EVERY_SEC or now < logged:
+            new["logged_at"] = now
+            hint = (" (token is for %r: set EDITORTRACK_HOST=%s in deploy/env.sh)" % (token_host, token_host)
+                    if token_host else "")
+            print("editortrack: server %s refused host %r with HTTP 403%s; records stay in the queue (%d)"
+                  % (url, new["sent"], hint, _queue_len()), file=sys.stderr)
+        safety._write("host_refused.json", new)
+    except Exception:
+        pass
 
 
 # ---- send backoff (separate from safety's Resolve backoff: a server outage never gates Resolve) ----
@@ -316,8 +362,12 @@ def _reject_hold(st=None):
 
 
 def _delivered():
-    """a 2xx: the server takes records again -> clear the backoff and the reject streak"""
+    """a 2xx: the server takes records again -> clear the backoff, the reject streak and a host refusal"""
     _send_backoff_ok()
+    try:
+        (safety.state_dir() / "host_refused.json").unlink()
+    except Exception:
+        pass
     st = _reject_state()
     if st.get("streak"):
         st["streak"] = 0
@@ -477,6 +527,11 @@ def _flush_queue():
         if why:
             _reject(ln, "local", why, local=True)
             continue
+        # a record queued under another spelling of this machine's name (e.g. before EDITORTRACK_HOST was set
+        # after a host-name refusal) is sent under the current one: it was taken on this machine either way.
+        # rid and ts stay, so a re-send is still recognised by the server.
+        if rec.get("host") != host_id():
+            rec["host"] = host_id()
         tried += 1
         kind, status, info = _send(rec)
         if kind == "final" and _reject_hold():
@@ -502,7 +557,7 @@ def main():
     lock = safety.Lock()
     if not lock.acquire():
         return None                                 # มีรอบอื่นค้างอยู่
-    safety.refresh_lease(SERVERS, TOKEN, socket.gethostname())
+    safety.refresh_lease(SERVERS, TOKEN, host_id())
     if not safety.lease_ok():
         return None                                 # remote kill / ยังไม่ได้รับอนุญาต / lease หมดอายุ
     return post(build_record(prio, t0))
