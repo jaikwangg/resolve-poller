@@ -107,6 +107,34 @@ class Idempotent(Base):
         [f] = list((STORE / "ingest_ids").glob("*.txt"))
         self.assertEqual(f.stat().st_mode & 0o077, 0)
 
+    def test_record_fsynced_before_its_key(self):
+        # a power cut between the two writes must never leave a key without its record (review Medium 2)
+        events, real_fsync, real_add = [], os.fsync, api._index().add
+
+        def fsync(fd):
+            try:
+                events.append(("fsync", os.readlink("/proc/self/fd/%d" % fd)))
+            except OSError:
+                events.append(("fsync", None))
+            return real_fsync(fd)
+
+        def add(host, r):
+            events.append(("key", r["rid"]))
+            return real_add(host, r)
+        os.fsync, api._ids.add = fsync, add
+        try:
+            self.assertEqual(self.post(rec()).status_code, 200)   # first record of the day: file + dir fsynced
+        finally:
+            os.fsync = real_fsync
+            del api._ids.add
+        kinds = [k for k, _ in events]
+        self.assertEqual(kinds[-1], "key")
+        self.assertGreaterEqual(kinds.count("fsync"), 2)          # the record file and the new directory entry
+        synced = [v for k, v in events if k == "fsync" and v]
+        if synced:                                                # Linux: check WHAT was fsynced
+            self.assertTrue(any(s.endswith(".jsonl") for s in synced), synced)
+            self.assertIn(str(STORE.resolve()), [str(pathlib.Path(s).resolve()) for s in synced])
+
     def test_bad_rid_is_a_final_400(self):
         for bad in (12345, "short", "x" * 65, "has space here", ""):
             r = self.post(rec(rid=bad))

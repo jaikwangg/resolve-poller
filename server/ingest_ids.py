@@ -15,7 +15,8 @@ Index on disk: <store>/ingest_ids/<YYYY-MM-DD>.txt (UTC day of the record's ts, 
 days later still finds its day), one "host<TAB>key" line per record, mode 600. Days are loaded into
 memory on demand (at most MAX_DAYS_CACHED at once). retention.py prunes old day files.
 
-Order at /ingest: record appended to the store FIRST, then its key. A crash between the two can only
+Order at /ingest: record appended to the store and fsynced FIRST (dashboard_api._append_record), then its key.
+The key itself is not fsynced: losing a key only means one more stored copy, never lost time. A crash between the two can only
 leave a record without its key (the re-send is then stored twice and the readers' 30 s same-host
 dedupe in explain.dedupe still counts it once); it can never leave a key without its record, which
 would make the server acknowledge a re-send that it never stored (lost time).

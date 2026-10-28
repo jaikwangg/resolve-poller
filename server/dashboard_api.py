@@ -76,11 +76,34 @@ def livez():
 
 
 def _append_record(rec):
-    """append one record to today's file, created with mode 600."""
+    """append one record to today's file, created with mode 600, and fsync it (and the store directory when the
+    file is new) BEFORE /ingest writes the record's idempotency key: after a power cut the key must never survive
+    without its record, or a re-send would be answered "duplicate" for a record that is not on disk (lost time).
+    One fsync per record (agents send one per minute) is cheap."""
     day = datetime.date.today().isoformat()
-    fd = os.open(str(STORE / f"{day}.jsonl"), os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+    path = STORE / f"{day}.jsonl"
+    new = not path.exists()
+    fd = os.open(str(path), os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
     with os.fdopen(fd, "a", encoding="utf-8") as f:
         f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        f.flush()
+        os.fsync(f.fileno())
+    if new:
+        _fsync_dir(STORE)
+
+
+def _fsync_dir(d):
+    """make a new directory entry durable (POSIX); a platform without directory fsync just skips it."""
+    try:
+        dfd = os.open(str(d), os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(dfd)
+    except OSError:
+        pass
+    finally:
+        os.close(dfd)
 
 
 # ---------------- ingest ----------------
