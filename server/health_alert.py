@@ -33,6 +33,15 @@ def load_records(store, days=2):
     return explain.dedupe(recs)        # same record check as the server: a bad stored line is skipped
 
 
+def server_alerts(store):
+    """PMS progress steps lost by the server (pms_sync.LOST_FILE); read from the store, no server import."""
+    try:
+        import pms_sync
+        return pms_sync.server_alerts(store)
+    except Exception as e:                    # the alert run must not die on this; say it instead
+        return ["cannot read PMS progress loss state: %s" % type(e).__name__]
+
+
 def transitions(prev, rows):
     msgs, state = [], {}
     for h, r in sorted(rows.items()):
@@ -63,7 +72,10 @@ def main(argv):
         prev = json.loads(sp.read_text())
     except Exception:
         prev = {}
-    rows = agent_health.health(load_records(store), control=agent_health.load_control(store))
+    rows = agent_health.health(load_records(store), control=agent_health.load_control(store),
+                               refused=agent_health.load_host_refused(store))
+    sa = server_alerts(store)
+    rows["server"] = {"status": "alert" if sa else "ok", "alerts": sa, "warnings": []}
     msgs, state = transitions(prev, rows)
     for m in msgs:
         if "--dry-run" in argv:

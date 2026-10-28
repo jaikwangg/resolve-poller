@@ -287,6 +287,7 @@ def progress_submit(rec, eff_job, erp, store):
     except _queue.Full:
         progress_status["queue_dropped"] += 1
         progress_status["last_error"] = "progress queue full: PMS step skipped for one record (record stored)"
+        note_lost(store, 1, "queue full")
         return False
     progress_status["queued"] += 1
     return True
@@ -301,3 +302,88 @@ def progress_drain(timeout=10.0):
             return False
         _t.sleep(0.01)
     return True
+
+
+# ---------------- visibility + shutdown (review Medium 4: drops were silent, a restart lost the queue) ----------------
+# A lost PMS step never loses working time: the record is already in the store, and the next record of that job
+# carries the latest value to PMS. It is still shown: counted in a small file in the store (survives the restart
+# that caused it), on /api/health + /health, and in health_alert.py's owner alerts for LOST_ALERT_SEC.
+import logging as _logging
+
+LOST_FILE = "pms_progress_lost.json"              # in STORE: {count, last_at, reason}
+LOST_ALERT_SEC = 24 * 3600
+SHUTDOWN_DRAIN_SEC = float(_os.environ.get("PMS_SHUTDOWN_DRAIN_SEC", "10"))   # cap: a hung PMS must not block a restart
+_lost_lock = threading.Lock()
+_log = _logging.getLogger("editortrack")
+
+
+def note_lost(store, n, reason):
+    """add n lost PMS steps to <store>/pms_progress_lost.json. Never raises."""
+    if not n or store is None:
+        return
+    try:
+        with _lost_lock:
+            cur = load_lost(store) or {}
+            c = cur.get("count") if isinstance(cur.get("count"), int) else 0
+            body = {"count": c + int(n), "last_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    "reason": str(reason)[:200]}
+            path = _os.path.join(str(store), LOST_FILE)
+            tmp = path + ".tmp"
+            fd = _os.open(tmp, _os.O_WRONLY | _os.O_CREAT | _os.O_TRUNC, 0o600)
+            with _os.fdopen(fd, "w", encoding="utf-8") as f:
+                _json.dump(body, f)
+            _os.replace(tmp, path)
+    except Exception:
+        pass
+
+
+def load_lost(store):
+    try:
+        with open(_os.path.join(str(store), LOST_FILE), encoding="utf-8") as f:
+            d = _json.load(f)
+        return d if isinstance(d, dict) else None
+    except Exception:
+        return None
+
+
+def queue_info():
+    """the PMS progress queue right now (this process)."""
+    return {"depth": _pq.qsize(), "max": _pq.maxsize, "in_flight": max(0, _pq.unfinished_tasks - _pq.qsize()),
+            "queued_total": progress_status.get("queued", 0), "dropped": progress_status.get("queue_dropped", 0),
+            "lost_on_shutdown": progress_status.get("lost_on_shutdown", 0)}
+
+
+def server_alerts(store, now=None):
+    """owner-facing alert lines about PMS progress steps lost (queue full, or still queued at shutdown) in the
+    last LOST_ALERT_SEC. [] when nothing was lost."""
+    lost = load_lost(store)
+    if not lost:
+        return []
+    try:
+        last = datetime.datetime.fromisoformat(str(lost.get("last_at")))
+    except ValueError:
+        return []
+    if last.tzinfo is None:
+        return []
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    if (now - last).total_seconds() > LOST_ALERT_SEC:
+        return []
+    return ["PMS progress: %s step(s) not sent (%s, last %s); the records are stored and the next record of each "
+            "job sends its latest value - check PMS / the server log" % (lost.get("count"), lost.get("reason"),
+                                                                        lost.get("last_at"))]
+
+
+def progress_shutdown(store, cap=None):
+    """app shutdown: let the worker finish the queued PMS steps for at most `cap` seconds (a hung PMS must not hold
+    the restart), then count what is left as lost (visible after the restart). -> number of steps left."""
+    cap = SHUTDOWN_DRAIN_SEC if cap is None else cap
+    if _pq.unfinished_tasks == 0:
+        return 0
+    if _pq_worker["thread"] is not None and _pq_worker["thread"].is_alive():
+        progress_drain(max(0.0, cap))
+    left = _pq.unfinished_tasks
+    if left:
+        progress_status["lost_on_shutdown"] = progress_status.get("lost_on_shutdown", 0) + left
+        note_lost(store, left, "still queued at shutdown (drain cap %gs)" % cap)
+        _log.warning("shutdown: %d PMS progress step(s) not sent within %gs (records are stored)", left, cap)
+    return left

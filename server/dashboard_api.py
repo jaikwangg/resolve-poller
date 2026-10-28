@@ -174,7 +174,15 @@ def api_health(days: int = 2):
     rows = agent_health.health(_load_recent(days), control=agent_health.load_control(STORE),
                                refused=agent_health.load_host_refused(STORE))
     return JSONResponse({"hosts": sorted(rows.values(), key=lambda r: r["host"]),
-                         "control": agent_health.load_control(STORE), "skipped": load_skipped.get(days)})
+                         "control": agent_health.load_control(STORE), "skipped": load_skipped.get(days),
+                         "server": _server_health()})
+
+
+def _server_health():
+    """server-side problems that belong to no host (PMS progress queue depth / lost steps)"""
+    alerts = pms_sync.server_alerts(STORE)
+    return {"pms_progress_queue": pms_sync.queue_info(), "pms_progress_lost": pms_sync.load_lost(STORE),
+            "alerts": alerts, "status": "alert" if alerts else "ok"}
 
 
 @app.get("/health")
@@ -189,10 +197,15 @@ def health_page():
                                           r.get("last_ok_poll"), r.get("max_rss_mb"), r.get("queue_lines"),
                                           "; ".join(r["alerts"] + r["warnings"])))
         for r in sorted(rows.values(), key=lambda r: r["host"]))
+    sv = _server_health()
+    q = sv["pms_progress_queue"]
+    srv = "<p class='%s'>Server: PMS progress queue %s / %s, dropped %s, lost at shutdown %s%s</p>" % (
+        sv["status"], q["depth"], q["max"], q["dropped"], q["lost_on_shutdown"],
+        "".join("<br><b>ALERT</b> " + html.escape(a) for a in sv["alerts"]))
     return HTMLResponse("<!doctype html><meta charset=utf-8><title>Agent health</title>"
                         "<style>body{font:14px system-ui;margin:16px;background:#fff;color:#111}"
                         "td,th{padding:4px 8px;border-bottom:1px solid #ddd}.alert{background:#fde2e2}.warn{background:#fff4d6}</style>"
-                        "<h1>Agent health</h1><table><tr><th>host</th><th>status</th><th>version</th><th>last seen</th>"
+                        "<h1>Agent health</h1>" + srv + "<table><tr><th>host</th><th>status</th><th>version</th><th>last seen</th>"
                         "<th>last Resolve poll</th><th>max RSS MB</th><th>queue</th><th>issues</th></tr>" + tr + "</table>")
 
 
@@ -463,6 +476,12 @@ def inbox():
 def _start_pms_sync():
     if erp:
         pms_sync.start(_load_recent, INTERVAL_MIN, _eff_job, erp)
+
+
+@app.on_event("shutdown")
+def _drain_pms_progress():
+    """bounded: at most PMS_SHUTDOWN_DRAIN_SEC (default 10 s) even when PMS hangs; leftovers are counted as lost"""
+    pms_sync.progress_shutdown(STORE)
 
 
 @app.get("/api/pms")

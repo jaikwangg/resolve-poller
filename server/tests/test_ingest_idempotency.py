@@ -53,7 +53,7 @@ def clean():
     for f in STORE.glob("*.jsonl"):
         f.unlink()
     shutil.rmtree(STORE / "ingest_ids", ignore_errors=True)
-    for n in ("host_refused.json",):
+    for n in ("host_refused.json", "pms_progress_lost.json"):
         with contextlib.suppress(FileNotFoundError):
             (STORE / n).unlink()
     api._ids = ingest_ids.Index(STORE)
@@ -198,6 +198,80 @@ class SlowPms(Base):
         self.assertEqual(self.post(rec()).status_code, 200)    # the worker survived
         self.assertTrue(pms_sync.progress_drain(5))
         self.assertEqual(len(stored()), 2)
+
+
+class PmsQueueVisible(Base):
+    """review Medium 4: a full queue or a restart with steps still queued is counted and shown, and a hung PMS
+    cannot hold the shutdown longer than the cap."""
+
+    def _hang(self):
+        gate, calls = threading.Event(), []
+
+        def hang(rec_, *a):
+            gate.wait(20)
+            calls.append(rec_["rid"])
+            return True
+        pms_sync.progress_on_ingest = hang
+        pms_sync._progress_enabled = lambda erp: True
+        self.addCleanup(gate.set)
+        return gate, calls
+
+    def _wait_in_flight(self):
+        for _ in range(200):
+            if pms_sync._pq.qsize() == 0:
+                return
+            time.sleep(0.01)
+
+    def test_shutdown_drain_is_capped_and_leftovers_visible(self):
+        gate, calls = self._hang()
+        for _ in range(3):
+            pms_sync.progress_submit(rec(), None, object(), STORE)
+        self._wait_in_flight()
+        lost0 = pms_sync.progress_status.get("lost_on_shutdown", 0)
+        t0 = time.monotonic()
+        left = pms_sync.progress_shutdown(STORE, cap=0.3)
+        self.assertLess(time.monotonic() - t0, 2.0)                 # a hung PMS does not hold the restart
+        self.assertEqual(left, 3)                                   # one in flight + two queued
+        self.assertEqual(pms_sync.progress_status["lost_on_shutdown"] - lost0, 3)
+        self.assertEqual(json.loads((STORE / pms_sync.LOST_FILE).read_text())["count"], 3)
+        h = self.c.get("/api/health", headers=authfix.reader()).json()["server"]
+        self.assertEqual(h["status"], "alert")
+        self.assertIn("3 step(s) not sent", h["alerts"][0])
+        self.assertIn("still queued at shutdown", h["alerts"][0])
+        self.assertIn("ALERT", self.c.get("/health", headers=authfix.reader()).text)
+        gate.set()
+        self.assertTrue(pms_sync.progress_drain(5))
+
+    def test_shutdown_drains_the_queue_when_pms_answers(self):
+        done = []
+        pms_sync.progress_on_ingest = lambda rec_, *a: (time.sleep(0.05), done.append(rec_["rid"]))[1] or True
+        pms_sync._progress_enabled = lambda erp: True
+        for _ in range(4):
+            pms_sync.progress_submit(rec(), None, object(), STORE)
+        self.assertEqual(pms_sync.progress_shutdown(STORE, cap=5), 0)
+        self.assertEqual(len(done), 4)
+        self.assertFalse((STORE / pms_sync.LOST_FILE).exists())
+        self.assertEqual(self.c.get("/api/health", headers=authfix.reader()).json()["server"]["alerts"], [])
+
+    def test_full_queue_drop_counted_and_alerted(self):
+        gate, calls = self._hang()
+        old_max = pms_sync._pq.maxsize
+        pms_sync._pq.maxsize = 1
+        self.addCleanup(setattr, pms_sync._pq, "maxsize", old_max)
+        d0 = pms_sync.progress_status["queue_dropped"]
+        self.assertTrue(pms_sync.progress_submit(rec(), None, object(), STORE))
+        self._wait_in_flight()
+        self.assertTrue(pms_sync.progress_submit(rec(), None, object(), STORE))     # fills the queue
+        self.assertFalse(pms_sync.progress_submit(rec(), None, object(), STORE))    # dropped
+        q = self.c.get("/api/health", headers=authfix.reader()).json()["server"]
+        self.assertEqual(q["pms_progress_queue"]["depth"], 1)
+        self.assertEqual(q["pms_progress_queue"]["dropped"] - d0, 1)
+        self.assertIn("queue full", q["alerts"][0])
+        import health_alert
+        msgs = health_alert.main(["--dry-run"])
+        self.assertTrue(any("editortrack server: alert" in m and "PMS progress" in m for m in msgs), msgs)
+        gate.set()
+        self.assertTrue(pms_sync.progress_drain(5))
 
 
 class HostNames(Base):
