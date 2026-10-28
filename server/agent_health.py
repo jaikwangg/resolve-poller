@@ -139,6 +139,25 @@ def _dt(ts):
         return None
 
 
+def _lease_ends_by(entry, control, host):
+    """latest time the mismatched agent's current lease can run out. An entry exists only while no request of that
+    host was accepted (clear_host_refused), so its last lease was granted before first_at: the lease ends at
+    first_at + lease_sec at the latest. None when unknown (no control file / host not enabled / no first_at)."""
+    first = _dt(entry.get("first_at"))
+    if first is None or not isinstance(control, dict):
+        return None
+    h = (control.get("hosts") or {}).get(host)
+    if h is None:
+        h = control.get("default") or {}
+    if not isinstance(h, dict) or h.get("enabled") is not True:
+        return None
+    try:
+        lease = int(h.get("lease_sec") or control.get("lease_sec") or DEFAULT_LEASE)
+    except (TypeError, ValueError):
+        return None
+    return (first + datetime.timedelta(seconds=max(60, min(lease, 7 * 86400)))).isoformat()
+
+
 def health(records, now=None, control=None, refused=None):
     """records: iterable of ingest records (any order). refused: load_host_refused(). -> {host: row}"""
     now = now or datetime.datetime.now(datetime.timezone.utc)
@@ -193,14 +212,19 @@ def health(records, now=None, control=None, refused=None):
                                "max_turn_ms": None, "max_guard_ms": None, "last_ok_poll": None,
                                "last_seen": None, "has_heartbeat": None}
         row["host_refused"] = {k: e.get(k) for k in ("sent", "route", "count", "first_at", "last_at")}
+        row["host_refused"]["lease_ends_by"] = _lease_ends_by(e, control, th)
     for row in hosts.values():
         row.pop("_last_rx", None)
         alerts, warns = [], []
         hr = row.get("host_refused")
         if hr:
-            alerts.append("host name mismatch: token is for %s, agent reports %r (%s request(s) refused, last %s); "
-                          "the agent keeps its records - set EDITORTRACK_HOST=%s in its deploy/env.sh"
-                          % (row["host"], hr.get("sent"), hr.get("count"), hr.get("last_at"), row["host"]))
+            ends = hr.get("lease_ends_by")
+            alerts.append("host name mismatch: token is for %s, agent reports %r (%s request(s) refused, last %s). "
+                          "The server refuses its lease too, so the agent RECORDS NOTHING once its current lease "
+                          "runs out (%s); records already queued are kept and sent after the fix - set "
+                          "EDITORTRACK_HOST=%s in its deploy/env.sh now"
+                          % (row["host"], hr.get("sent"), hr.get("count"), hr.get("last_at"),
+                             ("by %s at the latest" % ends) if ends else "lease end unknown", row["host"]))
         base, last = row.pop("_rj_base", None), row.pop("_rj_last", None)
         # a counter that went down = state reset on the workstation (reinstall): count from 0 again
         row["rejected_24h"] = (last - base if last >= base else last) if last is not None else 0

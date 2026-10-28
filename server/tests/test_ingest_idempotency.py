@@ -236,6 +236,26 @@ class HostNames(Base):
         [row] = [x for x in self.c.get("/api/health", headers=authfix.reader()).json()["hosts"] if x["host"] == "grade-01"]
         self.assertNotIn("host_refused", row)
 
+    def test_mismatch_alert_says_recording_stops_and_when(self):
+        # review Medium 3: the mismatch also refuses /agent/control, so the alert must not say only "keeps records"
+        import agent_health
+        ctl = STORE / "agent_control.json"
+        ctl.write_text(json.dumps({"allowed_versions": ["x"], "lease_sec": 3600,
+                                   "hosts": {"grade-01": {"enabled": True}}}))
+        self.addCleanup(ctl.unlink)
+        self.assertEqual(self.post(rec("grade-02")).status_code, 403)
+        [row] = [x for x in self.c.get("/api/health", headers=authfix.reader()).json()["hosts"] if x["host"] == "grade-01"]
+        hr = row["host_refused"]
+        first = datetime.datetime.fromisoformat(hr["first_at"])
+        self.assertEqual(datetime.datetime.fromisoformat(hr["lease_ends_by"]) - first, datetime.timedelta(hours=1))
+        [a] = [a for a in row["alerts"] if "host name mismatch" in a]
+        self.assertIn("RECORDS NOTHING once its current lease runs out (by %s at the latest)" % hr["lease_ends_by"], a)
+        self.assertIn("EDITORTRACK_HOST=grade-01", a)
+        ctl.write_text(json.dumps({"allowed_versions": ["x"], "default": {"enabled": False}}))
+        [row] = [x for x in self.c.get("/api/health", headers=authfix.reader()).json()["hosts"] if x["host"] == "grade-01"]
+        self.assertIsNone(row["host_refused"]["lease_ends_by"])
+        self.assertTrue(any("lease end unknown" in a for a in row["alerts"]))
+
     def test_refused_entry_cleared_when_accepted_again(self):
         # review Low 5: host_refused.json entries are removed, not only hidden
         import agent_health
@@ -374,6 +394,7 @@ class EndToEnd(unittest.TestCase):
             self.assertEqual(len((sd / "queue.jsonl").read_text().splitlines()), 2)   # kept, not dropped
             self.assertIn("refused host 'editbay-7'", err.getvalue())
             self.assertIn("EDITORTRACK_HOST=e2e", err.getvalue())
+            self.assertIn("recording stops when the current lease runs out", err.getvalue())   # review Medium 3
             self.assertEqual(err.getvalue().count("refused host"), 1)                  # rate-limited log
             self.assertEqual(json.loads((sd / "host_refused.json").read_text())["token_host"], "e2e")
             self.assertFalse((sd / "rejected.json").exists())                          # nothing dropped

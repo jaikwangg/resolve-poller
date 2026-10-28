@@ -296,7 +296,11 @@ def _log_lease_refused(e, host, now):
         last = float(st.get("logged_at") or 0) if isinstance(st.get("logged_at"), (int, float)) else 0
         if st.get("host") != host or st.get("token_host") != token_host or not 0 <= now - last < 3600:
             hint = " (token is for %r: set EDITORTRACK_HOST=%s in deploy/env.sh)" % (token_host, token_host) if token_host else ""
-            print("editortrack: server refused the lease for host %r with HTTP 403%s" % (host, hint), file=sys.stderr)
+            l = _read("lease.json")
+            until = float(l.get("until") or 0) if isinstance(l, dict) and isinstance(l.get("until"), (int, float)) else 0
+            ends = ("at %s" % time.strftime("%Y-%m-%d %H:%M %Z", time.localtime(until))) if until > now else "now: no valid lease"
+            print("editortrack: server refused the lease for host %r with HTTP 403%s; recording stops when the "
+                  "current lease runs out (%s)" % (host, hint, ends), file=sys.stderr)
             last = now
         _write("lease_refused.json", {"at": now, "host": host, "token_host": token_host, "logged_at": last})
     except Exception:
